@@ -180,6 +180,7 @@ static int check_cancel( sync_vars_t *svars );
 	} while (0)
 
 #define AUX &svars->t[t]
+#define INV_AUX &svars->t[1-t]
 #define DECL_SVARS \
 	int t; \
 	sync_vars_t *svars
@@ -1564,7 +1565,7 @@ msgs_flags_set( sync_vars_t *svars, int t )
 							stats( svars );
 							cv = nfmalloc( sizeof(*cv) );
 							cv->cb = msg_rtrashed;
-							cv->aux = AUX;
+							cv->aux = INV_AUX;
 							cv->srec = 0;
 							cv->msg = tmsg;
 							if (copy_msg( cv ))
@@ -1611,6 +1612,7 @@ msg_rtrashed( int sts, int uid, copy_vars_t *vars )
 		return;
 	}
 	free( vars );
+	t ^= 1;
 	svars->trash_done[t]++;
 	stats( svars );
 	sync_close( svars, t );
