@@ -63,6 +63,8 @@ typedef struct server_conf {
 	unsigned use_sslv2:1;
 	unsigned use_sslv3:1;
 	unsigned use_tlsv1:1;
+	unsigned use_tlsv11:1;
+	unsigned use_tlsv12:1;
 
 	/* these are actually variables and are leaked at the end */
 	SSL_CTX *SSLContext;

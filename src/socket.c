@@ -231,14 +231,9 @@ static int
 init_ssl_ctx( const server_conf_t *conf )
 {
 	server_conf_t *mconf = (server_conf_t *)conf;
-	const SSL_METHOD *method;
 	int options = 0;
 
-	if (conf->use_tlsv1 && !conf->use_sslv2 && !conf->use_sslv3)
-		method = TLSv1_client_method();
-	else
-		method = SSLv23_client_method();
-	mconf->SSLContext = SSL_CTX_new( method );
+	mconf->SSLContext = SSL_CTX_new( SSLv23_client_method() );
 
 	if (!conf->use_sslv2)
 		options |= SSL_OP_NO_SSLv2;
@@ -246,6 +241,14 @@ init_ssl_ctx( const server_conf_t *conf )
 		options |= SSL_OP_NO_SSLv3;
 	if (!conf->use_tlsv1)
 		options |= SSL_OP_NO_TLSv1;
+#ifdef SSL_OP_NO_TLSv1_1
+	if (!conf->use_tlsv11)
+		options |= SSL_OP_NO_TLSv1_1;
+#endif
+#ifdef SSL_OP_NO_TLSv1_2
+	if (!conf->use_tlsv12)
+		options |= SSL_OP_NO_TLSv1_2;
+#endif
 
 	SSL_CTX_set_options( mconf->SSLContext, options );
 

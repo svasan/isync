@@ -1980,6 +1980,10 @@ imap_parse_store( conffile_t *cfg, store_conf_t **storep )
 			server->sconf.use_sslv3 = parse_bool( cfg );
 		else if (!strcasecmp( "UseTLSv1", cfg->cmd ))
 			server->sconf.use_tlsv1 = parse_bool( cfg );
+		else if (!strcasecmp( "UseTLSv1.1", cfg->cmd ))
+			server->sconf.use_tlsv11 = parse_bool( cfg );
+		else if (!strcasecmp( "UseTLSv1.2", cfg->cmd ))
+			server->sconf.use_tlsv12 = parse_bool( cfg );
 		else if (!strcasecmp( "RequireCRAM", cfg->cmd ))
 			server->require_cram = parse_bool( cfg );
 #endif
