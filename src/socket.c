@@ -28,6 +28,7 @@
 # include <openssl/ssl.h>
 # include <openssl/err.h>
 # include <openssl/hmac.h>
+# include <openssl/x509v3.h>
 #endif
 
 #include "isync.h"
@@ -118,6 +119,62 @@ compare_certificates( X509 *cert, X509 *peercert,
 	return 0;
 }
 
+static int
+host_matches( const char *host, const char *pattern )
+{
+	if (pattern[0] == '*' && pattern[1] == '.') {
+		pattern += 2;
+		if (!(host = strchr( host, '.' )))
+			return 0;
+		host++;
+	}
+
+	return *host && *pattern && !strcasecmp( host, pattern );
+}
+
+static int
+verify_hostname( X509 *cert, const char *hostname )
+{
+	int i, len, found;
+	X509_NAME *subj;
+	STACK_OF(GENERAL_NAME) *subj_alt_names;
+	char cname[1000];
+
+	/* try the DNS subjectAltNames */
+	found = 0;
+	if ((subj_alt_names = X509_get_ext_d2i( cert, NID_subject_alt_name, NULL, NULL ))) {
+		int num_subj_alt_names = sk_GENERAL_NAME_num( subj_alt_names );
+		for (i = 0; i < num_subj_alt_names; i++) {
+			GENERAL_NAME *subj_alt_name = sk_GENERAL_NAME_value( subj_alt_names, i );
+			if (subj_alt_name->type == GEN_DNS &&
+			    strlen( (const char *)subj_alt_name->d.ia5->data ) == (size_t)subj_alt_name->d.ia5->length &&
+			    host_matches( hostname, (const char *)(subj_alt_name->d.ia5->data) ))
+			{
+				found = 1;
+				break;
+			}
+		}
+		sk_GENERAL_NAME_pop_free( subj_alt_names, GENERAL_NAME_free );
+	}
+	if (found)
+		return 0;
+
+	/* try the common name */
+	if (!(subj = X509_get_subject_name( cert ))) {
+		error( "Error, cannot get certificate subject\n" );
+		return -1;
+	}
+	if ((len = X509_NAME_get_text_by_NID( subj, NID_commonName, cname, sizeof(cname) )) < 0) {
+		error( "Error, cannot get certificate common name\n" );
+		return -1;
+	}
+	if (strlen( cname ) == (size_t)len && host_matches( hostname, cname ))
+		return 0;
+
+	error( "Error, certificate owner does not match hostname %s\n", hostname );
+	return -1;
+}
+
 #if OPENSSL_VERSION_NUMBER >= 0x00904000L
 #define READ_X509_KEY(fp, key) PEM_read_X509( fp, key, 0, 0 )
 #else
@@ -146,6 +203,8 @@ verify_cert( const server_conf_t *conf, conn_t *sock )
 	}
 
 	while (conf->cert_file) { /* while() instead of if() so break works */
+		/* Note: this code intentionally does no hostname verification. */
+
 		if (X509_cmp_current_time( X509_get_notBefore( cert )) >= 0) {
 			error( "Server certificate is not yet valid\n" );
 			break;
@@ -164,7 +223,7 @@ verify_cert( const server_conf_t *conf, conn_t *sock )
 		}
 		err = -1;
 		for (lcert = 0; READ_X509_KEY( fp, &lcert ); )
-			if (!(err = compare_certificates( lcert, cert, md, n )))
+			if (!(err = compare_certificates( lcert, cert, md, n ))) /* TODO: check X509v3 [Extended] Key Usage? */
 				break;
 		X509_free( lcert );
 		fclose( fp );
@@ -193,11 +252,16 @@ verify_cert( const server_conf_t *conf, conn_t *sock )
 	X509_STORE_CTX_init( &xsc, mconf->cert_store, cert, 0 );
 	err = X509_verify_cert( &xsc ) > 0 ? 0 : X509_STORE_CTX_get_error( &xsc );
 	X509_STORE_CTX_cleanup( &xsc );
-	if (!err)
-		return 0;
-	error( "Error, cannot verify certificate: %s (%d)\n",
-	       X509_verify_cert_error_string( err ), err );
+	if (err) {
+		error( "Error, cannot verify certificate: %s (%d)\n",
+		       X509_verify_cert_error_string( err ), err );
+		goto intcheck;
+	}
+	if (conf->host && verify_hostname( cert, conf->host ) < 0)
+		goto intcheck;
+	return 0;
 
+  intcheck:
 	X509_NAME_oneline( X509_get_subject_name( cert ), buf, sizeof(buf) );
 	info( "\nSubject: %s\n", buf );
 	X509_NAME_oneline( X509_get_issuer_name( cert ), buf, sizeof(buf) );
