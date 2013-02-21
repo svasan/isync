@@ -39,8 +39,8 @@ isync executable still exists; it is a compatibility wrapper around mbsync.
 * Compatibility
 
     isync should work fairly well with any IMAP4 compliant server;
-    particularily efficient with those that support the UIDPLUS and LITERAL+
-    extensions.
+    servers that support the UIDPLUS and LITERAL+ extensions are most
+    efficient.
 
     Courier 1.4.3 is known to be buggy, version 1.7.3 works fine.
 
