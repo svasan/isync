@@ -68,8 +68,10 @@ isync executable still exists; it is a compatibility wrapper around mbsync.
 
 * Installation
 
+    ./autogen.sh (only when building from git)
     ./configure
-    make install
+    make
+    sudo make install
 
 * Help
 
