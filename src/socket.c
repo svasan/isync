@@ -275,13 +275,7 @@ socket_start_tls( conn_t *conn, void (*cb)( int ok, void *aux ) )
 static void
 start_tls_p2( conn_t *conn )
 {
-	switch (ssl_return( "connect to", conn, SSL_connect( conn->ssl ) )) {
-	case -1:
-		start_tls_p3( conn, 0 );
-		break;
-	case 0:
-		break;
-	default:
+	if (ssl_return( "connect to", conn, SSL_connect( conn->ssl ) ) > 0) {
 		/* verify whether the server hostname matches the certificate */
 		if (verify_cert_host( conn->conf, conn )) {
 			start_tls_p3( conn, 0 );
@@ -289,7 +283,6 @@ start_tls_p2( conn_t *conn )
 			info( "Connection is now encrypted\n" );
 			start_tls_p3( conn, 1 );
 		}
-		break;
 	}
 }
 
