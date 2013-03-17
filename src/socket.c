@@ -62,6 +62,8 @@ socket_fail( conn_t *conn )
 }
 
 #ifdef HAVE_LIBSSL
+static int ssl_data_idx;
+
 static int
 ssl_return( const char *func, conn_t *conn, int ret )
 {
@@ -98,26 +100,6 @@ ssl_return( const char *func, conn_t *conn, int ret )
 }
 
 /* Some of this code is inspired by / lifted from mutt. */
-
-static int
-compare_certificates( X509 *cert, X509 *peercert,
-                      unsigned char *peermd, unsigned peermdlen )
-{
-	unsigned char md[EVP_MAX_MD_SIZE];
-	unsigned mdlen;
-
-	/* Avoid CPU-intensive digest calculation if the certificates are
-	 * not even remotely equal. */
-	if (X509_subject_name_cmp( cert, peercert ) ||
-	    X509_issuer_name_cmp( cert, peercert ))
-		return -1;
-
-	if (!X509_digest( cert, EVP_sha1(), md, &mdlen ) ||
-	    peermdlen != mdlen || memcmp( peermd, md, mdlen ))
-		return -1;
-
-	return 0;
-}
 
 static int
 host_matches( const char *host, const char *pattern )
@@ -175,120 +157,45 @@ verify_hostname( X509 *cert, const char *hostname )
 	return -1;
 }
 
-#if OPENSSL_VERSION_NUMBER >= 0x00904000L
-#define READ_X509_KEY(fp, key) PEM_read_X509( fp, key, 0, 0 )
-#else
-#define READ_X509_KEY(fp, key) PEM_read_X509( fp, key, 0 )
-#endif
-
-/* this gets called when a certificate is to be verified */
 static int
-verify_cert( const server_conf_t *conf, conn_t *sock )
+verify_cert_host( const server_conf_t *conf, conn_t *sock )
 {
-	server_conf_t *mconf = (server_conf_t *)conf;
-	SSL *ssl = sock->ssl;
-	X509 *cert, *lcert;
-	BIO *bio;
-	FILE *fp;
-	int err;
-	unsigned n, i;
-	X509_STORE_CTX xsc;
-	char buf[256];
-	unsigned char md[EVP_MAX_MD_SIZE];
+	X509 *cert;
 
-	cert = SSL_get_peer_certificate( ssl );
+	if (!conf->host || sock->force_trusted > 0)
+		return 0;
+
+	cert = SSL_get_peer_certificate( sock->ssl );
 	if (!cert) {
 		error( "Error, no server certificate\n" );
 		return -1;
 	}
 
-	while (conf->cert_file) { /* while() instead of if() so break works */
-		/* Note: this code intentionally does no hostname verification. */
+	return verify_hostname( cert, conf->host );
+}
 
-		if (X509_cmp_current_time( X509_get_notBefore( cert )) >= 0) {
-			error( "Server certificate is not yet valid\n" );
-			break;
-		}
-		if (X509_cmp_current_time( X509_get_notAfter( cert )) <= 0) {
-			error( "Server certificate has expired\n" );
-			break;
-		}
-		if (!X509_digest( cert, EVP_sha1(), md, &n )) {
-			error( "*** Unable to calculate digest\n" );
-			break;
-		}
-		if (!(fp = fopen( conf->cert_file, "rt" ))) {
-			sys_error( "Unable to load CertificateFile '%s'", conf->cert_file );
-			return -1;
-		}
-		err = -1;
-		for (lcert = 0; READ_X509_KEY( fp, &lcert ); )
-			if (!(err = compare_certificates( lcert, cert, md, n ))) /* TODO: check X509v3 [Extended] Key Usage? */
+static int
+ssl_verify_callback( int ok, X509_STORE_CTX *ctx )
+{
+	SSL *ssl = X509_STORE_CTX_get_ex_data( ctx, SSL_get_ex_data_X509_STORE_CTX_idx() );
+	conn_t *conn = SSL_get_ex_data( ssl, ssl_data_idx );
+
+	if (!conn->force_trusted) {
+		X509 *cert = sk_X509_value( ctx->chain, 0 );
+		STACK_OF(X509_OBJECT) *trusted = ctx->ctx->objs;
+		unsigned i;
+
+		conn->force_trusted = -1;
+		for (i = 0; i < conn->conf->num_trusted; i++) {
+			if (!X509_cmp( cert, sk_X509_OBJECT_value( trusted, i )->data.x509 )) {
+				conn->force_trusted = 1;
 				break;
-		X509_free( lcert );
-		fclose( fp );
-		if (!err)
-			return 0;
-		break;
-	}
-
-	if (!mconf->cert_store) {
-		if (!(mconf->cert_store = X509_STORE_new())) {
-			error( "Error creating certificate store\n" );
-			return -1;
-		}
-		if (!X509_STORE_set_default_paths( mconf->cert_store ))
-			warn( "Error while loading default certificate files: %s\n",
-			      ERR_error_string( ERR_get_error(), 0 ) );
-		if (!conf->cert_file) {
-			info( "Note: CertificateFile not defined\n" );
-		} else if (!X509_STORE_load_locations( mconf->cert_store, conf->cert_file, 0 )) {
-			error( "Error while loading certificate file '%s': %s\n",
-			       conf->cert_file, ERR_error_string( ERR_get_error(), 0 ) );
-			return -1;
+			}
 		}
 	}
-
-	X509_STORE_CTX_init( &xsc, mconf->cert_store, cert, 0 );
-	err = X509_verify_cert( &xsc ) > 0 ? 0 : X509_STORE_CTX_get_error( &xsc );
-	X509_STORE_CTX_cleanup( &xsc );
-	if (err) {
-		error( "Error, cannot verify certificate: %s (%d)\n",
-		       X509_verify_cert_error_string( err ), err );
-		goto intcheck;
-	}
-	if (conf->host && verify_hostname( cert, conf->host ) < 0)
-		goto intcheck;
-	return 0;
-
-  intcheck:
-	X509_NAME_oneline( X509_get_subject_name( cert ), buf, sizeof(buf) );
-	info( "\nSubject: %s\n", buf );
-	X509_NAME_oneline( X509_get_issuer_name( cert ), buf, sizeof(buf) );
-	info( "Issuer:  %s\n", buf );
-	bio = BIO_new( BIO_s_mem() );
-	ASN1_TIME_print( bio, X509_get_notBefore( cert ) );
-	memset( buf, 0, sizeof(buf) );
-	BIO_read( bio, buf, sizeof(buf) - 1 );
-	info( "Valid from: %s\n", buf );
-	ASN1_TIME_print( bio, X509_get_notAfter( cert ) );
-	memset( buf, 0, sizeof(buf) );
-	BIO_read( bio, buf, sizeof(buf) - 1 );
-	BIO_free( bio );
-	info( "      to:   %s\n", buf );
-	if (!X509_digest( cert, EVP_md5(), md, &n )) {
-		error( "*** Unable to calculate fingerprint\n" );
-	} else {
-		info( "Fingerprint: " );
-		for (i = 0; i < n; i += 2)
-			info( "%02X%02X ", md[i], md[i + 1] );
-		info( "\n" );
-	}
-
-	fputs( "\nAccept certificate? [y/N]: ",  stderr );
-	if (fgets( buf, sizeof(buf), stdin ) && (buf[0] == 'y' || buf[0] == 'Y'))
-		return 0;
-	return -1;
+	if (conn->force_trusted > 0)
+		ok = 1;
+	return ok;
 }
 
 static int
@@ -296,6 +203,9 @@ init_ssl_ctx( const server_conf_t *conf )
 {
 	server_conf_t *mconf = (server_conf_t *)conf;
 	int options = 0;
+
+	if (conf->SSLContext)
+		return conf->ssl_ctx_valid;
 
 	mconf->SSLContext = SSL_CTX_new( SSLv23_client_method() );
 
@@ -316,9 +226,20 @@ init_ssl_ctx( const server_conf_t *conf )
 
 	SSL_CTX_set_options( mconf->SSLContext, options );
 
-	/* we check the result of the verification after SSL_connect() */
-	SSL_CTX_set_verify( mconf->SSLContext, SSL_VERIFY_NONE, 0 );
-	return 0;
+	if (conf->cert_file && !SSL_CTX_load_verify_locations( mconf->SSLContext, conf->cert_file, 0 )) {
+		error( "Error while loading certificate file '%s': %s\n",
+		       conf->cert_file, ERR_error_string( ERR_get_error(), 0 ) );
+		return 0;
+	}
+	mconf->num_trusted = sk_X509_OBJECT_num( SSL_CTX_get_cert_store( mconf->SSLContext )->objs );
+	if (!SSL_CTX_set_default_verify_paths( mconf->SSLContext ))
+		warn( "Warning: Unable to load default certificate files: %s\n",
+		      ERR_error_string( ERR_get_error(), 0 ) );
+
+	SSL_CTX_set_verify( mconf->SSLContext, SSL_VERIFY_PEER, ssl_verify_callback );
+
+	mconf->ssl_ctx_valid = 1;
+	return 1;
 }
 
 static void start_tls_p2( conn_t * );
@@ -334,10 +255,11 @@ socket_start_tls( conn_t *conn, void (*cb)( int ok, void *aux ) )
 	if (!ssl_inited) {
 		SSL_library_init();
 		SSL_load_error_strings();
+		ssl_data_idx = SSL_get_ex_new_index( 0, NULL, NULL, NULL, NULL );
 		ssl_inited = 1;
 	}
 
-	if (!conn->conf->SSLContext && init_ssl_ctx( conn->conf )) {
+	if (!init_ssl_ctx( conn->conf )) {
 		start_tls_p3( conn, 0 );
 		return;
 	}
@@ -345,6 +267,7 @@ socket_start_tls( conn_t *conn, void (*cb)( int ok, void *aux ) )
 	conn->ssl = SSL_new( ((server_conf_t *)conn->conf)->SSLContext );
 	SSL_set_fd( conn->ssl, conn->fd );
 	SSL_set_mode( conn->ssl, SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER );
+	SSL_set_ex_data( conn->ssl, ssl_data_idx, conn );
 	conn->state = SCK_STARTTLS;
 	start_tls_p2( conn );
 }
@@ -359,8 +282,8 @@ start_tls_p2( conn_t *conn )
 	case 0:
 		break;
 	default:
-		/* verify the server certificate */
-		if (verify_cert( conn->conf, conn )) {
+		/* verify whether the server hostname matches the certificate */
+		if (verify_cert_host( conn->conf, conn )) {
 			start_tls_p3( conn, 0 );
 		} else {
 			info( "Connection is now encrypted\n" );

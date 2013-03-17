@@ -273,8 +273,12 @@ established with the IMAP server.  (Default: \fIyes\fR)
 ..
 .TP
 \fBCertificateFile\fR \fIpath\fR
-File containing X.509 CA certificates used to verify server identities.
-This option is \fImandatory\fR if SSL is used. See \fBSSL CERTIFICATES\fR below.
+File containing additional X.509 certificates used to verify server
+identities. Directly matched peer certificates are always trusted,
+regardless of validity.
+.br
+Note that the system's default certificate store is always used and should
+not be specified here.
 ..
 .TP
 \fBUseSSLv2\fR \fIyes\fR|\fIno\fR
@@ -506,9 +510,6 @@ disproportionate.
 .br
 \fBThorough\fR - this avoids message duplication after crashes as well,
 at some additional performance cost.
-..
-.SH SSL CERTIFICATES
-[to be done]
 ..
 .SH INHERENT PROBLEMS
 Changes done after \fBmbsync\fR has retrieved the message list will not be

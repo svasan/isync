@@ -67,8 +67,9 @@ typedef struct server_conf {
 	unsigned use_tlsv12:1;
 
 	/* these are actually variables and are leaked at the end */
+	unsigned ssl_ctx_valid:1;
+	unsigned num_trusted;
 	SSL_CTX *SSLContext;
-	X509_STORE *cert_store;
 #endif
 } server_conf_t;
 
@@ -87,6 +88,7 @@ typedef struct {
 	char *name;
 #ifdef HAVE_LIBSSL
 	SSL *ssl;
+	int force_trusted;
 #endif
 
 	void (*bad_callback)( void *aux ); /* async fail while sending or listening */
