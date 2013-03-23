@@ -1322,9 +1322,9 @@ imap_open_store_greeted( imap_store_t *ctx )
 static void
 imap_open_store_p2( imap_store_t *ctx, struct imap_cmd *cmd ATTR_UNUSED, int response )
 {
-	if (response != RESP_OK)
+	if (response == RESP_NO)
 		imap_open_store_bail( ctx );
-	else
+	else if (response == RESP_OK)
 		imap_open_store_authenticate( ctx );
 }
 
@@ -1363,9 +1363,9 @@ imap_open_store_authenticate( imap_store_t *ctx )
 static void
 imap_open_store_authenticate_p2( imap_store_t *ctx, struct imap_cmd *cmd ATTR_UNUSED, int response )
 {
-	if (response != RESP_OK)
+	if (response == RESP_NO)
 		imap_open_store_bail( ctx );
-	else
+	else if (response == RESP_OK)
 		socket_start_tls( &ctx->conn, imap_open_store_tlsstarted2 );
 }
 
@@ -1383,9 +1383,9 @@ imap_open_store_tlsstarted2( int ok, void *aux )
 static void
 imap_open_store_authenticate_p3( imap_store_t *ctx, struct imap_cmd *cmd ATTR_UNUSED, int response )
 {
-	if (response != RESP_OK)
+	if (response == RESP_NO)
 		imap_open_store_bail( ctx );
-	else
+	else if (response == RESP_OK)
 		imap_open_store_authenticate2( ctx );
 }
 #endif
@@ -1453,9 +1453,9 @@ imap_open_store_authenticate2( imap_store_t *ctx )
 static void
 imap_open_store_authenticate2_p2( imap_store_t *ctx, struct imap_cmd *cmd ATTR_UNUSED, int response )
 {
-	if (response != RESP_OK)
+	if (response == RESP_NO)
 		imap_open_store_bail( ctx );
-	else
+	else if (response == RESP_OK)
 		imap_open_store_namespace( ctx );
 }
 
@@ -1480,9 +1480,9 @@ imap_open_store_namespace( imap_store_t *ctx )
 static void
 imap_open_store_namespace_p2( imap_store_t *ctx, struct imap_cmd *cmd ATTR_UNUSED, int response )
 {
-	if (response != RESP_OK) {
+	if (response == RESP_NO) {
 		imap_open_store_bail( ctx );
-	} else {
+	} else if (response == RESP_OK) {
 		ctx->got_namespace = 1;
 		imap_open_store_namespace2( ctx );
 	}
