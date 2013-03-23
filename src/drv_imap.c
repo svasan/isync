@@ -1209,7 +1209,9 @@ do_cram_auth( imap_store_t *ctx, struct imap_cmd *cmdp, const char *prompt )
 		printf( ">+> %s\n", resp );
 		fflush( stdout );
 	}
-	return socket_write( &ctx->conn, resp, l, GiveOwn );
+	if (socket_write( &ctx->conn, resp, l, GiveOwn ) < 0)
+		return -1;
+	return socket_write( &ctx->conn, "\r\n", 2, KeepOwn );
 }
 #endif
 
