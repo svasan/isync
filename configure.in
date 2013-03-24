@@ -76,7 +76,7 @@ if test "x$ob_cv_with_ssl" != xno; then
 fi
 AC_SUBST(SSL_LIBS)
 
-AC_CACHE_CHECK([for Berkley DB 4.2], ac_cv_berkdb4,
+AC_CACHE_CHECK([for Berkley DB >= 4.2], ac_cv_berkdb4,
   [ac_cv_berkdb4=no
    AC_TRY_LINK([#include <db.h>],
                [DB *db;
@@ -84,8 +84,7 @@ AC_CACHE_CHECK([for Berkley DB 4.2], ac_cv_berkdb4,
 	        db->open(db, 0, "foo", "foo", DB_HASH, DB_CREATE, 0)],
 	       [ac_cv_berkdb4=yes])])
 if test "x$ac_cv_berkdb4" = xno; then
-  AC_MSG_ERROR([Berkley DB 4.2 not found.
-You must install libdb4.2 including the respective development files/headers.])
+  AC_MSG_ERROR([Berkley DB >= 4.2 not found.])
 fi
 
 AC_ARG_ENABLE(compat,
