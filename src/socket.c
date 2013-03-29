@@ -297,7 +297,7 @@ static void start_tls_p3( conn_t *conn, int ok )
 static void socket_fd_cb( int, void * );
 
 static void socket_connect_failed( conn_t * );
-static void socket_connected2( conn_t * );
+static void socket_connected( conn_t * );
 static void socket_connect_bail( conn_t * );
 
 static void
@@ -388,7 +388,7 @@ socket_connect( conn_t *sock, void (*cb)( int ok, void *aux ) )
 
 	}
 	info( "\vok\n" );
-	socket_connected2( sock );
+	socket_connected( sock );
 	return;
 }
 
@@ -402,24 +402,6 @@ socket_connect_failed( conn_t *conn )
 
 static void
 socket_connected( conn_t *conn )
-{
-	int soerr;
-	socklen_t selen = sizeof(soerr);
-
-	if (getsockopt( conn->fd, SOL_SOCKET, SO_ERROR, &soerr, &selen )) {
-		perror( "getsockopt" );
-		exit( 1 );
-	}
-	if (soerr) {
-		errno = soerr;
-		socket_connect_failed( conn );
-		return;
-	}
-	socket_connected2( conn );
-}
-
-static void
-socket_connected2( conn_t *conn )
 {
 	conf_fd( conn->fd, 0, POLLIN );
 	conn->state = SCK_READY;
@@ -637,13 +619,22 @@ socket_fd_cb( int events, void *aux )
 {
 	conn_t *conn = (conn_t *)aux;
 
-	if (conn->state == SCK_CONNECTING) {
-		socket_connected( conn );
-		return;
-	}
-
-	if (events & POLLERR) {
-		error( "Unidentified socket error from %s.\n", conn->name );
+	if ((events & POLLERR) || conn->state == SCK_CONNECTING) {
+		int soerr;
+		socklen_t selen = sizeof(soerr);
+		if (getsockopt( conn->fd, SOL_SOCKET, SO_ERROR, &soerr, &selen )) {
+			perror( "getsockopt" );
+			exit( 1 );
+		}
+		errno = soerr;
+		if (conn->state == SCK_CONNECTING) {
+			if (errno)
+				socket_connect_failed( conn );
+			else
+				socket_connected( conn );
+			return;
+		}
+		sys_error( "Socket error from %s", conn->name );
 		socket_fail( conn );
 		return;
 	}
