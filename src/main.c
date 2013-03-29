@@ -431,7 +431,10 @@ main( int argc, char **argv )
 				DFlags |= VERBOSE | QUIET;
 			break;
 		case 'D':
-			DFlags |= DEBUG | QUIET;
+			if (*ochar == 'C')
+				DFlags |= CRASHDEBUG, ochar++;
+			else
+				DFlags |= CRASHDEBUG | DEBUG | QUIET;
 			break;
 		case 'J':
 			DFlags |= KEEPJOURNAL;
@@ -450,7 +453,7 @@ main( int argc, char **argv )
 	}
 
 #ifdef __linux__
-	if (DFlags & DEBUG) {
+	if (DFlags & CRASHDEBUG) {
 		signal( SIGSEGV, crashHandler );
 		signal( SIGBUS, crashHandler );
 		signal( SIGILL, crashHandler );
