@@ -633,14 +633,14 @@ socket_fd_cb( int events, void *aux )
 {
 	conn_t *conn = (conn_t *)aux;
 
-	if (events & POLLERR) {
-		error( "Unidentified socket error from %s.\n", conn->name );
-		socket_fail( conn );
+	if (conn->state == SCK_CONNECTING) {
+		socket_connected( conn );
 		return;
 	}
 
-	if (conn->state == SCK_CONNECTING) {
-		socket_connected( conn );
+	if (events & POLLERR) {
+		error( "Unidentified socket error from %s.\n", conn->name );
+		socket_fail( conn );
 		return;
 	}
 
