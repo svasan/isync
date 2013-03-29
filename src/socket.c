@@ -296,6 +296,7 @@ static void start_tls_p3( conn_t *conn, int ok )
 
 static void socket_fd_cb( int, void * );
 
+static void socket_connect_failed( conn_t * );
 static void socket_connected2( conn_t * );
 static void socket_connect_bail( conn_t * );
 
@@ -355,7 +356,8 @@ socket_connect( conn_t *sock, void (*cb)( int ok, void *aux ) )
 		he = gethostbyname( conf->host );
 		if (!he) {
 			error( "IMAP error: Cannot resolve server '%s'\n", conf->host );
-			goto bail;
+			socket_connect_bail( sock );
+			return;
 		}
 		info( "\vok\n" );
 
@@ -375,9 +377,8 @@ socket_connect( conn_t *sock, void (*cb)( int ok, void *aux ) )
 		infon( "Connecting to %s... ", sock->name );
 		if (connect( s, (struct sockaddr *)&addr, sizeof(addr) )) {
 			if (errno != EINPROGRESS) {
-				sys_error( "Cannot connect to %s", sock->name );
-				socket_close_internal( sock );
-				goto bail;
+				socket_connect_failed( sock );
+				return;
 			}
 			conf_fd( s, 0, POLLOUT );
 			sock->state = SCK_CONNECTING;
@@ -389,9 +390,14 @@ socket_connect( conn_t *sock, void (*cb)( int ok, void *aux ) )
 	info( "\vok\n" );
 	socket_connected2( sock );
 	return;
+}
 
-  bail:
-	socket_connect_bail( sock );
+static void
+socket_connect_failed( conn_t *conn )
+{
+	sys_error( "Cannot connect to %s", conn->name );
+	socket_close_internal( conn );
+	socket_connect_bail( conn );
 }
 
 static void
@@ -406,9 +412,7 @@ socket_connected( conn_t *conn )
 	}
 	if (soerr) {
 		errno = soerr;
-		sys_error( "Cannot connect to %s", conn->name );
-		socket_close_internal( conn );
-		socket_connect_bail( conn );
+		socket_connect_failed( conn );
 		return;
 	}
 	socket_connected2( conn );
