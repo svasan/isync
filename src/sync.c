@@ -155,7 +155,7 @@ typedef struct {
 	int trash_total[2], trash_done[2];
 	int maxuid[2]; /* highest UID that was already propagated */
 	int uidval[2]; /* UID validity value */
-	int uidnext[2]; /* next expected UID; TUID lookup makes sense only for lower UIDs */
+	int newuid[2]; /* TUID lookup makes sense only for UIDs >= this */
 	int smaxxuid; /* highest expired UID on slave */
 } sync_vars_t;
 
@@ -725,8 +725,8 @@ box_selected( int sts, void *aux )
 			return;
 		}
 		if (sscanf( buf, "%63s %63s", buf1, buf2 ) != 2 ||
-		    sscanf( buf1, "%d:%d:%d", &svars->uidval[M], &svars->maxuid[M], &svars->uidnext[M] ) < 2 ||
-		    sscanf( buf2, "%d:%d:%d:%d", &svars->uidval[S], &svars->smaxxuid, &svars->maxuid[S], &svars->uidnext[S] ) < 3) {
+		    sscanf( buf1, "%d:%d:%d", &svars->uidval[M], &svars->maxuid[M], &svars->newuid[M] ) < 2 ||
+		    sscanf( buf2, "%d:%d:%d:%d", &svars->uidval[S], &svars->smaxxuid, &svars->maxuid[S], &svars->newuid[S] ) < 3) {
 			error( "Error: invalid sync state header in %s\n", svars->dname );
 			goto jbail;
 		}
@@ -804,9 +804,9 @@ box_selected( int sts, void *aux )
 				else if (buf[0] == ')')
 					svars->maxuid[S] = t1;
 				else if (buf[0] == '{')
-					svars->uidnext[M] = t1;
+					svars->newuid[M] = t1;
 				else if (buf[0] == '}')
-					svars->uidnext[S] = t1;
+					svars->newuid[S] = t1;
 				else if (buf[0] == '|') {
 					svars->uidval[M] = t1;
 					svars->uidval[S] = t2;
@@ -998,7 +998,7 @@ load_box( sync_vars_t *svars, int t, int minwuid, int *mexcs, int nmexcs )
 		maxwuid = 0;
 	info( "Loading %s...\n", str_ms[t] );
 	debug( maxwuid == INT_MAX ? "loading %s [%d,inf]\n" : "loading %s [%d,%d]\n", str_ms[t], minwuid, maxwuid );
-	DRIVER_CALL_RET(load( svars->ctx[t], minwuid, maxwuid, svars->uidnext[t], mexcs, nmexcs, box_loaded, AUX ));
+	DRIVER_CALL_RET(load( svars->ctx[t], minwuid, maxwuid, svars->newuid[t], mexcs, nmexcs, box_loaded, AUX ));
 }
 
 typedef struct {
