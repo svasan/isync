@@ -367,7 +367,7 @@ sub showstate($)
 		close FILE;
 		return;
 	}
-	if (!/^1:(\d+):0 1:(\d+):(\d+):0\n$/) {
+	if (!/^1:(\d+) 1:(\d+):(\d+)\n$/) {
 		print STDERR " Malformed sync state header '$_'.\n";
 		close FILE;
 		return;
@@ -508,7 +508,7 @@ sub ckstate($@)
 		return 1;
 	}
 	chomp($l);
-	my $xl = "1:".shift(@T).":0 1:".shift(@T).":".shift(@T).":0";
+	my $xl = "1:".shift(@T)." 1:".shift(@T).":".shift(@T);
 	if ($l ne $xl) {
 		print STDERR "Sync state header mismatch: '$l' instead of '$xl'.\n";
 		return 1;

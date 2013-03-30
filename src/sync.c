@@ -725,8 +725,8 @@ box_selected( int sts, void *aux )
 			return;
 		}
 		if (sscanf( buf, "%63s %63s", buf1, buf2 ) != 2 ||
-		    sscanf( buf1, "%d:%d:%d", &svars->uidval[M], &svars->maxuid[M], &svars->newuid[M] ) < 2 ||
-		    sscanf( buf2, "%d:%d:%d:%d", &svars->uidval[S], &svars->smaxxuid, &svars->maxuid[S], &svars->newuid[S] ) < 3) {
+		    sscanf( buf1, "%d:%d", &svars->uidval[M], &svars->maxuid[M] ) < 2 ||
+		    sscanf( buf2, "%d:%d:%d", &svars->uidval[S], &svars->smaxxuid, &svars->maxuid[S] ) < 3) {
 			error( "Error: invalid sync state header in %s\n", svars->dname );
 			goto jbail;
 		}
@@ -1045,7 +1045,6 @@ box_loaded( int sts, void *aux )
 		debug( "matching previously copied messages on %s\n", str_ms[t] );
 		match_tuids( svars, t );
 	}
-	Fprintf( svars->jfp, "%c %d\n", "{}"[t], svars->ctx[t]->uidnext );
 
 	debug( "matching messages on %s against sync records\n", str_ms[t] );
 	hashsz = bucketsForSize( svars->nsrecs * 3 );
@@ -1161,6 +1160,7 @@ box_loaded( int sts, void *aux )
 	debug( "synchronizing new entries\n" );
 	svars->osrecadd = svars->srecadd;
 	for (t = 0; t < 2; t++) {
+		Fprintf( svars->jfp, "%c %d\n", "{}"[t], svars->ctx[t]->uidnext );
 		for (tmsg = svars->ctx[1-t]->msgs; tmsg; tmsg = tmsg->next)
 			if (tmsg->srec ? tmsg->srec->uid[t] < 0 && (tmsg->srec->uid[t] == -1 ? (svars->chan->ops[t] & OP_RENEW) : (svars->chan->ops[t] & OP_NEW)) : (svars->chan->ops[t] & OP_NEW)) {
 				debug( "new message %d on %s\n", tmsg->uid, str_ms[1-t] );
@@ -1461,7 +1461,6 @@ msgs_found_new( int sts, void *aux )
 static void
 msgs_new_done( sync_vars_t *svars, int t )
 {
-	Fprintf( svars->jfp, "%c %d\n", "{}"[t], svars->ctx[t]->uidnext );
 	svars->state[t] |= ST_FOUND_NEW;
 	sync_close( svars, t );
 }
@@ -1695,9 +1694,9 @@ box_closed_p2( sync_vars_t *svars, int t )
 		}
 	}
 
-	Fprintf( svars->nfp, "%d:%d:%d %d:%d:%d:%d\n",
-	         svars->uidval[M], svars->maxuid[M], svars->ctx[M]->uidnext,
-	         svars->uidval[S], svars->smaxxuid, svars->maxuid[S], svars->ctx[S]->uidnext );
+	Fprintf( svars->nfp, "%d:%d %d:%d:%d\n",
+	         svars->uidval[M], svars->maxuid[M],
+	         svars->uidval[S], svars->smaxxuid, svars->maxuid[S] );
 	for (srec = svars->srecs; srec; srec = srec->next) {
 		if (srec->status & S_DEAD)
 			continue;
