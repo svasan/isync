@@ -1612,6 +1612,8 @@ imap_load( store_t *gctx, int minuid, int maxuid, int newuid, int *excs, int nex
 				sprintf( buf, "%d:%d", minuid, newuid - 1 );
 				if (imap_submit_load( ctx, buf, 0, sts ) < 0)
 					goto done;
+				if (newuid > maxuid)
+					goto done;
 				sprintf( buf, "%d:%d", newuid, maxuid );
 			} else {
 				sprintf( buf, "%d:%d", minuid, maxuid );
