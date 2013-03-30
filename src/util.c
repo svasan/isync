@@ -337,35 +337,24 @@ expand_strdup( const char *s )
 	if (*s == '~') {
 		s++;
 		if (!*s) {
-		  rethome:
 			p = 0;
 			q = Home;
 		} else if (*s == '/') {
-			p = s + 1;
+			p = s;
 			q = Home;
 		} else {
 			if ((p = strchr( s, '/' ))) {
 				r = my_strndup( s, (int)(p - s) );
 				pw = getpwnam( r );
 				free( r );
-				p++;
 			} else
 				pw = getpwnam( s );
 			if (!pw)
 				return 0;
 			q = pw->pw_dir;
 		}
-		if (!p)
-			return nfstrdup( q );
-	  retjoin:
-		nfasprintf( &r, "%s/%s", q, p );
+		nfasprintf( &r, "%s%s", q, p ? p : "" );
 		return r;
-	} else if (*s != '/') {
-		if (*s == '.' && !s[1])
-			goto rethome;
-		p = s;
-		q = Home;
-		goto retjoin;
 	} else
 		return nfstrdup( s );
 }

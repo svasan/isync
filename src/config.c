@@ -219,7 +219,7 @@ getopt_helper( conffile_t *cfile, int *cops, int ops[], char **sync_state )
 		while ((arg = get_arg( cfile, ARG_OPTIONAL, 0 )));
 		ops[M] |= XOP_HAVE_CREATE;
 	} else if (!strcasecmp( "SyncState", cfile->cmd ))
-		*sync_state = !strcmp( cfile->val, "*" ) ? nfstrdup( "*" ) : expand_strdup( cfile->val );
+		*sync_state = expand_strdup( cfile->val );
 	else
 		return 0;
 	return 1;

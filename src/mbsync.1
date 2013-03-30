@@ -90,6 +90,8 @@ Lines starting with a hash mark (\fB#\fR) are comments and are ignored entirely.
 Configuration items are keywords followed by one or more arguments;
 arguments containing spaces must be enclosed in double quotes (\fB"\fR).
 All keywords (including those used as arguments) are case-insensitive.
+Bash-like home directory expansion using the tilde (\fB~\fR) is supported
+in all options which represent local paths.
 There are a few global options, the rest applies to particular sections.
 Sections are started by a section keyword and are terminated by an empty line
 or end of file.
@@ -177,7 +179,7 @@ Store's \fBTrash\fR. When using this, the remote Store does not need an own
 (Default: \fIno\fR)
 ..
 .SS Maildir Stores
-The reference point for relative \fBPath\fRs is $HOME.
+The reference point for relative \fBPath\fRs is the current working directory.
 .P
 As \fBmbsync\fR needs UIDs, but no standardized UID storage scheme exists for
 Maildir, \fBmbsync\fR supports two schemes, each with its pros and cons.
