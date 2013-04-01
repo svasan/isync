@@ -195,7 +195,7 @@ maildir_invoke_bad_callback( store_t *ctx )
 	ctx->bad_callback( ctx->bad_callback_aux );
 }
 
-static int maildir_list_part( store_t *gctx, int doInbox, int *flags );
+static int maildir_list_inbox( store_t *gctx, int *flags );
 
 static int
 maildir_list_recurse( store_t *gctx, int isBox, int *flags, const char *inbox,
@@ -222,7 +222,7 @@ maildir_list_recurse( store_t *gctx, int isBox, int *flags, const char *inbox,
 		const char *ent = de->d_name;
 		pl = pathLen + nfsnprintf( path + pathLen, _POSIX_PATH_MAX - pathLen, "%s", ent );
 		if (inbox && !memcmp( path, inbox, pl ) && !inbox[pl]) {
-			if (maildir_list_part( gctx, 1, flags ) < 0)
+			if (maildir_list_inbox( gctx, flags ) < 0)
 				return -1;
 		} else {
 			if (!memcmp( ent, "INBOX", 6 )) {
@@ -248,30 +248,34 @@ maildir_list_recurse( store_t *gctx, int isBox, int *flags, const char *inbox,
 }
 
 static int
-maildir_list_part( store_t *gctx, int doInbox, int *flags )
+maildir_list_inbox( store_t *gctx, int *flags )
 {
 	char path[_POSIX_PATH_MAX], name[_POSIX_PATH_MAX];
 
-	if (doInbox) {
-		*flags &= ~LIST_INBOX;
-		return maildir_list_recurse(
-		        gctx, 1, flags, 0,
-		        path, nfsnprintf( path, _POSIX_PATH_MAX, "%s", ((maildir_store_conf_t *)gctx->conf)->inbox ),
-		        name, nfsnprintf( name, _POSIX_PATH_MAX, "INBOX" ) );
-	} else {
-		return maildir_list_recurse(
-		        gctx, 0, flags, ((maildir_store_conf_t *)gctx->conf)->inbox,
-		        path, nfsnprintf( path, _POSIX_PATH_MAX, "%s", gctx->conf->path ),
-		        name, 0 );
-	}
+	*flags &= ~LIST_INBOX;
+	return maildir_list_recurse(
+	        gctx, 1, flags, 0,
+	        path, nfsnprintf( path, _POSIX_PATH_MAX, "%s", ((maildir_store_conf_t *)gctx->conf)->inbox ),
+	        name, nfsnprintf( name, _POSIX_PATH_MAX, "INBOX" ) );
+}
+
+static int
+maildir_list_path( store_t *gctx, int *flags )
+{
+	char path[_POSIX_PATH_MAX], name[_POSIX_PATH_MAX];
+
+	return maildir_list_recurse(
+	        gctx, 0, flags, ((maildir_store_conf_t *)gctx->conf)->inbox,
+	        path, nfsnprintf( path, _POSIX_PATH_MAX, "%s", gctx->conf->path ),
+	        name, 0 );
 }
 
 static void
 maildir_list( store_t *gctx, int flags,
               void (*cb)( int sts, void *aux ), void *aux )
 {
-	if (((flags & LIST_PATH) && maildir_list_part( gctx, 0, &flags ) < 0) ||
-	    ((flags & LIST_INBOX) && maildir_list_part( gctx, 1, &flags ) < 0)) {
+	if (((flags & LIST_PATH) && maildir_list_path( gctx, &flags ) < 0) ||
+	    ((flags & LIST_INBOX) && maildir_list_inbox( gctx, &flags ) < 0)) {
 		maildir_invoke_bad_callback( gctx );
 		cb( DRV_CANCELED, aux );
 	} else {
