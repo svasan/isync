@@ -250,18 +250,19 @@ maildir_list_recurse( store_t *gctx, int isBox, int *flags, const char *inbox,
 static int
 maildir_list_part( store_t *gctx, int doInbox, int *flags )
 {
-	int pl, nl;
-	const char *inbox = ((maildir_store_conf_t *)gctx->conf)->inbox;
 	char path[_POSIX_PATH_MAX], name[_POSIX_PATH_MAX];
 
 	if (doInbox) {
 		*flags &= ~LIST_INBOX;
-		pl = nfsnprintf( path, _POSIX_PATH_MAX, "%s", inbox );
-		nl = nfsnprintf( name, _POSIX_PATH_MAX, "INBOX" );
-		return maildir_list_recurse( gctx, 1, flags, 0, path, pl, name, nl );
+		return maildir_list_recurse(
+		        gctx, 1, flags, 0,
+		        path, nfsnprintf( path, _POSIX_PATH_MAX, "%s", ((maildir_store_conf_t *)gctx->conf)->inbox ),
+		        name, nfsnprintf( name, _POSIX_PATH_MAX, "INBOX" ) );
 	} else {
-		pl = nfsnprintf( path, _POSIX_PATH_MAX, "%s", gctx->conf->path );
-		return maildir_list_recurse( gctx, 0, flags, inbox, path, pl, name, 0 );
+		return maildir_list_recurse(
+		        gctx, 0, flags, ((maildir_store_conf_t *)gctx->conf)->inbox,
+		        path, nfsnprintf( path, _POSIX_PATH_MAX, "%s", gctx->conf->path ),
+		        name, 0 );
 	}
 }
 
