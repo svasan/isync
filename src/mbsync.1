@@ -147,7 +147,8 @@ If \fIsize\fR is 0, the maximum message size is \fBunlimited\fR.
 \fBMapInbox\fR \fImailbox\fR
 Create a virtual mailbox (relative to \fBPath\fR), which is backed by
 the \fBINBOX\fR. Makes sense in conjunction with \fBPatterns\fR in the
-Channels section.
+Channels section, though with a Maildir slave, you probably want to
+place \fBInbox\fR under \fBPath\fR instead.
 This virtual mailbox does not support subfolders.
 ..
 .TP
@@ -219,7 +220,8 @@ use \fBmdconvert\fR to change it.
 ..
 .TP
 \fBInbox\fR \fIpath\fR
-The location of the \fBINBOX\fR. This is \fInot\fR relative to \fBPath\fR.
+The location of the \fBINBOX\fR. This is \fInot\fR relative to \fBPath\fR,
+but it is allowed to place the \fBINBOX\fR inside the \fBPath\fR.
 (Default: \fI~/Maildir\fR)
 ..
 .SS IMAP4 Accounts
