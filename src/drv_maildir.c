@@ -162,7 +162,6 @@ maildir_cleanup( store_t *gctx )
 	if (ctx->db)
 		ctx->db->close( ctx->db, 0 );
 #endif /* USE_DB */
-	free( ctx->trash );
 	free( gctx->path );
 	free( ctx->excs );
 	if (ctx->uvfd >= 0)
@@ -173,6 +172,7 @@ static void
 maildir_disown_store( store_t *gctx )
 {
 	maildir_cleanup( gctx );
+	free( ((maildir_store_t *)gctx)->trash );
 	free_string_list( gctx->boxes );
 	free( gctx );
 }
