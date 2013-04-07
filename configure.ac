@@ -1,10 +1,10 @@
-AC_INIT(src/isync.h)
-AM_CONFIG_HEADER(config.h)
-AM_INIT_AUTOMAKE(isync, 1.1.0)
+AC_INIT([isync], [1.1.0])
+AC_CONFIG_HEADERS([config.h])
+AM_INIT_AUTOMAKE
 
 AM_MAINTAINER_MODE
 
-AM_PROG_CC_STDC
+AC_PROG_CC
 if test "$GCC" = yes; then
     CFLAGS="$CFLAGS -pipe -W -Wall -Wshadow -Wstrict-prototypes -ansi -pedantic -Wno-overlength-strings"
 fi
@@ -18,11 +18,9 @@ AC_CHECK_LIB(socket, socket, [SOCK_LIBS="-lsocket"])
 AC_CHECK_LIB(nsl, inet_ntoa, [SOCK_LIBS="$SOCK_LIBS -lnsl"])
 AC_SUBST(SOCK_LIBS)
 
-m4_ifdef([AS_HELP_STRING], , [m4_define([AS_HELP_STRING], m4_defn([AC_HELP_STRING]))])
-
 have_ssl_paths=
 AC_ARG_WITH(ssl,
-  AS_HELP_STRING([--with-ssl[=PATH]], [where to look for SSL [detect]]),
+  AC_HELP_STRING([--with-ssl[=PATH]], [where to look for SSL [detect]]),
   [ob_cv_with_ssl=$withval])
 if test "x$ob_cv_with_ssl" != xno; then
   case $ob_cv_with_ssl in
@@ -88,14 +86,15 @@ if test "x$ac_cv_berkdb4" = xno; then
 fi
 
 AC_ARG_ENABLE(compat,
-  AS_HELP_STRING([--disable-compat], [don't include isync compatibility wrapper [no]]),
+  AC_HELP_STRING([--disable-compat], [don't include isync compatibility wrapper [no]]),
   [ob_cv_enable_compat=$enableval])
 if test "x$ob_cv_enable_compat" != xno; then
   AC_CHECK_FUNCS(getopt_long)
 fi
 AM_CONDITIONAL(with_compat, test "x$ob_cv_enable_compat" != xno)
 
-AC_OUTPUT(Makefile src/Makefile src/compat/Makefile isync.spec)
+AC_CONFIG_FILES([Makefile src/Makefile src/compat/Makefile isync.spec])
+AC_OUTPUT
 
 if test -n "$have_ssl_paths"; then
     AC_MSG_RESULT([
