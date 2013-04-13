@@ -679,7 +679,7 @@ cram( const char *challenge, const char *user, const char *pass, char **_final, 
 {
 	char *response, *final;
 	unsigned hashlen;
-	int i, clen, rlen, blen, flen, olen;
+	int i, clen, blen, flen, olen;
 	unsigned char hash[16];
 	char buf[256], hex[33];
 	HMAC_CTX hmac;
@@ -689,8 +689,8 @@ cram( const char *challenge, const char *user, const char *pass, char **_final, 
 	clen = strlen( challenge );
 	/* response will always be smaller than challenge because we are decoding. */
 	response = nfcalloc( 1 + clen );
-	rlen = EVP_DecodeBlock( (unsigned char *)response, (unsigned char *)challenge, clen );
-	HMAC_Update( &hmac, (unsigned char *)response, rlen );
+	EVP_DecodeBlock( (unsigned char *)response, (unsigned char *)challenge, clen );
+	HMAC_Update( &hmac, (unsigned char *)response, strlen( response ) );
 	free( response );
 
 	hashlen = sizeof(hash);
