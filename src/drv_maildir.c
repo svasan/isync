@@ -202,16 +202,18 @@ maildir_list_recurse( store_t *gctx, int isBox, int *flags, const char *inbox,
                       char *path, int pathLen, char *name, int nameLen )
 {
 	DIR *dir;
-	int pl, nl;
+	int pl, nl, missing;
 	struct dirent *de;
 	struct stat st;
 
 	if (isBox) {
 		nfsnprintf( path + pathLen, _POSIX_PATH_MAX - pathLen, "/cur" );
-		if (stat( path, &st ) || !S_ISDIR(st.st_mode))
+		missing = stat( path, &st ) || !S_ISDIR(st.st_mode);
+		if (!missing || isBox > 1)
+			add_string_list( &gctx->boxes, name );
+		if (missing)
 			return 0;
 		path[pathLen] = 0;
-		add_string_list( &gctx->boxes, name );
 		name[nameLen++] = '/';
 	}
 	if (!(dir = opendir( path ))) {
@@ -254,7 +256,7 @@ maildir_list_inbox( store_t *gctx, int *flags )
 
 	*flags &= ~LIST_INBOX;
 	return maildir_list_recurse(
-	        gctx, 1, flags, 0,
+	        gctx, 2, flags, 0,
 	        path, nfsnprintf( path, _POSIX_PATH_MAX, "%s", ((maildir_store_conf_t *)gctx->conf)->inbox ),
 	        name, nfsnprintf( name, _POSIX_PATH_MAX, "INBOX" ) );
 }
