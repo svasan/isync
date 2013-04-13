@@ -370,6 +370,10 @@ and \fB%\fR matches anything up to the next hierarchy delimiter. Prepending
 \fB!\fR to a pattern makes it an exclusion. Multiple patterns can be specified
 (either by supplying multiple arguments or by using \fBPattern\fR multiple
 times); later matches take precedence.
+.br
+Note that \fBINBOX\fR is not matched by wildcards, unless it lives under
+\fBPath\fR.
+.br
 Example: "\fBPatterns\fR\ \fI%\ !Trash\fR"
 ..
 .TP

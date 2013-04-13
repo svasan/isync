@@ -706,28 +706,29 @@ store_opened( store_t *ctx, void *aux )
 		for (flags = 0, cpat = mvars->chan->patterns; cpat; cpat = cpat->next) {
 			const char *pat = cpat->string;
 			if (*pat != '!') {
-				int i;
-				char c;
-				static const char strinbox[] = "INBOX";
-				for (i = 0; ; i++) {
-					c = pat[i];
-					if (i == sizeof(strinbox) - 1)
-						break;
-					if (c != strinbox[i])
-						goto nextpat;
-				}
-				if (!c) {
-					flags |= LIST_INBOX;
-				} else if (c == '/') {
-					if (ctx->conf->flat_delim)
+				/* Partial matches like "INB*" or even "*" are not considered,
+				 * except implicity when the INBOX lives under Path. */
+				if (!memcmp( pat, "INBOX", 5 )) {
+					char c = pat[5];
+					if (!c) {
+						/* User really wants the INBOX. */
+						flags |= LIST_INBOX;
+					} else if (c == '/') {
+						/* Flattened sub-folders of INBOX actually end up in Path. */
+						if (ctx->conf->flat_delim)
+							flags |= LIST_PATH;
+						else
+							flags |= LIST_INBOX;
+					} else {
+						/* User may not want the INBOX after all ... */
 						flags |= LIST_PATH;
-					else
-						flags |= LIST_INBOX;
+						/* ... but maybe he does.
+						 * The flattened sub-folder case is implicitly covered by the previous line. */
+						if (c == '*' || c == '%')
+							flags |= LIST_INBOX;
+					}
 				} else {
-				  nextpat:
 					flags |= LIST_PATH;
-					if (c == '*' || c == '%')
-						flags |= LIST_INBOX;
 				}
 			}
 		}
