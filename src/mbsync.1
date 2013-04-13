@@ -159,6 +159,9 @@ This can be useful when the MUA used to access the Store provides
 suboptimal handling of hierarchical mailboxes, as is the case with
 \fBMutt\fR.
 A common choice for the delimiter is \fB.\fR.
+.br
+Note that flattened sub-folders of the \fBINBOX\fR always end up
+under \fBPath\fR, including the "INBOX\fIdelim\fR" prefix.
 ..
 .TP
 \fBTrash\fR \fImailbox\fR
@@ -389,7 +392,7 @@ This is useful for mailboxes where you keep a complete archive on the server,
 but want to mirror only the last messages (for instance, for mailing lists).
 The messages that were the first to arrive in the mailbox (independently of
 the actual date of the message) will be deleted first.
-Messages that are flagged (marked as important) and recent messages will not
+Messages that are flagged (marked as important) and unread messages will not
 be automatically deleted.
 If \fIcount\fR is 0, the maximum number of messages is \fBunlimited\fR
 (Default: \fI0\fR).
