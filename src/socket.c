@@ -1,7 +1,7 @@
 /*
  * mbsync - mailbox synchronizer
  * Copyright (C) 2000-2002 Michael R. Elkins <me@mutt.org>
- * Copyright (C) 2002-2006,2008,2010,2011 Oswald Buddenhagen <ossi@users.sf.net>
+ * Copyright (C) 2002-2006,2008,2010,2011, 2013 Oswald Buddenhagen <ossi@users.sf.net>
  * Copyright (C) 2004 Theodore Y. Ts'o <tytso@mit.edu>
  *
  *  This program is free software; you can redistribute it and/or modify
