@@ -1211,10 +1211,10 @@ box_loaded( int sts, void *aux )
 					} else {
 						if (tmsg->srec) {
 							debug( "  -> not %sing - still too big\n", str_hl[t] );
-							continue;
+						} else {
+							debug( "  -> not %sing - too big\n", str_hl[t] );
+							msg_copied_p2( svars, srec, t, tmsg, -1 );
 						}
-						debug( "  -> not %sing - too big\n", str_hl[t] );
-						msg_copied_p2( svars, srec, t, tmsg, -1 );
 					}
 				}
 			}
