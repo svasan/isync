@@ -941,7 +941,7 @@ box_selected( int sts, void *aux )
 				opts[1-t] |= OPEN_NEW;
 			if (chan->ops[t] & OP_EXPUNGE)
 				opts[1-t] |= OPEN_FLAGS;
-			if (chan->stores[t]->max_size)
+			if (chan->stores[t]->max_size != INT_MAX)
 				opts[1-t] |= OPEN_SIZE;
 		}
 		if (chan->ops[t] & OP_EXPUNGE) {
@@ -1185,7 +1185,7 @@ box_loaded( int sts, void *aux )
 						Fprintf( svars->jfp, "+ %d %d\n", srec->uid[M], srec->uid[S] );
 						debug( "  -> pair(%d,%d) created\n", srec->uid[M], srec->uid[S] );
 					}
-					if ((tmsg->flags & F_FLAGGED) || !svars->chan->stores[t]->max_size || tmsg->size <= svars->chan->stores[t]->max_size) {
+					if ((tmsg->flags & F_FLAGGED) || tmsg->size <= svars->chan->stores[t]->max_size) {
 						if (tmsg->flags) {
 							srec->flags = tmsg->flags;
 							Fprintf( svars->jfp, "* %d %d %u\n", srec->uid[M], srec->uid[S], srec->flags );
@@ -1558,7 +1558,7 @@ msgs_flags_set( sync_vars_t *svars, int t )
 						debug( "%s: not trashing message %d - not new\n", str_ms[t], tmsg->uid );
 				} else {
 					if (!tmsg->srec || tmsg->srec->uid[1-t] < 0) {
-						if (!svars->ctx[1-t]->conf->max_size || tmsg->size <= svars->ctx[1-t]->conf->max_size) {
+						if (tmsg->size <= svars->ctx[1-t]->conf->max_size) {
 							debug( "%s: remote trashing message %d\n", str_ms[t], tmsg->uid );
 							svars->trash_total[t]++;
 							stats( svars );

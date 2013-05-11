@@ -343,6 +343,8 @@ load_config( const char *where, int pseudo )
 				if (store) {
 					if (!store->path)
 						store->path = "";
+					if (!store->max_size)
+						store->max_size = INT_MAX;
 					*storeapp = store;
 					storeapp = &store->next;
 					*storeapp = 0;
