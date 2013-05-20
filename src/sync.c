@@ -1297,11 +1297,14 @@ box_loaded( int sts, void *aux )
 		 * expired message are not counted. */
 		todel = svars->ctx[S]->count + svars->new_total[S] - svars->chan->max_messages;
 		debug( "scheduling %d excess messages for expiration\n", todel );
-		for (tmsg = svars->ctx[S]->msgs; tmsg && todel > 0; tmsg = tmsg->next)
-			if (!(tmsg->status & M_DEAD) && (srec = tmsg->srec) &&
+		for (tmsg = svars->ctx[S]->msgs; tmsg && todel > 0; tmsg = tmsg->next) {
+			if (tmsg->status & M_DEAD)
+				continue;
+			if ((srec = tmsg->srec) &&
 			    ((tmsg->flags | srec->aflags[S]) & ~srec->dflags[S] & F_DELETED) &&
 			    !(srec->status & (S_EXPIRE|S_EXPIRED)))
 				todel--;
+		}
 		debug( "%d non-deleted excess messages\n", todel );
 		for (tmsg = svars->ctx[S]->msgs; tmsg; tmsg = tmsg->next) {
 			if (tmsg->status & M_DEAD)
