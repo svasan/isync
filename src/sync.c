@@ -1300,7 +1300,7 @@ box_loaded( int sts, void *aux )
 		for (tmsg = svars->ctx[S]->msgs; tmsg && todel > 0; tmsg = tmsg->next) {
 			if (tmsg->status & M_DEAD)
 				continue;
-			if ((srec = tmsg->srec) &&
+			if ((srec = tmsg->srec) && srec->uid[M] > 0 &&
 			    ((tmsg->flags | srec->aflags[S]) & ~srec->dflags[S] & F_DELETED) &&
 			    !(srec->status & (S_EXPIRE|S_EXPIRED)))
 				todel--;
