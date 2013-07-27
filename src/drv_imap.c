@@ -887,16 +887,16 @@ parse_list_rsp( imap_store_t *ctx, list_t *list, char *cmd )
 	char *arg;
 	list_t *lp;
 
-	if (!list) {
+	if (!is_list( list )) {
 		error( "IMAP error: malformed LIST response\n" );
+		free_list( list );
 		return LIST_BAD;
 	}
-	if (list->val == LIST)
-		for (lp = list->child; lp; lp = lp->next)
-			if (is_atom( lp ) && !strcasecmp( lp->val, "\\NoSelect" )) {
-				free_list( list );
-				return LIST_OK;
-			}
+	for (lp = list->child; lp; lp = lp->next)
+		if (is_atom( lp ) && !strcasecmp( lp->val, "\\NoSelect" )) {
+			free_list( list );
+			return LIST_OK;
+		}
 	free_list( list );
 	arg = next_arg( &cmd );
 	if (!ctx->delimiter)
