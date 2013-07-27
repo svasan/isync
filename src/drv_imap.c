@@ -70,8 +70,11 @@ typedef struct _list {
 
 #define MAX_LIST_DEPTH 5
 
+struct imap_store;
+
 typedef struct parse_list_state {
 	list_t *head, **stack[MAX_LIST_DEPTH];
+	int (*callback)( struct imap_store *ctx, list_t *list, char *cmd );
 	int level, need_bytes;
 } parse_list_state_t;
 
@@ -642,18 +645,63 @@ parse_list_init( parse_list_state_t *sts )
 	sts->stack[0] = &sts->head;
 }
 
-static list_t *
-parse_list( char **sp )
+static int
+parse_list_continue( imap_store_t *ctx, char *s )
 {
-	parse_list_state_t sts;
-	parse_list_init( &sts );
-	if (parse_imap_list( 0, sp, &sts ) == LIST_OK)
-		return sts.head;
-	return NULL;
+	list_t *list;
+	int resp;
+	if ((resp = parse_imap_list( ctx, &s, &ctx->parse_list_sts )) != LIST_PARTIAL) {
+		list = (resp == LIST_BAD) ? 0 : ctx->parse_list_sts.head;
+		ctx->parse_list_sts.head = 0;
+		resp = ctx->parse_list_sts.callback( ctx, list, s );
+	}
+	return resp;
 }
 
 static int
-parse_fetch( imap_store_t *ctx, list_t *list )
+parse_list( imap_store_t *ctx, char *s, int (*cb)( imap_store_t *ctx, list_t *list, char *s ) )
+{
+	parse_list_init( &ctx->parse_list_sts );
+	ctx->parse_list_sts.callback = cb;
+	return parse_list_continue( ctx, s );
+}
+
+static int parse_namespace_rsp_p2( imap_store_t *, list_t *, char * );
+static int parse_namespace_rsp_p3( imap_store_t *, list_t *, char * );
+
+static int
+parse_namespace_rsp_fail( void )
+{
+	error( "IMAP error: malformed NAMESPACE response\n" );
+	return LIST_BAD;
+}
+
+static int
+parse_namespace_rsp( imap_store_t *ctx, list_t *list, char *s )
+{
+	if (!(ctx->ns_personal = list))
+		return parse_namespace_rsp_fail();
+	return parse_list( ctx, s, parse_namespace_rsp_p2 );
+}
+
+static int
+parse_namespace_rsp_p2( imap_store_t *ctx, list_t *list, char *s )
+{
+	if (!(ctx->ns_other = list))
+		return parse_namespace_rsp_fail();
+	return parse_list( ctx, s, parse_namespace_rsp_p3 );
+}
+
+static int
+parse_namespace_rsp_p3( imap_store_t *ctx, list_t *list, char *s ATTR_UNUSED )
+{
+	if (!(ctx->ns_shared = list))
+		return parse_namespace_rsp_fail();
+	return LIST_OK;
+}
+
+static int
+parse_fetch_rsp( imap_store_t *ctx, list_t *list, char *s ATTR_UNUSED )
 {
 	list_t *tmp, *flags;
 	char *body = 0, *tuid = 0;
@@ -666,7 +714,7 @@ parse_fetch( imap_store_t *ctx, list_t *list )
 	if (!is_list( list )) {
 		error( "IMAP error: bogus FETCH response\n" );
 		free_list( list );
-		return -1;
+		return LIST_BAD;
 	}
 
 	for (tmp = list->child; tmp; tmp = tmp->next) {
@@ -741,7 +789,7 @@ parse_fetch( imap_store_t *ctx, list_t *list )
 				goto gotuid;
 		error( "IMAP error: unexpected FETCH response (UID %d)\n", uid );
 		free_list( list );
-		return -1;
+		return LIST_BAD;
 	  gotuid:
 		msgdata = ((struct imap_cmd_fetch_msg *)cmdp)->msg_data;
 		msgdata->data = body;
@@ -768,7 +816,7 @@ parse_fetch( imap_store_t *ctx, list_t *list )
 	}
 
 	free_list( list );
-	return 0;
+	return LIST_OK;
 }
 
 static void
@@ -832,19 +880,21 @@ parse_response_code( imap_store_t *ctx, struct imap_cmd *cmd, char *s )
 }
 
 static int
-parse_list_rsp( imap_store_t *ctx, char *cmd )
+parse_list_rsp( imap_store_t *ctx, list_t *list, char *cmd )
 {
 	char *arg;
-	list_t *list, *lp;
+	list_t *lp;
 	int l;
 
-	if (!(list = parse_list( &cmd )))
-		return -1;
+	if (!list) {
+		error( "IMAP error: malformed LIST response\n" );
+		return LIST_BAD;
+	}
 	if (list->val == LIST)
 		for (lp = list->child; lp; lp = lp->next)
 			if (is_atom( lp ) && !strcasecmp( lp->val, "\\NoSelect" )) {
 				free_list( list );
-				return 0;
+				return LIST_OK;
 			}
 	free_list( list );
 	arg = next_arg( &cmd );
@@ -854,22 +904,22 @@ parse_list_rsp( imap_store_t *ctx, char *cmd )
 	if (memcmp( arg, "INBOX", 5 ) || (arg[5] && arg[5] != ctx->delimiter)) {
 		l = strlen( ctx->gen.conf->path );
 		if (memcmp( arg, ctx->gen.conf->path, l ))
-			return 0;
+			return LIST_OK;
 		arg += l;
 		if (!memcmp( arg, "INBOX", 5 ) && (!arg[5] || arg[5] == ctx->delimiter)) {
 			if (!arg[5])
 				warn( "IMAP warning: ignoring INBOX in %s\n", ctx->gen.conf->path );
-			return 0;
+			return LIST_OK;
 		}
 	}
 	if (!memcmp( arg + strlen( arg ) - 5, ".lock", 5 )) /* workaround broken servers */
-		return 0;
+		return LIST_OK;
 	if (map_name( arg, ctx->delimiter, '/') < 0) {
 		warn( "IMAP warning: ignoring mailbox %s (reserved character '/' in name)\n", arg );
-		return 0;
+		return LIST_OK;
 	}
 	add_string_list( &ctx->gen.boxes, arg );
-	return 0;
+	return LIST_OK;
 }
 
 static int
@@ -922,11 +972,16 @@ imap_socket_read( void *aux )
 	int resp, resp2, tag, greeted;
 
 	greeted = ctx->greeting;
-	if (ctx->parse_list_sts.level) {
-		cmd = 0;
-		goto do_fetch;
-	}
 	for (;;) {
+		if (ctx->parse_list_sts.level) {
+			resp = parse_list_continue( ctx, 0 );
+		  listret:
+			if (resp == LIST_PARTIAL)
+				return;
+			if (resp == LIST_BAD)
+				break;
+			continue;
+		}
 		if (!(cmd = socket_read_line( &ctx->conn )))
 			return;
 
@@ -943,12 +998,8 @@ imap_socket_read( void *aux )
 			}
 
 			if (!strcmp( "NAMESPACE", arg )) {
-				if (!(ctx->ns_personal = parse_list( &cmd )) ||
-				    !(ctx->ns_other = parse_list( &cmd )) ||
-				    !(ctx->ns_shared = parse_list( &cmd ))) {
-					error( "IMAP error: malformed NAMESPACE response\n" );
-					break;
-				}
+				resp = parse_list( ctx, cmd, parse_namespace_rsp );
+				goto listret;
 			} else if (ctx->greeting == GreetingPending && !strcmp( "PREAUTH", arg )) {
 				ctx->greeting = GreetingPreauth;
 				parse_response_code( ctx, 0, cmd );
@@ -961,24 +1012,16 @@ imap_socket_read( void *aux )
 			} else if (!strcmp( "CAPABILITY", arg )) {
 				parse_capability( ctx, cmd );
 			} else if (!strcmp( "LIST", arg )) {
-				if (parse_list_rsp( ctx, cmd ) < 0) {
-					error( "IMAP error: malformed LIST response\n" );
-					break;
-				}
+				resp = parse_list( ctx, cmd, parse_list_rsp );
+				goto listret;
 			} else if ((arg1 = next_arg( &cmd ))) {
 				if (!strcmp( "EXISTS", arg1 ))
 					ctx->gen.count = atoi( arg );
 				else if (!strcmp( "RECENT", arg1 ))
 					ctx->gen.recent = atoi( arg );
 				else if(!strcmp ( "FETCH", arg1 )) {
-					parse_list_init( &ctx->parse_list_sts );
-				  do_fetch:
-					if ((resp = parse_imap_list( ctx, &cmd, &ctx->parse_list_sts )) == LIST_BAD)
-						break; /* stream is likely to be useless now */
-					if (resp == LIST_PARTIAL)
-						return;
-					if (parse_fetch( ctx, ctx->parse_list_sts.head ) < 0)
-						break; /* this may mean anything, so prefer not to spam the log */
+					resp = parse_list( ctx, cmd, parse_fetch_rsp );
+					goto listret;
 				}
 			} else {
 				error( "IMAP error: unrecognized untagged response '%s'\n", arg );
