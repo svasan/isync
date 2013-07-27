@@ -1958,6 +1958,8 @@ imap_store_msg_p2( imap_store_t *ctx ATTR_UNUSED, struct imap_cmd *cmd, int resp
 
 /******************* imap_find_new_msgs *******************/
 
+static void imap_find_new_msgs_p2( imap_store_t *, struct imap_cmd *, int );
+
 static void
 imap_find_new_msgs( store_t *gctx,
                     void (*cb)( int sts, void *aux ), void *aux )
@@ -1966,6 +1968,19 @@ imap_find_new_msgs( store_t *gctx,
 	struct imap_cmd_simple *cmd;
 
 	INIT_IMAP_CMD(imap_cmd_simple, cmd, cb, aux)
+	imap_exec( (imap_store_t *)ctx, &cmd->gen, imap_find_new_msgs_p2, "CHECK" );
+}
+
+static void
+imap_find_new_msgs_p2( imap_store_t *ctx, struct imap_cmd *gcmd, int response )
+{
+	struct imap_cmd_simple *cmdp = (struct imap_cmd_simple *)gcmd, *cmd;
+
+	if (response != RESP_OK) {
+		imap_done_simple_box( ctx, gcmd, response );
+		return;
+	}
+	INIT_IMAP_CMD(imap_cmd_simple, cmd, cmdp->callback, cmdp->callback_aux)
 	imap_exec( (imap_store_t *)ctx, &cmd->gen, imap_done_simple_box,
 	           "UID FETCH %d:1000000000 (UID BODY.PEEK[HEADER.FIELDS (X-TUID)])", ctx->gen.uidnext );
 }
