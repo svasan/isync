@@ -221,6 +221,7 @@ match_tuids( sync_vars_t *svars, int t )
 	sync_rec_t *srec;
 	message_t *tmsg, *ntmsg = 0;
 	const char *diag;
+	int num_lost = 0;
 
 	for (srec = svars->srecs; srec; srec = srec->next) {
 		if (srec->status & S_DEAD)
@@ -247,6 +248,7 @@ match_tuids( sync_vars_t *svars, int t )
 			Fprintf( svars->jfp, "& %d %d\n", srec->uid[M], srec->uid[S] );
 			srec->flags = 0;
 			srec->tuid[0] = 0;
+			num_lost++;
 			continue;
 		  mfound:
 			debug( "  -> new UID %d %s\n", tmsg->uid, diag );
@@ -257,6 +259,8 @@ match_tuids( sync_vars_t *svars, int t )
 			srec->tuid[0] = 0;
 		}
 	}
+	if (num_lost)
+		warn( "Warning: lost track of %d %sed message(s)\n", num_lost, str_hl[t] );
 }
 
 
