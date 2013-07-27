@@ -178,9 +178,8 @@ maildir_disown_store( store_t *gctx )
 }
 
 static store_t *
-maildir_own_store( store_conf_t *conf )
+maildir_own_store( store_conf_t *conf ATTR_UNUSED )
 {
-	(void)conf;
 	return 0;
 }
 
@@ -1244,7 +1243,7 @@ maildir_find_new_msgs( store_t *gctx ATTR_UNUSED,
 }
 
 static void
-maildir_set_flags( store_t *gctx, message_t *gmsg, int uid, int add, int del,
+maildir_set_flags( store_t *gctx, message_t *gmsg, int uid ATTR_UNUSED, int add, int del,
                    void (*cb)( int sts, void *aux ), void *aux )
 {
 	maildir_store_t *ctx = (maildir_store_t *)gctx;
@@ -1254,7 +1253,6 @@ maildir_set_flags( store_t *gctx, message_t *gmsg, int uid, int add, int del,
 	int j, ret, ol, fl, bbl, bl, tl;
 	char buf[_POSIX_PATH_MAX], nbuf[_POSIX_PATH_MAX];
 
-	(void) uid;
 	bbl = nfsnprintf( buf, sizeof(buf), "%s/", gctx->path );
 	memcpy( nbuf, gctx->path, bbl - 1 );
 	memcpy( nbuf + bbl - 1, "/cur/", 5 );
@@ -1410,10 +1408,9 @@ maildir_close( store_t *gctx,
 }
 
 static void
-maildir_cancel( store_t *gctx,
+maildir_cancel( store_t *gctx ATTR_UNUSED,
                 void (*cb)( void *aux ), void *aux )
 {
-	(void)gctx;
 	cb( aux );
 }
 

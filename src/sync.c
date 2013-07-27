@@ -1597,10 +1597,9 @@ msg_trashed( int sts, void *aux )
 }
 
 static void
-msg_rtrashed( int sts, int uid, copy_vars_t *vars )
+msg_rtrashed( int sts, int uid ATTR_UNUSED, copy_vars_t *vars )
 {
 	SVARS_CHECK_CANCEL_RET;
-	(void)uid;
 	switch (sts) {
 	case SYNC_OK:
 	case SYNC_NOGOOD: /* the message is gone or heavily busted */
