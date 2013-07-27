@@ -879,12 +879,13 @@ parse_response_code( imap_store_t *ctx, struct imap_cmd *cmd, char *s )
 	return RESP_OK;
 }
 
+static int parse_list_rsp_p2( imap_store_t *, list_t *, char * );
+
 static int
 parse_list_rsp( imap_store_t *ctx, list_t *list, char *cmd )
 {
 	char *arg;
 	list_t *lp;
-	int l;
 
 	if (!list) {
 		error( "IMAP error: malformed LIST response\n" );
@@ -900,25 +901,41 @@ parse_list_rsp( imap_store_t *ctx, list_t *list, char *cmd )
 	arg = next_arg( &cmd );
 	if (!ctx->delimiter)
 		ctx->delimiter = *arg;
-	arg = next_arg( &cmd );
+	return parse_list( ctx, cmd, parse_list_rsp_p2 );
+}
+
+static int
+parse_list_rsp_p2( imap_store_t *ctx, list_t *list, char *cmd ATTR_UNUSED )
+{
+	char *arg;
+	int l;
+
+	if (!is_atom( list )) {
+		error( "IMAP error: malformed LIST response\n" );
+		free_list( list );
+		return LIST_BAD;
+	}
+	arg = list->val;
 	if (memcmp( arg, "INBOX", 5 ) || (arg[5] && arg[5] != ctx->delimiter)) {
 		l = strlen( ctx->gen.conf->path );
 		if (memcmp( arg, ctx->gen.conf->path, l ))
-			return LIST_OK;
+			goto skip;
 		arg += l;
 		if (!memcmp( arg, "INBOX", 5 ) && (!arg[5] || arg[5] == ctx->delimiter)) {
 			if (!arg[5])
 				warn( "IMAP warning: ignoring INBOX in %s\n", ctx->gen.conf->path );
-			return LIST_OK;
+			goto skip;
 		}
 	}
 	if (!memcmp( arg + strlen( arg ) - 5, ".lock", 5 )) /* workaround broken servers */
-		return LIST_OK;
+		goto skip;
 	if (map_name( arg, ctx->delimiter, '/') < 0) {
 		warn( "IMAP warning: ignoring mailbox %s (reserved character '/' in name)\n", arg );
-		return LIST_OK;
+		goto skip;
 	}
 	add_string_list( &ctx->gen.boxes, arg );
+  skip:
+	free_list( list );
 	return LIST_OK;
 }
 
