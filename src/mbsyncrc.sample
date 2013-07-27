@@ -11,7 +11,21 @@ Trash Trash
 
 IMAPStore work
 Host work.host.com
+User tehuser
 Pass xxxxxxxx
+# Fetch password from gnome-keyring:
+#PassCmd "gnome-keyring-query get mail_pw"
+# Fetch password from .netrc:
+#PassCmd "sed -n -e 's,^machine work\.host\.com login tehuser password \(.*\),\1,p' < $HOME/.netrc"
+# Fetch password from a gpg-encrypted file:
+#PassCmd "gpg --quiet --for-your-eyes-only --decrypt $HOME/imappassword.gpg"
+# Fetch password from pwmd (http://bjk.sourceforge.net/pwmd/):
+#PassCmd "echo -ne 'GET myIsp\tpassword' | pwmc datafile"
+# On Mac OS X, run "KeyChain Access" -- File->New Password Item. Fill out form using
+#  "Keychain Item Name" http://IMAPSERVER  (note: the "http://" is a hack)
+#  "Account Name" USERNAME
+#  "Password" PASSWORD
+#PassCmd "/usr/bin/security find-internet-password -w -a USERNAME -s IMAPSERVER ~/Library/Keychains/login.keychain"
 CertificateFile /etc/ssl/certs/ca-certificates.crt
 
 Channel work

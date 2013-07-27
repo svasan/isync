@@ -249,8 +249,15 @@ Specify the login name on the IMAP server.  (Default: current local user)
 \fBPass\fR \fIpassword\fR
 Specify the password for \fIusername\fR on the IMAP server.
 Note that this option is \fBNOT\fR required.
-If no password is specified in the configuration file, \fBmbsync\fR
-will prompt you for it.
+If neither a password nor a password command is specified in the
+configuration file, \fBmbsync\fR will prompt you for a password.
+..
+.TP
+\fBPassCmd\fR \fIcommand\fR
+Specify a shell command to obtain a password rather than specifying a
+password directly. This allows you to use password files and agents.
+The command must produce exactly one line on stdout; the trailing newline is
+optional.
 ..
 .TP
 \fBTunnel\fR \fIcommand\fR

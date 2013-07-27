@@ -31,6 +31,7 @@
 #include <limits.h>
 #include <string.h>
 #include <ctype.h>
+#include <sys/wait.h>
 
 typedef struct imap_server_conf {
 	struct imap_server_conf *next;
@@ -38,6 +39,7 @@ typedef struct imap_server_conf {
 	server_conf_t sconf;
 	char *user;
 	char *pass;
+	char *pass_cmd;
 	int max_in_progress;
 #ifdef HAVE_LIBSSL
 	unsigned require_ssl:1;
@@ -1404,7 +1406,35 @@ imap_open_store_authenticate2( imap_store_t *ctx )
 		error( "Skipping account %s, no user\n", srvc->name );
 		goto bail;
 	}
-	if (!srvc->pass) {
+	if (srvc->pass_cmd) {
+		FILE *fp;
+		int ret;
+		char buffer[80];
+
+		if (!(fp = popen( srvc->pass_cmd, "r" ))) {
+		  pipeerr:
+			sys_error( "Skipping account %s, password command failed", srvc->name );
+			goto bail;
+		}
+		if (!fgets( buffer, sizeof(buffer), fp ))
+			buffer[0] = 0;
+		if ((ret = pclose( fp )) < 0)
+			goto pipeerr;
+		if (ret) {
+			if (WIFSIGNALED( ret ))
+				error( "Skipping account %s, password command crashed\n", srvc->name );
+			else
+				error( "Skipping account %s, password command exited with status %d\n", srvc->name, WEXITSTATUS( ret ) );
+			goto bail;
+		}
+		if (!buffer[0]) {
+			error( "Skipping account %s, password command produced no output\n", srvc->name );
+			goto bail;
+		}
+		buffer[strcspn( buffer, "\n" )] = 0; /* Strip trailing newline */
+		free( srvc->pass ); /* From previous runs */
+		srvc->pass = nfstrdup( buffer );
+	} else if (!srvc->pass) {
 		char prompt[80];
 		sprintf( prompt, "Password (%s): ", srvc->name );
 		arg = getpass( prompt );
@@ -1958,6 +1988,8 @@ imap_parse_store( conffile_t *cfg, store_conf_t **storep )
 			server->user = nfstrdup( cfg->val );
 		else if (!strcasecmp( "Pass", cfg->cmd ))
 			server->pass = nfstrdup( cfg->val );
+		else if (!strcasecmp( "PassCmd", cfg->cmd ))
+			server->pass_cmd = nfstrdup( cfg->val );
 		else if (!strcasecmp( "Port", cfg->cmd ))
 			server->sconf.port = parse_int( cfg );
 		else if (!strcasecmp( "PipelineDepth", cfg->cmd )) {
@@ -2025,6 +2057,14 @@ imap_parse_store( conffile_t *cfg, store_conf_t **storep )
 				error( "IMAP store '%s' has incomplete/missing connection details\n", store->gen.name );
 			else
 				error( "IMAP account '%s' has incomplete/missing connection details\n", server->name );
+			cfg->err = 1;
+			return 1;
+		}
+		if (server->pass && server->pass_cmd) {
+			if (store)
+				error( "IMAP store '%s' has both Pass and PassCmd\n", store->gen.name );
+			else
+				error( "IMAP account '%s' has both Pass and PassCmd\n", server->name );
 			cfg->err = 1;
 			return 1;
 		}
