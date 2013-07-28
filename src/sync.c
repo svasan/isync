@@ -281,6 +281,7 @@ copy_msg( copy_vars_t *vars )
 
 	t ^= 1;
 	vars->data.flags = vars->msg->flags;
+	vars->data.date = svars->chan->use_internal_date ? -1 : 0;
 	DRIVER_CALL_RET(fetch_msg( svars->ctx[t], vars->msg, &vars->data, msg_fetched, vars ));
 }
 

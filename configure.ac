@@ -11,6 +11,23 @@ fi
 
 CPPFLAGS="$CPPFLAGS -D_GNU_SOURCE"
 
+AC_CACHE_CHECK([whether strftime supports %z], ob_cv_strftime_z,
+    [AC_TRY_RUN(
+[#include <time.h>
+#include <string.h>
+
+int main(void)
+{
+    time_t t = 0;
+    char buf[32];
+    strftime(buf, sizeof(buf), "%z", gmtime(&t));
+    return !!strcmp(buf, "+0000");
+}
+], [ob_cv_strftime_z=yes], [ob_cv_strftime_z=no], [ob_cv_strftime_z="yes (assumed)"])])
+if test "x$ob_cv_strftime_z" = x"no"; then
+    AC_MSG_ERROR([libc lacks necessary feature])
+fi
+
 AC_CHECK_HEADERS(sys/poll.h sys/select.h)
 AC_CHECK_FUNCS(vasprintf memrchr)
 

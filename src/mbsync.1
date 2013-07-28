@@ -477,6 +477,16 @@ a global effect. The global settings are overridden by Channel-specific options,
 which in turn are overridden by command line switches.
 ..
 .TP
+\fBCopyArrivalDate\fR {\fIyes\fR|\fIno\fR}
+Selects whether their arrival time should be propagated together with
+the messages.
+Enabling this makes sense in order to keep the time stamp based message
+sorting intact.
+Note that IMAP does not guarantee that the time stamp (termed \fBinternal
+date\fR) is actually the arrival time, but it is usually close enough.
+(Default: \fIno\fR)
+..
+.TP
 \fBSyncState\fR {\fB*\fR|\fIpath\fR}
 Set the location of this Channel's synchronization state files. \fB*\fR means
 that the state should be saved in a file named .mbsyncstate in the

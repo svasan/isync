@@ -31,6 +31,7 @@
 #include <limits.h>
 #include <string.h>
 #include <ctype.h>
+#include <time.h>
 #include <sys/wait.h>
 
 typedef struct imap_server_conf {
@@ -710,6 +711,8 @@ parse_fetch_rsp( imap_store_t *ctx, list_t *list, char *s ATTR_UNUSED )
 	struct imap_cmd *cmdp;
 	int uid = 0, mask = 0, status = 0, size = 0;
 	unsigned i;
+	time_t date = 0;
+	struct tm datetime;
 
 	if (!is_list( list )) {
 		error( "IMAP error: bogus FETCH response\n" );
@@ -751,6 +754,15 @@ parse_fetch_rsp( imap_store_t *ctx, list_t *list, char *s ATTR_UNUSED )
 					status |= M_FLAGS;
 				} else
 					error( "IMAP error: unable to parse FLAGS\n" );
+			} else if (!strcmp( "INTERNALDATE", tmp->val )) {
+				tmp = tmp->next;
+				if (is_atom( tmp )) {
+					if (strptime( tmp->val, "%d-%b-%Y %H:%M:%S %z", &datetime ))
+						date = mktime( &datetime );
+					else
+						error( "IMAP error: unable to parse INTERNALDATE format\n" );
+				} else
+					error( "IMAP error: unable to parse INTERNALDATE\n" );
 			} else if (!strcmp( "RFC822.SIZE", tmp->val )) {
 				tmp = tmp->next;
 				if (is_atom( tmp ))
@@ -794,6 +806,7 @@ parse_fetch_rsp( imap_store_t *ctx, list_t *list, char *s ATTR_UNUSED )
 		msgdata = ((struct imap_cmd_fetch_msg *)cmdp)->msg_data;
 		msgdata->data = body;
 		msgdata->len = size;
+		msgdata->date = date;
 		if (status & M_FLAGS)
 			msgdata->flags = mask;
 	} else if (uid) { /* ignore async flag updates for now */
@@ -1738,8 +1751,9 @@ imap_fetch_msg( store_t *ctx, message_t *msg, msg_data_t *data,
 	cmd->gen.gen.param.uid = msg->uid;
 	cmd->msg_data = data;
 	imap_exec( (imap_store_t *)ctx, &cmd->gen.gen, imap_done_simple_msg,
-	           "UID FETCH %d (%sBODY.PEEK[])",
-	           msg->uid, (msg->status & M_FLAGS) ? "" : "FLAGS " );
+	           "UID FETCH %d (%s%sBODY.PEEK[])", msg->uid,
+	           !(msg->status & M_FLAGS) ? "FLAGS " : "",
+	           (data->date== -1) ? "INTERNALDATE " : "" );
 }
 
 /******************* imap_set_flags *******************/
@@ -1888,7 +1902,7 @@ imap_store_msg( store_t *gctx, msg_data_t *data, int to_trash,
 	imap_store_t *ctx = (imap_store_t *)gctx;
 	struct imap_cmd_out_uid *cmd;
 	int d;
-	char flagstr[128], buf[1024];
+	char flagstr[128], datestr[64], buf[1024];
 
 	d = 0;
 	if (data->flags) {
@@ -1915,8 +1929,22 @@ imap_store_msg( store_t *gctx, msg_data_t *data, int to_trash,
 			return;
 		}
 	}
-	imap_exec( ctx, &cmd->gen, imap_store_msg_p2,
-	           "APPEND \"%s\" %s", buf, flagstr );
+	if (data->date) {
+#ifdef __GNUC__
+#  pragma GCC diagnostic push
+#  pragma GCC diagnostic ignored "-Wformat"
+		/* configure ensures that %z actually works. */
+#endif
+		strftime( datestr, sizeof(datestr), "%d-%b-%Y %H:%M:%S %z", localtime( &data->date ) );
+#ifdef __GNUC__
+#  pragma GCC diagnostic pop
+#endif
+		imap_exec( ctx, &cmd->gen, imap_store_msg_p2,
+		           "APPEND \"%s\" %s\"%s\" ", buf, flagstr, datestr );
+	} else {
+		imap_exec( ctx, &cmd->gen, imap_store_msg_p2,
+		           "APPEND \"%s\" %s", buf, flagstr );
+	}
 }
 
 static void

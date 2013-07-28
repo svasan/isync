@@ -166,6 +166,7 @@ typedef struct channel_conf {
 	string_list_t *patterns;
 	int ops[2];
 	unsigned max_messages; /* for slave only */
+	unsigned use_internal_date:1;
 } channel_conf_t;
 
 typedef struct group_conf {
@@ -245,6 +246,7 @@ set_bad_callback( store_t *ctx, void (*cb)( void *aux ), void *aux )
 typedef struct {
 	char *data;
 	int len;
+	time_t date;
 	unsigned char flags;
 } msg_data_t;
 

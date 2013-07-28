@@ -36,6 +36,7 @@
 #include <sys/file.h>
 #include <errno.h>
 #include <time.h>
+#include <utime.h>
 
 #define USE_DB 1
 #ifdef __linux__
@@ -1124,6 +1125,8 @@ maildir_fetch_msg( store_t *gctx, message_t *gmsg, msg_data_t *data,
 	}
 	fstat( fd, &st );
 	data->len = st.st_size;
+	if (data->date == -1)
+		data->date = st.st_mtime;
 	data->data = nfmalloc( data->len );
 	if (read( fd, data->data, data->len ) != data->len) {
 		sys_error( "Maildir error: cannot read %s", buf );
@@ -1225,6 +1228,18 @@ maildir_store_msg( store_t *gctx, msg_data_t *data, int to_trash,
 		cb( DRV_BOX_BAD, 0, aux );
 		return;
 	}
+
+	if (data->date) {
+		/* Set atime and mtime according to INTERNALDATE or mtime of source message */
+		struct utimbuf utimebuf;
+		utimebuf.actime = utimebuf.modtime = data->date;
+		if (utime( buf, &utimebuf ) < 0) {
+			sys_error( "Maildir error: cannot set times for %s", buf );
+			cb( DRV_BOX_BAD, 0, aux );
+			return;
+		}
+	}
+
 	/* Moving seen messages to cur/ is strictly speaking incorrect, but makes mutt happy. */
 	nfsnprintf( nbuf, sizeof(nbuf), "%s/%s/%s%s", box, subdirs[!(data->flags & F_SEEN)], base, fbuf );
 	if (rename( buf, nbuf )) {
