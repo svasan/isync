@@ -52,7 +52,7 @@ typedef struct imap_store_conf {
 	store_conf_t gen;
 	imap_server_conf_t *server;
 	unsigned use_namespace:1;
-	char delimiter;
+	char *delimiter;
 } imap_store_conf_t;
 
 typedef struct imap_message {
@@ -88,7 +88,7 @@ typedef struct imap_store {
 	/* trash folder's existence is not confirmed yet */
 	enum { TrashUnknown, TrashChecking, TrashKnown } trashnc;
 	unsigned got_namespace:1;
-	char delimiter; /* hierarchy delimiter */
+	char *delimiter; /* hierarchy delimiter */
 	list_t *ns_personal, *ns_other, *ns_shared; /* NAMESPACE info */
 	message_t **msgapp; /* FETCH results */
 	unsigned caps; /* CAPABILITY results */
@@ -913,13 +913,29 @@ parse_list_rsp( imap_store_t *ctx, list_t *list, char *cmd )
 	free_list( list );
 	arg = next_arg( &cmd );
 	if (!ctx->delimiter)
-		ctx->delimiter = *arg;
+		ctx->delimiter = nfstrdup( arg );
 	return parse_list( ctx, cmd, parse_list_rsp_p2 );
+}
+
+static int
+is_inbox( imap_store_t *ctx, const char *arg )
+{
+	int i;
+	char c;
+
+	if (memcmp( arg, "INBOX", 5 ))
+		return 0;
+	if (arg[5])
+		for (i = 0; (c = ctx->delimiter[i]); i++)
+			if (arg[i + 5] != c)
+				return 0;
+	return 1;
 }
 
 static int
 parse_list_rsp_p2( imap_store_t *ctx, list_t *list, char *cmd ATTR_UNUSED )
 {
+	string_list_t *narg;
 	char *arg;
 	int l;
 
@@ -929,12 +945,12 @@ parse_list_rsp_p2( imap_store_t *ctx, list_t *list, char *cmd ATTR_UNUSED )
 		return LIST_BAD;
 	}
 	arg = list->val;
-	if (memcmp( arg, "INBOX", 5 ) || (arg[5] && arg[5] != ctx->delimiter)) {
+	if (!is_inbox( ctx, arg )) {
 		l = strlen( ctx->gen.conf->path );
 		if (memcmp( arg, ctx->gen.conf->path, l ))
 			goto skip;
 		arg += l;
-		if (!memcmp( arg, "INBOX", 5 ) && (!arg[5] || arg[5] == ctx->delimiter)) {
+		if (is_inbox( ctx, arg )) {
 			if (!arg[5])
 				warn( "IMAP warning: ignoring INBOX in %s\n", ctx->gen.conf->path );
 			goto skip;
@@ -942,36 +958,37 @@ parse_list_rsp_p2( imap_store_t *ctx, list_t *list, char *cmd ATTR_UNUSED )
 	}
 	if (!memcmp( arg + strlen( arg ) - 5, ".lock", 5 )) /* workaround broken servers */
 		goto skip;
-	if (map_name( arg, ctx->delimiter, '/') < 0) {
+	if (map_name( arg, (char **)&narg, offsetof(string_list_t, string), ctx->delimiter, "/") < 0) {
 		warn( "IMAP warning: ignoring mailbox %s (reserved character '/' in name)\n", arg );
 		goto skip;
 	}
-	add_string_list( &ctx->gen.boxes, arg );
+	narg->next = ctx->gen.boxes;
+	ctx->gen.boxes = narg;
   skip:
 	free_list( list );
 	return LIST_OK;
 }
 
 static int
-prepare_name( char *buf, const imap_store_t *ctx, const char *prefix, const char *name )
+prepare_name( char **buf, const imap_store_t *ctx, const char *prefix, const char *name )
 {
-	int pl;
+	int pl = strlen( prefix );
 
-	nfsnprintf( buf, 1024, "%s%n%s", prefix, &pl, name );
-	switch (map_name( buf + pl, '/', ctx->delimiter )) {
+	switch (map_name( name, buf, pl, "/", ctx->delimiter )) {
 	case -1:
-		error( "IMAP error: mailbox name %s contains server's hierarchy delimiter\n", buf + pl );
+		error( "IMAP error: mailbox name %s contains server's hierarchy delimiter\n", name );
 		return -1;
 	case -2:
 		error( "IMAP error: server's hierarchy delimiter not known\n" );
 		return -1;
 	default:
+		memcpy( *buf, prefix, pl );
 		return 0;
 	}
 }
 
 static int
-prepare_box( char *buf, const imap_store_t *ctx )
+prepare_box( char **buf, const imap_store_t *ctx )
 {
 	const char *name = ctx->gen.name;
 
@@ -980,7 +997,7 @@ prepare_box( char *buf, const imap_store_t *ctx )
 }
 
 static int
-prepare_trash( char *buf, const imap_store_t *ctx )
+prepare_trash( char **buf, const imap_store_t *ctx )
 {
 	return prepare_name( buf, ctx, ctx->prefix, ctx->gen.conf->trash );
 }
@@ -1183,6 +1200,7 @@ imap_cancel_store( store_t *gctx )
 	free_list( ctx->ns_personal );
 	free_list( ctx->ns_other );
 	free_list( ctx->ns_shared );
+	free( ctx->delimiter );
 	imap_deref( ctx );
 }
 
@@ -1330,6 +1348,7 @@ imap_open_store( store_conf_t *conf,
 			ctx->gen.boxes = 0;
 			ctx->gen.listed = 0;
 			ctx->gen.conf = conf;
+			free( ctx->delimiter );
 			ctx->delimiter = 0;
 			ctx->callbacks.imap_open = cb;
 			ctx->callback_aux = aux;
@@ -1570,7 +1589,7 @@ imap_open_store_namespace( imap_store_t *ctx )
 	imap_store_conf_t *cfg = (imap_store_conf_t *)ctx->gen.conf;
 
 	ctx->prefix = cfg->gen.path;
-	ctx->delimiter = cfg->delimiter;
+	ctx->delimiter = cfg->delimiter ? nfstrdup( cfg->delimiter ) : 0;
 	if (((!*ctx->prefix && cfg->use_namespace) || !cfg->delimiter) && CAP(NAMESPACE)) {
 		/* get NAMESPACE info */
 		if (!ctx->got_namespace)
@@ -1608,7 +1627,7 @@ imap_open_store_namespace2( imap_store_t *ctx )
 		if (!*ctx->prefix && cfg->use_namespace)
 			ctx->prefix = nsp_1st_ns->val;
 		if (!ctx->delimiter)
-			ctx->delimiter = *nsp_1st_dl->val;
+			ctx->delimiter = nfstrdup( nsp_1st_dl->val );
 	}
 	imap_open_store_finalize( ctx );
 }
@@ -1656,12 +1675,12 @@ imap_select( store_t *gctx, int create,
 {
 	imap_store_t *ctx = (imap_store_t *)gctx;
 	struct imap_cmd_simple *cmd;
-	char buf[1024];
+	char *buf;
 
 	free_generic_messages( gctx->msgs );
 	gctx->msgs = 0;
 
-	if (prepare_box( buf, ctx ) < 0) {
+	if (prepare_box( &buf, ctx ) < 0) {
 		cb( DRV_BOX_BAD, aux );
 		return;
 	}
@@ -1673,6 +1692,7 @@ imap_select( store_t *gctx, int create,
 	cmd->gen.param.trycreate = 1;
 	imap_exec( ctx, &cmd->gen, imap_done_simple_box,
 	           "SELECT \"%s\"", buf );
+	free( buf );
 }
 
 /******************* imap_load *******************/
@@ -1878,17 +1898,18 @@ imap_trash_msg( store_t *gctx, message_t *msg,
 {
 	imap_store_t *ctx = (imap_store_t *)gctx;
 	struct imap_cmd_simple *cmd;
-	char buf[1024];
+	char *buf;
 
 	INIT_IMAP_CMD(imap_cmd_simple, cmd, cb, aux)
 	cmd->gen.param.create = 1;
 	cmd->gen.param.to_trash = 1;
-	if (prepare_trash( buf, ctx ) < 0) {
+	if (prepare_trash( &buf, ctx ) < 0) {
 		cb( DRV_BOX_BAD, aux );
 		return;
 	}
 	imap_exec( ctx, &cmd->gen, imap_done_simple_msg,
 	           "UID COPY %d \"%s\"", msg->uid, buf );
+	free( buf );
 }
 
 /******************* imap_store_msg *******************/
@@ -1901,8 +1922,9 @@ imap_store_msg( store_t *gctx, msg_data_t *data, int to_trash,
 {
 	imap_store_t *ctx = (imap_store_t *)gctx;
 	struct imap_cmd_out_uid *cmd;
+	char *buf;
 	int d;
-	char flagstr[128], datestr[64], buf[1024];
+	char flagstr[128], datestr[64];
 
 	d = 0;
 	if (data->flags) {
@@ -1919,12 +1941,12 @@ imap_store_msg( store_t *gctx, msg_data_t *data, int to_trash,
 	if (to_trash) {
 		cmd->gen.param.create = 1;
 		cmd->gen.param.to_trash = 1;
-		if (prepare_trash( buf, ctx ) < 0) {
+		if (prepare_trash( &buf, ctx ) < 0) {
 			cb( DRV_BOX_BAD, -1, aux );
 			return;
 		}
 	} else {
-		if (prepare_box( buf, ctx ) < 0) {
+		if (prepare_box( &buf, ctx ) < 0) {
 			cb( DRV_BOX_BAD, -1, aux );
 			return;
 		}
@@ -1945,6 +1967,7 @@ imap_store_msg( store_t *gctx, msg_data_t *data, int to_trash,
 		imap_exec( ctx, &cmd->gen, imap_store_msg_p2,
 		           "APPEND \"%s\" %s", buf, flagstr );
 	}
+	free( buf );
 }
 
 static void
@@ -2143,7 +2166,7 @@ imap_parse_store( conffile_t *cfg, store_conf_t **storep )
 			else if (!strcasecmp( "Path", cfg->cmd ))
 				store->gen.path = nfstrdup( cfg->val );
 			else if (!strcasecmp( "PathDelimiter", cfg->cmd ))
-				store->delimiter = *cfg->val;
+				store->delimiter = nfstrdup( cfg->val );
 			else
 				parse_generic_store( &store->gen, cfg );
 			continue;

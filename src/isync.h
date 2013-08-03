@@ -142,11 +142,11 @@ typedef struct store_conf {
 	char *name;
 	driver_t *driver;
 	const char *path; /* should this be here? its interpretation is driver-specific */
+	const char *flat_delim;
 	const char *map_inbox;
 	const char *trash;
 	unsigned max_size; /* off_t is overkill */
 	unsigned trash_remote_new:1, trash_only_new:1;
-	char flat_delim;
 } store_conf_t;
 
 typedef struct string_list {
@@ -440,7 +440,7 @@ void ATTR_NORETURN oob( void );
 
 char *expand_strdup( const char *s );
 
-int map_name( char *arg, char in, char out );
+int map_name(const char *arg, char **result, int reserve, const char *in, const char *out );
 
 void sort_ints( int *arr, int len );
 

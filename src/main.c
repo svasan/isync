@@ -744,7 +744,7 @@ static void
 store_listed( int sts, void *aux )
 {
 	MVARS(aux)
-	string_list_t *box;
+	string_list_t **box;
 
 	switch (sts) {
 	case DRV_CANCELED:
@@ -752,10 +752,15 @@ store_listed( int sts, void *aux )
 	case DRV_OK:
 		mvars->ctx[t]->listed = 1;
 		if (mvars->ctx[t]->conf->flat_delim) {
-			for (box = mvars->ctx[t]->boxes; box; box = box->next) {
-				if (map_name( box->string, mvars->ctx[t]->conf->flat_delim, '/' ) < 0) {
-					error( "Error: flattened mailbox name '%s' contains canonical hierarchy delimiter\n", box->string );
+			for (box = &mvars->ctx[t]->boxes; *box; box = &(*box)->next) {
+				string_list_t *nbox;
+				if (map_name( (*box)->string, (char **)&nbox, offsetof(string_list_t, string), mvars->ctx[t]->conf->flat_delim, "/" ) < 0) {
+					error( "Error: flattened mailbox name '%s' contains canonical hierarchy delimiter\n", (*box)->string );
 					mvars->ret = mvars->skip = 1;
+				} else {
+					nbox->next = (*box)->next;
+					free( *box );
+					*box = nbox;
 				}
 			}
 		}

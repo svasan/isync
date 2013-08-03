@@ -361,24 +361,59 @@ expand_strdup( const char *s )
 
 /* Return value: 0 = ok, -1 = out found in arg, -2 = in found in arg but no out specified */
 int
-map_name( char *arg, char in, char out )
+map_name( const char *arg, char **result, int reserve, const char *in, const char *out )
 {
-	int l, k;
+	char *p;
+	int i, l, ll, num, inl, outl;
 
-	if (!in || in == out)
+	l = strlen( arg );
+	if (!in) {
+	  copy:
+		*result = nfmalloc( reserve + l + 1 );
+		memcpy( *result + reserve, arg, l + 1 );
 		return 0;
-	for (l = 0; arg[l]; l++)
-		if (arg[l] == in) {
-			if (!out)
-				return -2;
-			arg[l] = out;
-		} else if (arg[l] == out) {
-			/* restore original name for printing error message */
-			for (k = 0; k < l; k++)
-				if (arg[k] == out)
-					arg[k] = in;
+	}
+	inl = strlen( in );
+	if (out) {
+		outl = strlen( out );
+		if (inl == outl && !memcmp( in, out, inl ))
+			goto copy;
+	}
+	for (num = 0, i = 0; i < l; ) {
+		for (ll = 0; ll < inl; ll++)
+			if (arg[i + ll] != in[ll])
+				goto fout;
+		num++;
+		i += inl;
+		continue;
+	  fout:
+		if (out) {
+			for (ll = 0; ll < outl; ll++)
+				if (arg[i + ll] != out[ll])
+					goto fnexti;
 			return -1;
 		}
+	  fnexti:
+		i++;
+	}
+	if (!num)
+		goto copy;
+	if (!out)
+		return -2;
+	*result = nfmalloc( reserve + l + num * (outl - inl) + 1 );
+	p = *result + reserve;
+	for (i = 0; i < l; ) {
+		for (ll = 0; ll < inl; ll++)
+			if (arg[i + ll] != in[ll])
+				goto rnexti;
+		memcpy( p, out, outl );
+		p += outl;
+		i += inl;
+		continue;
+	  rnexti:
+		*p++ = arg[i++];
+	}
+	*p = 0;
 	return 0;
 }
 

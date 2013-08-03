@@ -497,16 +497,14 @@ parse_generic_store( store_conf_t *store, conffile_t *cfg )
 	else if (!strcasecmp( "MapInbox", cfg->cmd ))
 		store->map_inbox = nfstrdup( cfg->val );
 	else if (!strcasecmp( "Flatten", cfg->cmd )) {
-		int sl = strlen( cfg->val );
-		if (sl != 1) {
-			error( "%s:%d: malformed flattened hierarchy delimiter\n", cfg->file, cfg->line );
-			cfg->err = 1;
-		} else if (cfg->val[0] == '/') {
-			error( "%s:%d: flattened hierarchy delimiter cannot be the canonical delimiter '/'\n", cfg->file, cfg->line );
-			cfg->err = 1;
-		} else {
-			store->flat_delim = cfg->val[0];
-		}
+		const char *p;
+		for (p = cfg->val; *p; p++)
+			if (*p == '/') {
+				error( "%s:%d: flattened hierarchy delimiter cannot contain the canonical delimiter '/'\n", cfg->file, cfg->line );
+				cfg->err = 1;
+				return;
+			}
+		store->flat_delim = nfstrdup( cfg->val );
 	} else {
 		error( "%s:%d: unknown keyword '%s'\n", cfg->file, cfg->line, cfg->cmd );
 		cfg->err = 1;
