@@ -346,6 +346,24 @@ socket_connect( conn_t *sock, void (*cb)( int ok, void *aux ) )
 		info( "\vok\n" );
 		socket_connected( sock );
 	} else {
+#ifdef HAVE_IPV6
+		int gaierr;
+		struct addrinfo hints;
+
+		memset( &hints, 0, sizeof(hints) );
+		hints.ai_family = AF_UNSPEC;
+		hints.ai_socktype = SOCK_STREAM;
+		hints.ai_flags = AI_V4MAPPED | AI_ADDRCONFIG;
+		infon( "Resolving %s... ", conf->host );
+		if ((gaierr = getaddrinfo( conf->host, NULL, &hints, &sock->addrs ))) {
+			error( "IMAP error: Cannot resolve server '%s': %s\n", conf->host, gai_strerror( gaierr ) );
+			socket_connect_bail( sock );
+			return;
+		}
+		info( "\vok\n" );
+
+		sock->curr_addr = sock->addrs;
+#else
 		struct hostent *he;
 
 		infon( "Resolving %s... ", conf->host );
@@ -358,6 +376,7 @@ socket_connect( conn_t *sock, void (*cb)( int ok, void *aux ) )
 		info( "\vok\n" );
 
 		sock->curr_addr = he->h_addr_list;
+#endif
 		socket_connect_one( sock );
 	}
 }
@@ -367,11 +386,19 @@ socket_connect_one( conn_t *sock )
 {
 	int s;
 	ushort port;
+#ifdef HAVE_IPV6
+	struct addrinfo *ai;
+#else
 	struct {
 		struct sockaddr_in ai_addr[1];
 	} ai[1];
+#endif
 
+#ifdef HAVE_IPV6
+	if (!(ai = sock->curr_addr)) {
+#else
 	if (!*sock->curr_addr) {
+#endif
 		error( "No working address found for %s\n", sock->conf->host );
 		socket_connect_bail( sock );
 		return;
@@ -382,17 +409,32 @@ socket_connect_one( conn_t *sock )
 	       sock->conf->use_imaps ? 993 :
 #endif
 	       143;
+#ifdef HAVE_IPV6
+	if (ai->ai_family == AF_INET6) {
+		struct sockaddr_in6 *in6 = ((struct sockaddr_in6 *)ai->ai_addr);
+		char sockname[64];
+		in6->sin6_port = htons( port );
+		nfasprintf( &sock->name, "%s ([%s]:%hu)",
+		            sock->conf->host, inet_ntop( AF_INET6, &in6->sin6_addr, sockname, sizeof(sockname) ), port );
+	} else
+#endif
 	{
 		struct sockaddr_in *in = ((struct sockaddr_in *)ai->ai_addr);
+#ifndef HAVE_IPV6
 		memset( in, 0, sizeof(*in) );
 		in->sin_family = AF_INET;
 		in->sin_addr.s_addr = *((int *)*sock->curr_addr);
+#endif
 		in->sin_port = htons( port );
 		nfasprintf( &sock->name, "%s (%s:%hu)",
 		            sock->conf->host, inet_ntoa( in->sin_addr ), port );
 	}
 
+#ifdef HAVE_IPV6
+	s = socket( ai->ai_family, SOCK_STREAM, 0 );
+#else
 	s = socket( PF_INET, SOCK_STREAM, 0 );
+#endif
 	if (s < 0) {
 		perror( "socket" );
 		exit( 1 );
@@ -402,7 +444,11 @@ socket_connect_one( conn_t *sock )
 	add_fd( s, socket_fd_cb, sock );
 
 	infon( "Connecting to %s... ", sock->name );
+#ifdef HAVE_IPV6
+	if (connect( s, ai->ai_addr, ai->ai_addrlen )) {
+#else
 	if (connect( s, ai->ai_addr, sizeof(*ai->ai_addr) )) {
+#endif
 		if (errno != EINPROGRESS) {
 			socket_connect_failed( sock );
 			return;
@@ -423,13 +469,20 @@ socket_connect_failed( conn_t *conn )
 	socket_close_internal( conn );
 	free( conn->name );
 	conn->name = 0;
+#ifdef HAVE_IPV6
+	conn->curr_addr = conn->curr_addr->ai_next;
+#else
 	conn->curr_addr++;
+#endif
 	socket_connect_one( conn );
 }
 
 static void
 socket_connected( conn_t *conn )
 {
+#ifdef HAVE_IPV6
+	freeaddrinfo( conn->addrs );
+#endif
 	conf_fd( conn->fd, 0, POLLIN );
 	conn->state = SCK_READY;
 	conn->callbacks.connect( 1, conn->callback_aux );
@@ -438,6 +491,9 @@ socket_connected( conn_t *conn )
 static void
 socket_connect_bail( conn_t *conn )
 {
+#ifdef HAVE_IPV6
+	freeaddrinfo( conn->addrs );
+#endif
 	free( conn->name );
 	conn->name = 0;
 	conn->callbacks.connect( 0, conn->callback_aux );

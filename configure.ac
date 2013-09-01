@@ -35,6 +35,15 @@ AC_CHECK_LIB(socket, socket, [SOCK_LIBS="-lsocket"])
 AC_CHECK_LIB(nsl, inet_ntoa, [SOCK_LIBS="$SOCK_LIBS -lnsl"])
 AC_SUBST(SOCK_LIBS)
 
+have_ipv6=true
+sav_LDFLAGS=$LDFLAGS
+LDFLAGS="$LDFLAGS $SOCK_LIBS"
+AC_CHECK_FUNCS(getaddrinfo inet_ntop, , [have_ipv6=false])
+LDFLAGS=$sav_LDFLAGS
+if $have_ipv6; then
+    AC_DEFINE(HAVE_IPV6, 1, [if your libc has IPv6 support])
+fi
+
 have_ssl_paths=
 AC_ARG_WITH(ssl,
   AC_HELP_STRING([--with-ssl[=PATH]], [where to look for SSL [detect]]),

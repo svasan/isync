@@ -85,7 +85,11 @@ typedef struct {
 	int fd;
 	int state;
 	const server_conf_t *conf; /* needed during connect */
+#ifdef HAVE_IPV6
+	struct addrinfo *addrs, *curr_addr; /* needed during connect */
+#else
 	char **curr_addr; /* needed during connect */
+#endif
 	char *name;
 #ifdef HAVE_LIBSSL
 	SSL *ssl;
