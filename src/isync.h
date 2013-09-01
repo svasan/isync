@@ -85,6 +85,7 @@ typedef struct {
 	int fd;
 	int state;
 	const server_conf_t *conf; /* needed during connect */
+	char **curr_addr; /* needed during connect */
 	char *name;
 #ifdef HAVE_LIBSSL
 	SSL *ssl;

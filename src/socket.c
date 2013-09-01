@@ -296,6 +296,7 @@ static void start_tls_p3( conn_t *conn, int ok )
 
 static void socket_fd_cb( int, void * );
 
+static void socket_connect_one( conn_t * );
 static void socket_connect_failed( conn_t * );
 static void socket_connected( conn_t * );
 static void socket_connect_bail( conn_t * );
@@ -312,14 +313,13 @@ void
 socket_connect( conn_t *sock, void (*cb)( int ok, void *aux ) )
 {
 	const server_conf_t *conf = sock->conf;
-	struct hostent *he;
-	struct sockaddr_in addr;
-	int s, a[2];
 
 	sock->callbacks.connect = cb;
 
 	/* open connection to IMAP server */
 	if (conf->tunnel) {
+		int a[2];
+
 		nfasprintf( &sock->name, "tunnel '%s'", conf->tunnel );
 		infon( "Starting %s... ", sock->name );
 
@@ -343,14 +343,10 @@ socket_connect( conn_t *sock, void (*cb)( int ok, void *aux ) )
 		fcntl( a[1], F_SETFL, O_NONBLOCK );
 		add_fd( a[1], socket_fd_cb, sock );
 
+		info( "\vok\n" );
+		socket_connected( sock );
 	} else {
-		memset( &addr, 0, sizeof(addr) );
-		addr.sin_port = conf->port ? htons( conf->port ) :
-#ifdef HAVE_LIBSSL
-		                conf->use_imaps ? htons( 993 ) :
-#endif
-		                htons( 143 );
-		addr.sin_family = AF_INET;
+		struct hostent *he;
 
 		infon( "Resolving %s... ", conf->host );
 		he = gethostbyname( conf->host );
@@ -361,35 +357,63 @@ socket_connect( conn_t *sock, void (*cb)( int ok, void *aux ) )
 		}
 		info( "\vok\n" );
 
-		addr.sin_addr.s_addr = *((int *)he->h_addr_list[0]);
+		sock->curr_addr = he->h_addr_list;
+		socket_connect_one( sock );
+	}
+}
 
-		s = socket( PF_INET, SOCK_STREAM, 0 );
-		if (s < 0) {
-			perror( "socket" );
-			exit( 1 );
-		}
-		sock->fd = s;
-		fcntl( s, F_SETFL, O_NONBLOCK );
-		add_fd( s, socket_fd_cb, sock );
+static void
+socket_connect_one( conn_t *sock )
+{
+	int s;
+	ushort port;
+	struct {
+		struct sockaddr_in ai_addr[1];
+	} ai[1];
 
+	if (!*sock->curr_addr) {
+		error( "No working address found for %s\n", sock->conf->host );
+		socket_connect_bail( sock );
+		return;
+	}
+
+	port = sock->conf->port ? sock->conf->port :
+#ifdef HAVE_LIBSSL
+	       sock->conf->use_imaps ? 993 :
+#endif
+	       143;
+	{
+		struct sockaddr_in *in = ((struct sockaddr_in *)ai->ai_addr);
+		memset( in, 0, sizeof(*in) );
+		in->sin_family = AF_INET;
+		in->sin_addr.s_addr = *((int *)*sock->curr_addr);
+		in->sin_port = htons( port );
 		nfasprintf( &sock->name, "%s (%s:%hu)",
-		            conf->host, inet_ntoa( addr.sin_addr ), ntohs( addr.sin_port ) );
-		infon( "Connecting to %s... ", sock->name );
-		if (connect( s, (struct sockaddr *)&addr, sizeof(addr) )) {
-			if (errno != EINPROGRESS) {
-				socket_connect_failed( sock );
-				return;
-			}
-			conf_fd( s, 0, POLLOUT );
-			sock->state = SCK_CONNECTING;
-			info( "\v\n" );
+		            sock->conf->host, inet_ntoa( in->sin_addr ), port );
+	}
+
+	s = socket( PF_INET, SOCK_STREAM, 0 );
+	if (s < 0) {
+		perror( "socket" );
+		exit( 1 );
+	}
+	sock->fd = s;
+	fcntl( s, F_SETFL, O_NONBLOCK );
+	add_fd( s, socket_fd_cb, sock );
+
+	infon( "Connecting to %s... ", sock->name );
+	if (connect( s, ai->ai_addr, sizeof(*ai->ai_addr) )) {
+		if (errno != EINPROGRESS) {
+			socket_connect_failed( sock );
 			return;
 		}
-
+		conf_fd( s, 0, POLLOUT );
+		sock->state = SCK_CONNECTING;
+		info( "\v\n" );
+		return;
 	}
 	info( "\vok\n" );
 	socket_connected( sock );
-	return;
 }
 
 static void
@@ -397,7 +421,10 @@ socket_connect_failed( conn_t *conn )
 {
 	sys_error( "Cannot connect to %s", conn->name );
 	socket_close_internal( conn );
-	socket_connect_bail( conn );
+	free( conn->name );
+	conn->name = 0;
+	conn->curr_addr++;
+	socket_connect_one( conn );
 }
 
 static void
