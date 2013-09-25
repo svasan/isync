@@ -1876,6 +1876,8 @@ imap_submit_load( imap_store_t *ctx, const char *buf, int tuids, struct imap_cmd
 
 /******************* imap_fetch_msg *******************/
 
+static void imap_fetch_msg_p2( imap_store_t *ctx, struct imap_cmd *gcmd, int response );
+
 static void
 imap_fetch_msg( store_t *ctx, message_t *msg, msg_data_t *data,
                 void (*cb)( int sts, void *aux ), void *aux )
@@ -1885,10 +1887,23 @@ imap_fetch_msg( store_t *ctx, message_t *msg, msg_data_t *data,
 	INIT_IMAP_CMD_X(imap_cmd_fetch_msg, cmd, cb, aux)
 	cmd->gen.gen.param.uid = msg->uid;
 	cmd->msg_data = data;
-	imap_exec( (imap_store_t *)ctx, &cmd->gen.gen, imap_done_simple_msg,
+	data->data = 0;
+	imap_exec( (imap_store_t *)ctx, &cmd->gen.gen, imap_fetch_msg_p2,
 	           "UID FETCH %d (%s%sBODY.PEEK[])", msg->uid,
 	           !(msg->status & M_FLAGS) ? "FLAGS " : "",
 	           (data->date== -1) ? "INTERNALDATE " : "" );
+}
+
+static void
+imap_fetch_msg_p2( imap_store_t *ctx, struct imap_cmd *gcmd, int response )
+{
+	struct imap_cmd_fetch_msg *cmd = (struct imap_cmd_fetch_msg *)gcmd;
+
+	if (response == RESP_OK && !cmd->msg_data->data) {
+		/* The FETCH succeeded, but there is no message with this UID. */
+		response = RESP_NO;
+	}
+	imap_done_simple_msg( ctx, gcmd, response );
 }
 
 /******************* imap_set_flags *******************/
