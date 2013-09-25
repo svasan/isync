@@ -458,33 +458,37 @@ imap_refcounted_done_box( imap_store_t *ctx ATTR_UNUSED, struct imap_cmd *cmd, i
 }
 
 static char *
-next_arg( char **s )
+next_arg( char **ps )
 {
-	char *ret;
+	char *ret, *s;
 
-	if (!s || !*s)
+	assert( ps );
+	s = *ps;
+	if (!s)
 		return 0;
-	while (isspace( (unsigned char) **s ))
-		(*s)++;
-	if (!**s) {
-		*s = 0;
+	while (isspace( (unsigned char)*s ))
+		s++;
+	if (!*s) {
+		*ps = 0;
 		return 0;
 	}
-	if (**s == '"') {
-		++*s;
-		ret = *s;
-		*s = strchr( *s, '"' );
+	if (*s == '"') {
+		++s;
+		ret = s;
+		s = strchr( s, '"' );
 	} else {
-		ret = *s;
-		while (**s && !isspace( (unsigned char) **s ))
-			(*s)++;
+		ret = s;
+		while (*s && !isspace( (unsigned char)*s ))
+			s++;
 	}
-	if (*s) {
-		if (**s)
-			*(*s)++ = 0;
-		if (!**s)
-			*s = 0;
+	if (s) {
+		if (*s)
+			*s++ = 0;
+		if (!*s)
+			s = 0;
 	}
+
+	*ps = s;
 	return ret;
 }
 
