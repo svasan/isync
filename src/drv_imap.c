@@ -355,6 +355,88 @@ submit_imap_cmd( imap_store_t *ctx, struct imap_cmd *cmd )
 	return send_imap_cmd( ctx, cmd );
 }
 
+/* Minimal printf() replacement that supports an %\s format sequence to print backslash-escaped
+ * string literals. Note that this does not automatically add quotes around the printed string,
+ * so it is possible to concatenate multiple segments. */
+static char *
+imap_vprintf( const char *fmt, va_list ap )
+{
+	const char *s, *es;
+	char *d, *ed;
+	int maxlen;
+	char c;
+	char buf[1024]; /* Minimal supported command buffer size per IMAP spec. */
+
+	d = buf;
+	ed = d + sizeof(buf);
+	s = fmt;
+	for (;;) {
+		c = *fmt;
+		if (!c || c == '%') {
+			int l = fmt - s;
+			if (d + l > ed)
+				oob();
+			memcpy( d, s, l );
+			d += l;
+			if (!c) {
+				l = d - buf;
+				ed = nfmalloc( l + 1 );
+				memcpy( ed, buf, l );
+				ed[l] = 0;
+				return ed;
+			}
+			maxlen = INT_MAX;
+			c = *++fmt;
+			if (c == '\\') {
+				c = *++fmt;
+				if (c != 's') {
+					fputs( "Fatal: unsupported escaped format specifier. Please report a bug.\n", stderr );
+					abort();
+				}
+				s = va_arg( ap, const char * );
+				while ((c = *s++)) {
+					if (d + 2 > ed)
+						oob();
+					if (c == '\\' || c == '"')
+						*d++ = '\\';
+					*d++ = c;
+				}
+			} else { /* \\ cannot be combined with anything else. */
+				if (c == '.') {
+					c = *++fmt;
+					if (c != '*') {
+						fputs( "Fatal: unsupported string length specification. Please report a bug.\n", stderr );
+						abort();
+					}
+					maxlen = va_arg( ap , int );
+					c = *++fmt;
+				}
+				if (c == 'c') {
+					if (d + 1 > ed)
+						oob();
+					*d++ = (char)va_arg( ap , int );
+				} else if (c == 's') {
+					s = va_arg( ap, const char * );
+					es = memchr( s, 0, maxlen );
+					l = es ? es - s : maxlen;
+					if (d + l > ed)
+						oob();
+					memcpy( d, s, l );
+					d += l;
+				} else if (c == 'd') {
+					d += nfsnprintf( d, ed - d, "%d", va_arg( ap , int ) );
+				} else {
+					fputs( "Fatal: unsupported format specifier. Please report a bug.\n", stderr );
+					abort();
+				}
+			}
+			s = ++fmt;
+		} else {
+			fmt++;
+		}
+	}
+}
+
 static int
 imap_exec( imap_store_t *ctx, struct imap_cmd *cmdp,
            void (*done)( imap_store_t *ctx, struct imap_cmd *cmd, int response ),
@@ -366,7 +448,7 @@ imap_exec( imap_store_t *ctx, struct imap_cmd *cmdp,
 		cmdp = new_imap_cmd( sizeof(*cmdp) );
 	cmdp->param.done = done;
 	va_start( ap, fmt );
-	nfvasprintf( &cmdp->cmd, fmt, ap );
+	cmdp->cmd = imap_vprintf( fmt, ap );
 	va_end( ap );
 	return submit_imap_cmd( ctx, cmdp );
 }
@@ -457,10 +539,25 @@ imap_refcounted_done_box( imap_store_t *ctx ATTR_UNUSED, struct imap_cmd *cmd, i
 	imap_refcounted_done( sts );
 }
 
+static const char *
+imap_strchr( const char *s, char tc )
+{
+	for (;; s++) {
+		char c = *s;
+		if (c == '\\')
+			c = *++s;
+		if (!c)
+			return 0;
+		if (c == tc)
+			return s;
+	}
+}
+
 static char *
 next_arg( char **ps )
 {
-	char *ret, *s;
+	char *ret, *s, *d;
+	char c;
 
 	assert( ps );
 	s = *ps;
@@ -473,20 +570,30 @@ next_arg( char **ps )
 		return 0;
 	}
 	if (*s == '"') {
-		++s;
-		ret = s;
-		s = strchr( s, '"' );
+		s++;
+		ret = d = s;
+		while ((c = *s++) != '"') {
+			if (c == '\\')
+				c = *s++;
+			if (!c) {
+				*ps = 0;
+				return 0;
+			}
+			*d++ = c;
+		}
+		*d = 0;
 	} else {
 		ret = s;
-		while (*s && !isspace( (unsigned char)*s ))
+		while ((c = *s)) {
+			if (isspace( (unsigned char)c )) {
+				*s++ = 0;
+				break;
+			}
 			s++;
+		}
 	}
-	if (s) {
-		if (*s)
-			*s++ = 0;
-		if (!*s)
-			s = 0;
-	}
+	if (!*s)
+		s = 0;
 
 	*ps = s;
 	return ret;
@@ -529,8 +636,9 @@ static int
 parse_imap_list( imap_store_t *ctx, char **sp, parse_list_state_t *sts )
 {
 	list_t *cur, **curp;
-	char *s = *sp, *p;
+	char *s = *sp, *d, *p;
 	int bytes;
+	char c;
 
 	assert( sts );
 	assert( sts->level > 0 );
@@ -595,12 +703,15 @@ parse_imap_list( imap_store_t *ctx, char **sp, parse_list_state_t *sts )
 		} else if (*s == '"') {
 			/* quoted string */
 			s++;
-			p = s;
-			for (; *s != '"'; s++)
-				if (!*s)
+			p = d = s;
+			while ((c = *s++) != '"') {
+				if (c == '\\')
+					c = *s++;
+				if (!c)
 					goto bail;
-			cur->len = s - p;
-			s++;
+				*d++ = c;
+			}
+			cur->len = d - p;
 			cur->val = nfmalloc( cur->len + 1 );
 			memcpy( cur->val, p, cur->len );
 			cur->val[cur->len] = 0;
@@ -1140,7 +1251,7 @@ imap_socket_read( void *aux )
 						cmd2->gen.param.high_prio = 1;
 						p = strchr( cmdp->cmd, '"' );
 						if (imap_exec( ctx, &cmd2->gen, get_cmd_result_p2,
-						               "CREATE %.*s", strchr( p + 1, '"' ) - p + 1, p ) < 0)
+						               "CREATE %.*s", imap_strchr( p + 1, '"' ) - p + 1, p ) < 0)
 							return;
 						continue;
 					}
@@ -1571,7 +1682,7 @@ imap_open_store_authenticate2( imap_store_t *ctx )
 #endif
 		warn( "*** IMAP Warning *** Password is being sent in the clear\n" );
 	imap_exec( ctx, 0, imap_open_store_authenticate2_p2,
-	           "LOGIN \"%s\" \"%s\"", srvc->user, srvc->pass );
+	           "LOGIN \"%\\s\" \"%\\s\"", srvc->user, srvc->pass );
 	return;
 
   bail:
@@ -1695,7 +1806,7 @@ imap_select( store_t *gctx, int create,
 	cmd->gen.param.create = create;
 	cmd->gen.param.trycreate = 1;
 	imap_exec( ctx, &cmd->gen, imap_done_simple_box,
-	           "SELECT \"%s\"", buf );
+	           "SELECT \"%\\s\"", buf );
 	free( buf );
 }
 
@@ -1912,7 +2023,7 @@ imap_trash_msg( store_t *gctx, message_t *msg,
 		return;
 	}
 	imap_exec( ctx, &cmd->gen, imap_done_simple_msg,
-	           "UID COPY %d \"%s\"", msg->uid, buf );
+	           "UID COPY %d \"%\\s\"", msg->uid, buf );
 	free( buf );
 }
 
@@ -1966,10 +2077,10 @@ imap_store_msg( store_t *gctx, msg_data_t *data, int to_trash,
 #  pragma GCC diagnostic pop
 #endif
 		imap_exec( ctx, &cmd->gen, imap_store_msg_p2,
-		           "APPEND \"%s\" %s\"%s\" ", buf, flagstr, datestr );
+		           "APPEND \"%\\s\" %s\"%\\s\" ", buf, flagstr, datestr );
 	} else {
 		imap_exec( ctx, &cmd->gen, imap_store_msg_p2,
-		           "APPEND \"%s\" %s", buf, flagstr );
+		           "APPEND \"%\\s\" %s", buf, flagstr );
 	}
 	free( buf );
 }
@@ -2023,7 +2134,7 @@ imap_list( store_t *gctx, int flags,
 
 	if (((flags & LIST_PATH) &&
 	     imap_exec( ctx, imap_refcounted_new_cmd( sts ), imap_refcounted_done_box,
-	                "LIST \"\" \"%s*\"", ctx->prefix ) < 0) ||
+	                "LIST \"\" \"%\\s*\"", ctx->prefix ) < 0) ||
 	    ((flags & LIST_INBOX) && (!(flags & LIST_PATH) || *ctx->prefix) &&
 	     imap_exec( ctx, imap_refcounted_new_cmd( sts ), imap_refcounted_done_box,
 	                "LIST \"\" INBOX*" ) < 0))
