@@ -88,7 +88,8 @@ If specified twice, suppress warning messages as well.
 The configuration file is mandatory; \fBmbsync\fR will not run without it.
 Lines starting with a hash mark (\fB#\fR) are comments and are ignored entirely.
 Configuration items are keywords followed by one or more arguments;
-arguments containing spaces must be enclosed in double quotes (\fB"\fR).
+arguments containing spaces must be enclosed in double quotes (\fB"\fR),
+and literal double quotes and backslashes (\fB\\\fR) must be backslash-escaped.
 All keywords (including those used as arguments) are case-insensitive.
 Bash-like home directory expansion using the tilde (\fB~\fR) is supported
 in all options which represent local paths.

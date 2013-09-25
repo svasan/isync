@@ -48,7 +48,7 @@ static char *
 get_arg( conffile_t *cfile, int required, int *comment )
 {
 	char *ret, *p, *t;
-	int quoted;
+	int escaped, quoted;
 	char c;
 
 	p = cfile->rest;
@@ -64,9 +64,14 @@ get_arg( conffile_t *cfile, int required, int *comment )
 		}
 		ret = 0;
 	} else {
-		for (quoted = 0, ret = t = p; c; c = *p) {
+		for (escaped = 0, quoted = 0, ret = t = p; c; c = *p) {
 			p++;
-			if (c == '"')
+			if (escaped && c >= 32) {
+				escaped = 0;
+				*t++ = c;
+			} else if (c == '\\')
+				escaped = 1;
+			else if (c == '"')
 				quoted ^= 1;
 			else if (!quoted && isspace( (unsigned char) c ))
 				break;
@@ -74,6 +79,11 @@ get_arg( conffile_t *cfile, int required, int *comment )
 				*t++ = c;
 		}
 		*t = 0;
+		if (escaped) {
+			error( "%s:%d: unterminated escape sequence\n", cfile->file, cfile->line );
+			cfile->err = 1;
+			ret = 0;
+		}
 		if (quoted) {
 			error( "%s:%d: missing closing quote\n", cfile->file, cfile->line );
 			cfile->err = 1;
