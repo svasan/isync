@@ -1094,8 +1094,6 @@ box_loaded( int sts, void *aux )
 
 	if ((t == S) && svars->smaxxuid) {
 		debug( "preparing master selection - max expired slave uid is %d\n", svars->smaxxuid );
-		mexcs = 0;
-		nmexcs = rmexcs = 0;
 		minwuid = INT_MAX;
 		for (srec = svars->srecs; srec; srec = srec->next) {
 			if (srec->status & S_DEAD)
@@ -1113,6 +1111,8 @@ box_loaded( int sts, void *aux )
 				minwuid = srec->uid[M];
 		}
 		debug( "  min non-orphaned master uid is %d\n", minwuid );
+		mexcs = 0;
+		nmexcs = rmexcs = 0;
 		for (srec = svars->srecs; srec; srec = srec->next) {
 			if (srec->status & S_DEAD)
 				continue;
