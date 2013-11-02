@@ -1331,8 +1331,6 @@ box_loaded( int sts, void *aux )
 							srec->tuid[t1] = t2 < 26 ? t2 + 'A' : t2 < 52 ? t2 + 'a' - 26 : t2 < 62 ? t2 + '0' - 52 : t2 == 62 ? '+' : '/';
 						}
 						Fprintf( svars->jfp, "# %d %d %." stringify(TUIDL) "s\n", srec->uid[M], srec->uid[S], srec->tuid );
-						if (FSyncLevel >= FSYNC_THOROUGH)
-							fdatasync( fileno( svars->jfp ) );
 						debug( "  -> %sing message, TUID %." stringify(TUIDL) "s\n", str_hl[t], srec->tuid );
 					} else {
 						if (srec->uid[t] == -1) {
@@ -1513,6 +1511,8 @@ box_loaded( int sts, void *aux )
 	}
 
 	debug( "propagating new messages\n" );
+	if (FSyncLevel >= FSYNC_NORMAL)
+		fdatasync( fileno( svars->jfp ) );
 	for (t = 0; t < 2; t++) {
 		Fprintf( svars->jfp, "%c %d\n", "{}"[t], svars->ctx[t]->uidnext );
 		for (tmsg = svars->ctx[1-t]->msgs; tmsg; tmsg = tmsg->next) {
