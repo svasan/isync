@@ -1167,8 +1167,14 @@ box_loaded( int sts, void *aux )
 	for (t = 0; t < 2; t++) {
 		Fprintf( svars->jfp, "%c %d\n", "{}"[t], svars->ctx[t]->uidnext );
 		for (tmsg = svars->ctx[1-t]->msgs; tmsg; tmsg = tmsg->next) {
+			/* If we have a srec:
+			 * - message is old (> 0) or expired (0) => ignore
+			 * - message was skipped (-1) => ReNew
+			 * - message was attempted, but failed (-2) => New
+			 * If new have no srec, the message is always New. */
 			srec = tmsg->srec;
-			if (srec ? srec->uid[t] < 0 && (srec->uid[t] == -1 ? (svars->chan->ops[t] & OP_RENEW) : (svars->chan->ops[t] & OP_NEW)) : (svars->chan->ops[t] & OP_NEW)) {
+			if (srec ? srec->uid[t] < 0 && (svars->chan->ops[t] & (srec->uid[t] == -1 ? OP_RENEW : OP_NEW))
+			         : (svars->chan->ops[t] & OP_NEW)) {
 				debug( "new message %d on %s\n", tmsg->uid, str_ms[1-t] );
 				if ((svars->chan->ops[t] & OP_EXPUNGE) && (tmsg->flags & F_DELETED))
 					debug( "  -> not %sing - would be expunged anyway\n", str_hl[t] );
