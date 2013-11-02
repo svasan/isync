@@ -534,23 +534,16 @@ times within a Group.
 ..
 .SS Global Options
 .TP
-\fBFSync\fR {\fINone\fR|\fINormal\fR|\fIThorough\fR}
+\fBFSync\fR \fIyes\fR|\fIno\fR
 .br
-Select the amount of forced flushing \fBmbsync\fR performs, which determines
-the level of data safety after system crashes and power outages:
-.br
-\fBNone\fR - no flushing at all. This is reasonably safe for file systems
-which are mounted with data=ordered mode.
-.br
-\fBNormal\fR - message and critical metadata writes are flushed. No data
-should be lost due to crashes, though it is still possible that messages
-are duplicated after crashes. This is the default, and is a wise choice for
-file systems mounted with data=writeback, in particular modern systems like
-ext4, btrfs and xfs. The performance impact on older file systems may be
-disproportionate.
-.br
-\fBThorough\fR - this avoids message duplication after crashes as well,
-at some additional performance cost.
+Selects whether \fBmbsync\fR performs forced flushing, which determines
+the level of data safety after system crashes and power outages.
+Disabling it is reasonably safe for file systems which are mounted with
+data=ordered mode.
+Enabling it is a wise choice for file systems mounted with data=writeback,
+in particular modern systems like ext4, btrfs and xfs. The performance impact
+on older file systems may be disproportionate.
+(Default: \fIyes\fR)
 ..
 .SH INHERENT PROBLEMS
 Changes done after \fBmbsync\fR has retrieved the message list will not be

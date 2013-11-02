@@ -249,7 +249,7 @@ sub writecfg($$$)
 	open(FILE, ">", ".mbsyncrc") or
 		die "Cannot open .mbsyncrc.\n";
 	print FILE
-"FSync None
+"FSync no
 
 MaildirStore master
 Path ./

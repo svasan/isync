@@ -488,12 +488,7 @@ extern driver_t *drivers[N_DRIVERS];
 extern channel_conf_t global_conf;
 extern channel_conf_t *channels;
 extern group_conf_t *groups;
-
-#define FSYNC_NONE     0
-#define FSYNC_NORMAL   1
-#define FSYNC_THOROUGH 2
-
-extern int FSyncLevel;
+extern int UseFSync;
 
 int parse_bool( conffile_t *cfile );
 int parse_int( conffile_t *cfile );
