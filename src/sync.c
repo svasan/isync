@@ -99,7 +99,6 @@ make_flags( int flags, char *buf )
 #define S_EXPIRE       (1<<5)
 #define S_NEXPIRE      (1<<6)
 #define S_EXP_S        (1<<7)
-#define S_FIND         (1<<8)
 
 #define mvBit(in,ib,ob) ((unsigned char)(((unsigned)in) * (ob) / (ib)))
 
@@ -203,16 +202,17 @@ static int check_cancel( sync_vars_t *svars );
 */
 
 #define ST_LOADED          (1<<0)
-#define ST_SENT_NEW        (1<<1)
-#define ST_FOUND_NEW       (1<<2)
-#define ST_SENT_FLAGS      (1<<3)
-#define ST_SENT_TRASH      (1<<4)
-#define ST_CLOSED          (1<<5)
-#define ST_SENT_CANCEL     (1<<6)
-#define ST_CANCELED        (1<<7)
-#define ST_SELECTED        (1<<8)
-
-#define ST_DID_EXPUNGE     (1<<16)
+#define ST_FIND_OLD        (1<<1)
+#define ST_SENT_NEW        (1<<2)
+#define ST_FIND_NEW        (1<<3)
+#define ST_FOUND_NEW       (1<<4)
+#define ST_SENT_FLAGS      (1<<5)
+#define ST_SENT_TRASH      (1<<6)
+#define ST_CLOSED          (1<<7)
+#define ST_SENT_CANCEL     (1<<8)
+#define ST_CANCELED        (1<<9)
+#define ST_SELECTED        (1<<10)
+#define ST_DID_EXPUNGE     (1<<11)
 
 
 static void
@@ -970,9 +970,9 @@ box_selected( int sts, void *aux )
 				opts[S] |= OPEN_OLD|OPEN_FLAGS;
 			if (srec->tuid[0]) {
 				if (srec->uid[M] == -2)
-					opts[M] |= OPEN_NEW|OPEN_FIND, svars->state[M] |= S_FIND;
+					opts[M] |= OPEN_NEW|OPEN_FIND, svars->state[M] |= ST_FIND_OLD;
 				else if (srec->uid[S] == -2)
-					opts[S] |= OPEN_NEW|OPEN_FIND, svars->state[S] |= S_FIND;
+					opts[S] |= OPEN_NEW|OPEN_FIND, svars->state[S] |= ST_FIND_OLD;
 			}
 		}
 	svars->drv[M]->prepare_opts( ctx[M], opts[M] );
@@ -1046,8 +1046,7 @@ box_loaded( int sts, void *aux )
 	svars->state[t] |= ST_LOADED;
 	info( "%s: %d messages, %d recent\n", str_ms[t], svars->ctx[t]->count, svars->ctx[t]->recent );
 
-	if (svars->state[t] & S_FIND) {
-		svars->state[t] &= ~S_FIND;
+	if (svars->state[t] & ST_FIND_OLD) {
 		debug( "matching previously copied messages on %s\n", str_ms[t] );
 		match_tuids( svars, t );
 	}
@@ -1393,7 +1392,7 @@ msg_copied( int sts, int uid, copy_vars_t *vars )
 	switch (sts) {
 	case SYNC_OK:
 		if (uid < 0)
-			svars->state[t] |= S_FIND;
+			svars->state[t] |= ST_FIND_NEW;
 		msg_copied_p2( svars, vars->srec, t, vars->msg, uid );
 		break;
 	case SYNC_NOGOOD:
@@ -1440,7 +1439,7 @@ msgs_copied( sync_vars_t *svars, int t )
 	if (!(svars->state[t] & ST_SENT_NEW) || svars->new_done[t] < svars->new_total[t])
 		return;
 
-	if (svars->state[t] & S_FIND) {
+	if (svars->state[t] & ST_FIND_NEW) {
 		debug( "finding just copied messages on %s\n", str_ms[t] );
 		svars->drv[t]->find_new_msgs( svars->ctx[t], msgs_found_new, AUX );
 	} else {
