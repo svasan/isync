@@ -1166,14 +1166,14 @@ box_loaded( int sts, void *aux )
 	svars->osrecadd = svars->srecadd;
 	for (t = 0; t < 2; t++) {
 		Fprintf( svars->jfp, "%c %d\n", "{}"[t], svars->ctx[t]->uidnext );
-		for (tmsg = svars->ctx[1-t]->msgs; tmsg; tmsg = tmsg->next)
-			if (tmsg->srec ? tmsg->srec->uid[t] < 0 && (tmsg->srec->uid[t] == -1 ? (svars->chan->ops[t] & OP_RENEW) : (svars->chan->ops[t] & OP_NEW)) : (svars->chan->ops[t] & OP_NEW)) {
+		for (tmsg = svars->ctx[1-t]->msgs; tmsg; tmsg = tmsg->next) {
+			srec = tmsg->srec;
+			if (srec ? srec->uid[t] < 0 && (srec->uid[t] == -1 ? (svars->chan->ops[t] & OP_RENEW) : (svars->chan->ops[t] & OP_NEW)) : (svars->chan->ops[t] & OP_NEW)) {
 				debug( "new message %d on %s\n", tmsg->uid, str_ms[1-t] );
 				if ((svars->chan->ops[t] & OP_EXPUNGE) && (tmsg->flags & F_DELETED))
 					debug( "  -> not %sing - would be expunged anyway\n", str_hl[t] );
 				else {
-					if (tmsg->srec) {
-						srec = tmsg->srec;
+					if (srec) {
 						srec->status |= S_DONE;
 						debug( "  -> pair(%d,%d) exists\n", srec->uid[M], srec->uid[S] );
 					} else {
@@ -1223,6 +1223,7 @@ box_loaded( int sts, void *aux )
 					}
 				}
 			}
+		}
 		svars->state[t] |= ST_SENT_NEW;
 		msgs_copied( svars, t );
 	}
