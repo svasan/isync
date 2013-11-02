@@ -1275,7 +1275,7 @@ box_loaded( int sts, void *aux )
 					/* a) & b.3) / c.3) */
 					if (svars->chan->ops[t] & OP_FLAGS) {
 						sflags = srec->msg[1-t]->flags;
-						if ((srec->status & (S_EXPIRE|S_EXPIRED)) && !t)
+						if ((srec->status & (S_EXPIRE|S_EXPIRED)) && (t == M))
 							sflags &= ~F_DELETED;
 						srec->aflags[t] = sflags & ~srec->flags;
 						srec->dflags[t] = ~sflags & srec->flags;
