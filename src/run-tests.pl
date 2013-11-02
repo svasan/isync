@@ -250,7 +250,7 @@ sub qm($)
 	return $_;
 }
 
-# $global, $master, $slave
+# $master, $slave, $channel
 sub writecfg($$$)
 {
 	open(FILE, ">", ".mbsyncrc") or
@@ -334,6 +334,9 @@ sub readbox($)
 }
 
 # $boxname
+# Output:
+# [ maxuid,
+#   serial, uid, "flags", ... ],
 sub showbox($)
 {
 	my ($bn) = @_;
@@ -353,6 +356,9 @@ sub showbox($)
 }
 
 # $filename
+# Output:
+# [ maxuid[M], smaxxuid, maxuid[S],
+#   uid[M], uid[S], "flags", ... ],
 sub showstate($)
 {
 	my ($fn) = @_;
@@ -401,6 +407,7 @@ sub showchan($)
 	showstate($fn);
 }
 
+# $source_state_name, $target_state_name, $master_configs, $slave_configs, $channel_configs
 sub show($$@)
 {
 	my ($sx, $tx, @sfx) = @_;
@@ -581,6 +588,7 @@ sub printchan($$@)
 	printstate(@t);
 }
 
+# $title, \@source_state, \@target_state
 sub test($$$)
 {
 	my ($ttl, $sx, $tx) = @_;

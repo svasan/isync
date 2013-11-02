@@ -380,6 +380,7 @@ main( int argc, char **argv )
 			goto cop;
 		case 'F':
 			cops |= XOP_PULL|XOP_PUSH;
+			/* fallthrough */
 		case '0':
 			mvars->ops[M] |= XOP_HAVE_TYPE;
 			break;

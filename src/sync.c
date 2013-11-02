@@ -92,20 +92,20 @@ make_flags( int flags, char *buf )
 }
 
 
-#define S_DEAD         (1<<0)
-#define S_DONE         (1<<1)
-#define S_DEL(ms)      (1<<(2+(ms)))
-#define S_EXPIRED      (1<<4)
-#define S_EXPIRE       (1<<5)
-#define S_NEXPIRE      (1<<6)
-#define S_EXP_S        (1<<7)
+#define S_DEAD         (1<<0)  /* ephemeral: the entry was killed and should be ignored */
+#define S_DONE         (1<<1)  /* ephemeral: the entry was already synced */
+#define S_DEL(ms)      (1<<(2+(ms)))  /* ephemeral: m/s message would be subject to expunge */
+#define S_EXPIRED      (1<<4)  /* the entry is expired (slave message removal confirmed) */
+#define S_EXPIRE       (1<<5)  /* the entry is being expired (slave message removal scheduled) */
+#define S_NEXPIRE      (1<<6)  /* temporary: new expiration state */
+#define S_EXP_S        (1<<7)  /* temporary: expired slave message is actually gone */
 
 #define mvBit(in,ib,ob) ((unsigned char)(((unsigned)in) * (ob) / (ib)))
 
 typedef struct sync_rec {
 	struct sync_rec *next;
 	/* string_list_t *keywords; */
-	int uid[2];
+	int uid[2]; /* -2 = pending (use tuid), -1 = skipped (too big), 0 = expired */
 	message_t *msg[2];
 	unsigned char status, flags, aflags[2], dflags[2];
 	char tuid[TUIDL];
@@ -1093,24 +1093,39 @@ box_loaded( int sts, void *aux )
 	free( srecmap );
 
 	if ((t == S) && svars->smaxxuid) {
+		/* When messages have been expired on the slave, the master fetch is split into
+		 * two ranges: The bulk fetch which corresponds with the most recent messages, and an
+		 * exception list of messages which would have been expired if they weren't important. */
 		debug( "preparing master selection - max expired slave uid is %d\n", svars->smaxxuid );
+		/* First, find out the lower bound for the bulk fetch.
+		 * On the way, mark successfully expired messages. */
 		minwuid = INT_MAX;
 		for (srec = svars->srecs; srec; srec = srec->next) {
 			if (srec->status & S_DEAD)
 				continue;
 			if (srec->status & S_EXPIRED) {
 				if (!srec->uid[S] || ((svars->ctx[S]->opts & OPEN_OLD) && !srec->msg[S])) {
+					/* The expired message was already gone or it is gone now. */
 					srec->status |= S_EXP_S;
 					continue;
 				}
+				/* The expired message was not expunged yet, so re-examine it.
+				 * This will happen en masse, so just extend the bulk fetch. */
 			} else {
-				if (svars->smaxxuid >= srec->uid[S])
+				if (svars->smaxxuid >= srec->uid[S]) {
+					/* The non-expired message is in the generally expired range, so don't
+					 * make it contribute to the bulk fetch. */
 					continue;
+				}
+				/* Usual non-expired message. */
 			}
 			if (minwuid > srec->uid[M])
 				minwuid = srec->uid[M];
 		}
 		debug( "  min non-orphaned master uid is %d\n", minwuid );
+		/* Next, calculate the exception fetch.
+		 * The svars->maxuid[M] >= srec->uid[M] checks catch messages which we Pushed
+		 * to the range we never Pulled from (which we may still do). */
 		mexcs = 0;
 		nmexcs = rmexcs = 0;
 		for (srec = svars->srecs; srec; srec = srec->next) {
@@ -1118,23 +1133,28 @@ box_loaded( int sts, void *aux )
 				continue;
 			if (srec->status & S_EXP_S) {
 				if (minwuid > srec->uid[M] && svars->maxuid[M] >= srec->uid[M]) {
+					/* The pair is in the range that will not be synced any more. */
 					debug( "  -> killing (%d,%d)\n", srec->uid[M], srec->uid[S] );
 					srec->status = S_DEAD;
 					Fprintf( svars->jfp, "- %d %d\n", srec->uid[M], srec->uid[S] );
 				} else if (srec->uid[S]) {
+					/* The message disappeared just now, and the pair is still needed. */
 					debug( "  -> orphaning (%d,[%d])\n", srec->uid[M], srec->uid[S] );
 					Fprintf( svars->jfp, "> %d %d 0\n", srec->uid[M], srec->uid[S] );
 					srec->uid[S] = 0;
 				}
 			} else if (minwuid > srec->uid[M]) {
 				if (srec->uid[S] < 0) {
+					/* The message was never synced over ... */
 					if (svars->maxuid[M] >= srec->uid[M]) {
+						/* ... and the range is dead now. */
 						debug( "  -> killing (%d,%d)\n", srec->uid[M], srec->uid[S] );
 						srec->status = S_DEAD;
 						Fprintf( svars->jfp, "- %d %d\n", srec->uid[M], srec->uid[S] );
 					}
 				} else if (srec->uid[M] > 0 && srec->uid[S] && (svars->ctx[M]->opts & OPEN_OLD) &&
 				           (!(svars->ctx[M]->opts & OPEN_NEW) || svars->maxuid[M] >= srec->uid[M])) {
+					/* The pair is alive, but outside the bulk range, and we want to sync old entries. */
 					if (nmexcs == rmexcs) {
 						rmexcs = rmexcs * 2 + 100;
 						mexcs = nfrealloc( mexcs, rmexcs * sizeof(int) );
@@ -1282,8 +1302,10 @@ box_loaded( int sts, void *aux )
 					/* a) & b.3) / c.3) */
 					if (svars->chan->ops[t] & OP_FLAGS) {
 						sflags = srec->msg[1-t]->flags;
-						if ((srec->status & (S_EXPIRE|S_EXPIRED)) && (t == M))
+						if ((srec->status & (S_EXPIRE|S_EXPIRED)) && (t == M)) {
+							/* Don't propagate deletion resulting from expiration. */
 							sflags &= ~F_DELETED;
+						}
 						srec->aflags[t] = sflags & ~srec->flags;
 						srec->dflags[t] = ~sflags & srec->flags;
 						if (DFlags & DEBUG) {
@@ -1300,10 +1322,10 @@ box_loaded( int sts, void *aux )
 	}
 
 	if ((svars->chan->ops[S] & (OP_NEW|OP_RENEW|OP_FLAGS)) && svars->chan->max_messages) {
-		/* Flagged and not yet synced messages older than the first not
-		 * expired message are not counted. */
+		/* Expire excess messages. Flagged messages and not yet synced messages older
+		 * than the first not expired message are not counted towards the total. */
 		todel = svars->ctx[S]->count + svars->new_total[S] - svars->chan->max_messages;
-		debug( "scheduling %d excess messages for expiration\n", todel );
+		debug( "%d excess messages on slave\n", todel );
 		for (tmsg = svars->ctx[S]->msgs; tmsg && todel > 0; tmsg = tmsg->next) {
 			if (tmsg->status & M_DEAD)
 				continue;
@@ -1312,21 +1334,25 @@ box_loaded( int sts, void *aux )
 			    !(srec->status & (S_EXPIRE|S_EXPIRED)))
 				todel--;
 		}
-		debug( "%d non-deleted excess messages\n", todel );
+		debug( "... of which %d are not deleted\n", todel );
 		for (tmsg = svars->ctx[S]->msgs; tmsg; tmsg = tmsg->next) {
 			if (tmsg->status & M_DEAD)
 				continue;
-			if (!(srec = tmsg->srec) || srec->uid[M] <= 0)
+			if (!(srec = tmsg->srec) || srec->uid[M] <= 0) {
+				/* We did not push the message, so it must be kept. */
 				todel--;
-			else {
+			} else {
 				nflags = (tmsg->flags | srec->aflags[S]) & ~srec->dflags[S];
 				if (!(nflags & F_DELETED) || (srec->status & (S_EXPIRE|S_EXPIRED))) {
-					if (nflags & F_FLAGGED)
+					/* The message is not deleted, or is already (being) expired. */
+					if (nflags & F_FLAGGED) {
+						/* Flagged messages are always kept. */
 						todel--;
-					else if ((!(tmsg->status & M_RECENT) || (tmsg->flags & F_SEEN)) &&
+					} else if ((!(tmsg->status & M_RECENT) || (tmsg->flags & F_SEEN)) &&
 					         (todel > 0 ||
 					          ((srec->status & (S_EXPIRE|S_EXPIRED)) == (S_EXPIRE|S_EXPIRED)) ||
 					          ((srec->status & (S_EXPIRE|S_EXPIRED)) && (tmsg->flags & F_DELETED)))) {
+						/* The message is not new, and it is excess or was already (being) expired. */
 						srec->status |= S_NEXPIRE;
 						debug( "  pair(%d,%d)\n", srec->uid[M], srec->uid[S] );
 						todel--;
@@ -1358,6 +1384,7 @@ box_loaded( int sts, void *aux )
 			aflags = srec->aflags[t];
 			dflags = srec->dflags[t];
 			if ((t == S) && ((mvBit(srec->status, S_EXPIRE, S_EXPIRED) ^ srec->status) & S_EXPIRED)) {
+				/* Derive deletion action from expiration state. */
 				if (srec->status & S_NEXPIRE)
 					aflags |= F_DELETED;
 				else
@@ -1366,11 +1393,13 @@ box_loaded( int sts, void *aux )
 			if ((svars->chan->ops[t] & OP_EXPUNGE) && (((srec->msg[t] ? srec->msg[t]->flags : 0) | aflags) & ~dflags & F_DELETED) &&
 			    (!svars->ctx[t]->conf->trash || svars->ctx[t]->conf->trash_only_new))
 			{
+				/* If the message is going to be expunged, don't propagate anything but the deletion. */
 				srec->aflags[t] &= F_DELETED;
 				aflags &= F_DELETED;
 				srec->dflags[t] = dflags = 0;
 			}
 			if (srec->msg[t] && (srec->msg[t]->status & M_FLAGS)) {
+				/* If we know the target message's state, optimize away non-changes. */
 				aflags &= ~srec->msg[t]->flags;
 				dflags &= srec->msg[t]->flags;
 			}
@@ -1424,8 +1453,15 @@ msg_copied( int sts, int uid, copy_vars_t *vars )
 static void
 msg_copied_p2( sync_vars_t *svars, sync_rec_t *srec, int t, message_t *tmsg, int uid )
 {
+	/* Possible previous UIDs:
+	 * - -2 when the entry is new
+	 * - -1 when re-newing an entry
+	 * Possible new UIDs:
+	 * - a real UID when storing a message to a UIDPLUS mailbox
+	 * - -2 when storing a message to a dumb mailbox
+	 * - -1 when not actually storing a message */
 	if (srec->uid[t] != uid) {
-		debug( "  -> new UID %d\n", uid );
+		debug( "  -> new UID %d on %s\n", uid, str_ms[t] );
 		Fprintf( svars->jfp, "%c %d %d %d\n", "<>"[t], srec->uid[M], srec->uid[S], uid );
 		srec->uid[t] = uid;
 		srec->tuid[0] = 0;
@@ -1523,7 +1559,7 @@ flags_set_sync_p2( sync_vars_t *svars, sync_rec_t *srec, int t )
 
 	nflags = (srec->flags | srec->aflags[t]) & ~srec->dflags[t];
 	if (srec->flags != nflags) {
-		debug( "  pair(%d,%d): updating flags (%u -> %u)\n", srec->uid[M], srec->uid[S], srec->flags, nflags );
+		debug( "  pair(%d,%d): updating flags (%u -> %u; %sed)\n", srec->uid[M], srec->uid[S], srec->flags, nflags, str_hl[t] );
 		srec->flags = nflags;
 		Fprintf( svars->jfp, "* %d %d %u\n", srec->uid[M], srec->uid[S], nflags );
 	}
