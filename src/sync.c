@@ -1224,6 +1224,12 @@ box_loaded( int sts, void *aux )
 						Fprintf( svars->jfp, "+ %d %d\n", srec->uid[M], srec->uid[S] );
 						debug( "  -> pair(%d,%d) created\n", srec->uid[M], srec->uid[S] );
 					}
+					if (svars->maxuid[1-t] < tmsg->uid) {
+						/* We do this here for simplicity. However, logging must be delayed until
+						 * all messages were propagated, as skipped messages could otherwise be
+						 * logged before the propagation of messages with lower UIDs completes. */
+						svars->maxuid[1-t] = tmsg->uid;
+					}
 					if ((tmsg->flags & F_FLAGGED) || tmsg->size <= svars->chan->stores[t]->max_size) {
 						if (tmsg->flags) {
 							srec->flags = tmsg->flags;
@@ -1502,10 +1508,6 @@ msg_copied_p2( sync_vars_t *svars, sync_rec_t *srec, int t, message_t *tmsg, int
 	}
 	if (!tmsg->srec) {
 		tmsg->srec = srec;
-		if (svars->maxuid[1-t] < tmsg->uid) {
-			svars->maxuid[1-t] = tmsg->uid;
-			Fprintf( svars->jfp, "%c %d\n", ")("[t], tmsg->uid );
-		}
 	}
 }
 
@@ -1518,6 +1520,8 @@ msgs_copied( sync_vars_t *svars, int t )
 {
 	if (!(svars->state[t] & ST_SENT_NEW) || svars->new_done[t] < svars->new_total[t])
 		return;
+
+	Fprintf( svars->jfp, "%c %d\n", ")("[t], svars->maxuid[1-t] );
 
 	if (svars->state[t] & ST_FIND_NEW) {
 		debug( "finding just copied messages on %s\n", str_ms[t] );
