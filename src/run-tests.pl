@@ -368,6 +368,7 @@ sub showstate($)
 		return;
 	}
 	if (!/^1:(\d+) 1:(\d+):(\d+)\n$/) {
+		chomp;
 		print STDERR " Malformed sync state header '$_'.\n";
 		close FILE;
 		return;
