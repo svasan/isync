@@ -1111,7 +1111,7 @@ static void flags_set( int sts, void *aux );
 static void flags_set_p2( sync_vars_t *svars, sync_rec_t *srec, int t );
 static int msgs_flags_set( sync_vars_t *svars, int t );
 static void msg_copied( int sts, int uid, copy_vars_t *vars );
-static void msg_copied_p2( sync_vars_t *svars, sync_rec_t *srec, int t, message_t *tmsg, int uid );
+static void msg_copied_p2( sync_vars_t *svars, sync_rec_t *srec, int t, int uid );
 static void msgs_copied( sync_vars_t *svars, int t );
 
 static void
@@ -1221,6 +1221,7 @@ box_loaded( int sts, void *aux )
 						srec->tuid[0] = 0;
 						srec->uid[1-t] = tmsg->uid;
 						srec->uid[t] = -2;
+						tmsg->srec = srec;
 						Fprintf( svars->jfp, "+ %d %d\n", srec->uid[M], srec->uid[S] );
 						debug( "  -> pair(%d,%d) created\n", srec->uid[M], srec->uid[S] );
 					}
@@ -1254,11 +1255,11 @@ box_loaded( int sts, void *aux )
 						if (copy_msg( cv ))
 							return;
 					} else {
-						if (tmsg->srec) {
+						if (srec->uid[t] == -1) {
 							debug( "  -> not %sing - still too big\n", str_hl[t] );
 						} else {
 							debug( "  -> not %sing - too big\n", str_hl[t] );
-							msg_copied_p2( svars, srec, t, tmsg, -1 );
+							msg_copied_p2( svars, srec, t, -1 );
 						}
 					}
 				}
@@ -1472,7 +1473,7 @@ msg_copied( int sts, int uid, copy_vars_t *vars )
 	case SYNC_OK:
 		if (uid < 0)
 			svars->state[t] |= ST_FIND_NEW;
-		msg_copied_p2( svars, vars->srec, t, vars->msg, uid );
+		msg_copied_p2( svars, vars->srec, t, uid );
 		break;
 	case SYNC_NOGOOD:
 		debug( "  -> killing (%d,%d)\n", vars->srec->uid[M], vars->srec->uid[S] );
@@ -1491,7 +1492,7 @@ msg_copied( int sts, int uid, copy_vars_t *vars )
 }
 
 static void
-msg_copied_p2( sync_vars_t *svars, sync_rec_t *srec, int t, message_t *tmsg, int uid )
+msg_copied_p2( sync_vars_t *svars, sync_rec_t *srec, int t, int uid )
 {
 	/* Possible previous UIDs:
 	 * - -2 when the entry is new
@@ -1505,9 +1506,6 @@ msg_copied_p2( sync_vars_t *svars, sync_rec_t *srec, int t, message_t *tmsg, int
 		Fprintf( svars->jfp, "%c %d %d %d\n", "<>"[t], srec->uid[M], srec->uid[S], uid );
 		srec->uid[t] = uid;
 		srec->tuid[0] = 0;
-	}
-	if (!tmsg->srec) {
-		tmsg->srec = srec;
 	}
 }
 
