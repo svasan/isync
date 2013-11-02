@@ -22,6 +22,7 @@
 
 #include "isync.h"
 
+#include <assert.h>
 #include <stdio.h>
 #include <limits.h>
 #include <stdlib.h>
@@ -973,6 +974,8 @@ box_selected( int sts, void *aux )
 					opts[M] |= OPEN_NEW|OPEN_FIND, svars->state[M] |= ST_FIND_OLD;
 				else if (srec->uid[S] == -2)
 					opts[S] |= OPEN_NEW|OPEN_FIND, svars->state[S] |= ST_FIND_OLD;
+				else
+					assert( !"sync record with stray TUID" );
 			}
 		}
 	svars->drv[M]->prepare_opts( ctx[M], opts[M] );
