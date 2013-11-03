@@ -616,8 +616,18 @@ sub test($$)
 		die "Cannot read journal.\n";
 	my @nj = <FILE>;
 	close FILE;
-	@ret = runsync("-0 --no-expunge");
+	($xc, @ret) = runsync("-0 --no-expunge");
 	killcfg();
+	if ($xc) {
+		print "Journal replay failed.\n";
+		print "Input == Expected result:\n";
+		printchan($$tx[1], $$tx[2], @{ $$tx[3] });
+		print "Options:\n";
+		print " [ ".join(", ", map('"'.qm($_).'"', @{ $$tx[0] }))." ], [ \"-0\", \"--no-expunge\" ]\n";
+		print "Debug output:\n";
+		print @ret;
+		exit 1;
+	}
 	if (ckstate("slave/.mbsyncstate", @{ $$tx[3] })) {
 		print "Options:\n";
 		print " [ ".join(", ", map('"'.qm($_).'"', @{ $$tx[0] }))." ]\n";
