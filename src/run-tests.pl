@@ -616,7 +616,7 @@ sub test($$)
 		die "Cannot read journal.\n";
 	my @nj = <FILE>;
 	close FILE;
-	@ret = runsync("");
+	@ret = runsync("-0 --no-expunge");
 	killcfg();
 	if (ckstate("slave/.mbsyncstate", @{ $$tx[3] })) {
 		print "Options:\n";
