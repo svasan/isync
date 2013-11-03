@@ -593,6 +593,7 @@ sub test($$$)
 {
 	my ($ttl, $sx, $tx) = @_;
 
+	return 0 if (scalar(@ARGV) && !grep { $_ eq $ttl } @ARGV);
 	print "Testing: ".$ttl." ...\n";
 	mkchan($$sx[0], $$sx[1], @{ $$sx[2] });
 	&writecfg(@{ $$tx[0] });
