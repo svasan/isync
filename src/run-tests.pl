@@ -156,8 +156,6 @@ my @X11 = (
 );
 test("max size", \@x10, \@X11, @O11);
 
-test("max size verification", \@X11, \@X11, @O11);
-
 my @O22 = ("", "MaxSize 1k\n", "");
 #show("11", "22", "22");
 my @X22 = (
@@ -192,8 +190,6 @@ my @X31 = (
    1, 1, "F", 2, 2, "", 4, 3, "", 5, 4, "S", 6, 5, "" ],
 );
 test("max messages", \@x30, \@X31, @O31);
-
-test("max messages verification", \@X31, \@X31, @O31);
 
 my @x50 = (
  [ 6,
@@ -552,11 +548,11 @@ sub ckstate($@)
 	return 0;
 }
 
-# \@chan_state
-sub ckchan($)
+# $statefile, \@chan_state
+sub ckchan($$)
 {
-	my ($cs) = @_;
-	my $rslt = ckstate("slave/.mbsyncstate.new", @{ $$cs[2] });
+	my ($F, $cs) = @_;
+	my $rslt = ckstate($F, @{ $$cs[2] });
 	$rslt |= &ckbox("master", @{ $$cs[0] });
 	$rslt |= &ckbox("slave", @{ $$cs[1] });
 	return $rslt;
@@ -617,6 +613,7 @@ sub test($$$@)
 	print "Testing: ".$ttl." ...\n";
 	mkchan($$sx[0], $$sx[1], @{ $$sx[2] });
 	&writecfg(@sfx);
+
 	my ($xc, @ret) = runsync("-J");
 	if ($xc) {
 		print "Input:\n";
@@ -629,7 +626,7 @@ sub test($$$@)
 		print @ret;
 		exit 1;
 	}
-	if (ckchan($tx)) {
+	if (ckchan("slave/.mbsyncstate.new", $tx)) {
 		print "Input:\n";
 		printchan($sx);
 		print "Options:\n";
@@ -642,12 +639,12 @@ sub test($$$@)
 		print @ret;
 		exit 1;
 	}
+
 	open(FILE, "<", "slave/.mbsyncstate.journal") or
 		die "Cannot read journal.\n";
 	my @nj = <FILE>;
 	close FILE;
 	($xc, @ret) = runsync("-0 --no-expunge");
-	killcfg();
 	if ($xc) {
 		print "Journal replay failed.\n";
 		print "Input == Expected result:\n";
@@ -673,6 +670,32 @@ sub test($$$@)
 		print @ret;
 		exit 1;
 	}
+
+	($xc, @ret) = runsync("");
+	if ($xc) {
+		print "Idempotence verification run failed.\n";
+		print "Input == Expected result:\n";
+		printchan($tx);
+		print "Options:\n";
+		print " [ ".join(", ", map('"'.qm($_).'"', @sfx))." ]\n";
+		print "Debug output:\n";
+		print @ret;
+		exit 1;
+	}
+	if (ckchan("slave/.mbsyncstate", $tx)) {
+		print "Idempotence verification run failed.\n";
+		print "Input == Expected result:\n";
+		printchan($tx);
+		print "Options:\n";
+		print " [ ".join(", ", map('"'.qm($_).'"', @sfx))." ]\n";
+		print "Actual result:\n";
+		showchan("slave/.mbsyncstate");
+		print "Debug output:\n";
+		print @ret;
+		exit 1;
+	}
+
+	killcfg();
 	rmtree "slave";
 	rmtree "master";
 }
