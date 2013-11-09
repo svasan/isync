@@ -2046,6 +2046,12 @@ imap_trash_msg( store_t *gctx, message_t *msg,
 
 static void imap_store_msg_p2( imap_store_t *, struct imap_cmd *, int );
 
+static size_t
+my_strftime( char *s, size_t max, const char *fmt, const struct tm *tm )
+{
+    return strftime( s, max, fmt, tm );
+}
+
 static void
 imap_store_msg( store_t *gctx, msg_data_t *data, int to_trash,
                 void (*cb)( int sts, int uid, void *aux ), void *aux )
@@ -2082,15 +2088,8 @@ imap_store_msg( store_t *gctx, msg_data_t *data, int to_trash,
 		}
 	}
 	if (data->date) {
-#ifdef __GNUC__
-#  pragma GCC diagnostic push
-#  pragma GCC diagnostic ignored "-Wformat"
 		/* configure ensures that %z actually works. */
-#endif
-		strftime( datestr, sizeof(datestr), "%d-%b-%Y %H:%M:%S %z", localtime( &data->date ) );
-#ifdef __GNUC__
-#  pragma GCC diagnostic pop
-#endif
+		my_strftime( datestr, sizeof(datestr), "%d-%b-%Y %H:%M:%S %z", localtime( &data->date ) );
 		imap_exec( ctx, &cmd->gen, imap_store_msg_p2,
 		           "APPEND \"%\\s\" %s\"%\\s\" ", buf, flagstr, datestr );
 	} else {
