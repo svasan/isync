@@ -255,6 +255,7 @@ match_tuids( sync_vars_t *svars, int t )
 			debug( "  -> new UID %d %s\n", tmsg->uid, diag );
 			Fprintf( svars->jfp, "%c %d %d %d\n", "<>"[t], srec->uid[M], srec->uid[S], tmsg->uid );
 			tmsg->srec = srec;
+			srec->msg[t] = tmsg;
 			ntmsg = tmsg->next;
 			srec->uid[t] = tmsg->uid;
 			srec->tuid[0] = 0;
