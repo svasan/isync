@@ -1,6 +1,6 @@
 #! /usr/bin/perl -w
 #
-# Copyright (C) 2006 Oswald Buddenhagen <ossi@users.sf.net>
+# Copyright (C) 2006,2013 Oswald Buddenhagen <ossi@users.sf.net>
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -22,8 +22,8 @@ use File::Path;
 -d "tmp" or mkdir "tmp";
 chdir "tmp" or die "Cannot enter temp direcory.\n";
 
-sub show($$@);
-sub test($$$);
+sub show($$$);
+sub test($$$@);
 
 ################################################################################
 
@@ -37,9 +37,9 @@ my @x01 = (
    1, 1, "", 2, 2, "", 3, 3, "", 4, 4, "", 5, 5, "", 6, 6, "", 7, 7, "", 8, 8, "" ],
 );
 
-#show("01", "01", "", "", "");
+my @O01 = ("", "", "");
+#show("01", "01", "01");
 my @X01 = (
- [ "", "", "" ],
  [ 10,
    1, 1, "F", 2, 2, "F", 3, 3, "FS", 4, 4, "", 5, 5, "T", 6, 6, "FT", 7, 7, "FT", 9, 9, "", 10, 10, "" ],
  [ 10,
@@ -47,11 +47,11 @@ my @X01 = (
  [ 9, 0, 9,
    1, 1, "F", 2, 2, "F", 3, 3, "FS", 4, 4, "", 5, 5, "T", 6, 0, "", 7, 7, "FT", 0, 8, "", 10, 9, "", 9, 10, "" ],
 );
-test("full", \@x01, \@X01);
+test("full", \@x01, \@X01, @O01);
 
-#show("01", "02", "", "", "Expunge Both\n");
+my @O02 = ("", "", "Expunge Both\n");
+#show("01", "02", "02");
 my @X02 = (
- [ "", "", "Expunge Both\n" ],
  [ 10,
    1, 1, "F", 2, 2, "F", 3, 3, "FS", 4, 4, "", 9, 9, "", 10, 10, "" ],
  [ 10,
@@ -59,11 +59,11 @@ my @X02 = (
  [ 9, 0, 9,
    1, 1, "F", 2, 2, "F", 3, 3, "FS", 4, 4, "", 10, 9, "", 9, 10, "" ],
 );
-test("full + expunge both", \@x01, \@X02);
+test("full + expunge both", \@x01, \@X02, @O02);
 
-#show("01", "03", "", "", "Expunge Slave\n");
+my @O03 = ("", "", "Expunge Slave\n");
+#show("01", "03", "03");
 my @X03 = (
- [ "", "", "Expunge Slave\n" ],
  [ 10,
    1, 1, "F", 2, 2, "F", 3, 3, "FS", 4, 4, "", 5, 5, "T", 6, 6, "FT", 7, 7, "FT", 9, 9, "", 10, 10, "" ],
  [ 10,
@@ -71,11 +71,11 @@ my @X03 = (
  [ 9, 0, 9,
    1, 1, "F", 2, 2, "F", 3, 3, "FS", 4, 4, "", 5, 0, "T", 6, 0, "", 7, 0, "T", 10, 9, "", 9, 10, "" ],
 );
-test("full + expunge slave", \@x01, \@X03);
+test("full + expunge slave", \@x01, \@X03, @O03);
 
-#show("01", "04", "", "", "Sync Pull\n");
+my @O04 = ("", "", "Sync Pull\n");
+#show("01", "04", "04");
 my @X04 = (
- [ "", "", "Sync Pull\n" ],
  [ 9,
    1, 1, "F", 2, 2, "", 3, 3, "FS", 4, 4, "", 5, 5, "T", 6, 6, "F", 7, 7, "FT", 9, 9, "" ],
  [ 9,
@@ -83,11 +83,11 @@ my @X04 = (
  [ 9, 0, 0,
    1, 1, "F", 2, 2, "", 3, 3, "FS", 4, 4, "", 5, 5, "T", 6, 6, "", 7, 7, "FT", 0, 8, "", 9, 9, "" ],
 );
-test("pull", \@x01, \@X04);
+test("pull", \@x01, \@X04, @O04);
 
-#show("01", "05", "", "", "Sync Flags\n");
+my @O05 = ("", "", "Sync Flags\n");
+#show("01", "05", "05");
 my @X05 = (
- [ "", "", "Sync Flags\n" ],
  [ 8,
    1, 1, "F", 2, 2, "F", 3, 3, "FS", 4, 4, "", 5, 5, "T", 6, 6, "F", 7, 7, "FT", 9, 0, "" ],
  [ 8,
@@ -95,11 +95,11 @@ my @X05 = (
  [ 8, 0, 0,
    1, 1, "F", 2, 2, "F", 3, 3, "FS", 4, 4, "", 5, 5, "T", 6, 6, "", 7, 7, "FT", 8, 8, "" ],
 );
-test("flags", \@x01, \@X05);
+test("flags", \@x01, \@X05, @O05);
 
-#show("01", "06", "", "", "Sync Delete\n");
+my @O06 = ("", "", "Sync Delete\n");
+#show("01", "06", "06");
 my @X06 = (
- [ "", "", "Sync Delete\n" ],
  [ 8,
    1, 1, "F", 2, 2, "", 3, 3, "FS", 4, 4, "", 5, 5, "T", 6, 6, "FT", 7, 7, "FT", 9, 0, "" ],
  [ 8,
@@ -107,11 +107,11 @@ my @X06 = (
  [ 8, 0, 0,
    1, 1, "", 2, 2, "", 3, 3, "", 4, 4, "", 5, 5, "", 6, 0, "", 7, 7, "", 0, 8, "" ],
 );
-test("deletions", \@x01, \@X06);
+test("deletions", \@x01, \@X06, @O06);
 
-#show("01", "07", "", "", "Sync New\n");
+my @O07 = ("", "", "Sync New\n");
+#show("01", "07", "07");
 my @X07 = (
- [ "", "", "Sync New\n" ],
  [ 10,
    1, 1, "F", 2, 2, "", 3, 3, "FS", 4, 4, "", 5, 5, "T", 6, 6, "F", 7, 7, "FT", 9, 9, "", 10, 10, "" ],
  [ 10,
@@ -119,11 +119,11 @@ my @X07 = (
  [ 9, 0, 9,
    1, 1, "", 2, 2, "", 3, 3, "", 4, 4, "", 5, 5, "", 6, 6, "", 7, 7, "", 8, 8, "", 10, 9, "", 9, 10, "" ],
 );
-test("new", \@x01, \@X07);
+test("new", \@x01, \@X07, @O07);
 
-#show("01", "08", "", "", "Sync PushFlags PullDelete\n");
+my @O08 = ("", "", "Sync PushFlags PullDelete\n");
+#show("01", "08", "08");
 my @X08 = (
- [ "", "", "Sync PushFlags PullDelete\n" ],
  [ 8,
    1, 1, "F", 2, 2, "F", 3, 3, "FS", 4, 4, "", 5, 5, "T", 6, 6, "F", 7, 7, "FT", 9, 0, "" ],
  [ 8,
@@ -131,7 +131,7 @@ my @X08 = (
  [ 8, 0, 0,
    1, 1, "", 2, 2, "F", 3, 3, "F", 4, 4, "", 5, 5, "", 6, 6, "", 7, 7, "", 0, 8, "" ],
 );
-test("push flags + pull deletions", \@x01, \@X08);
+test("push flags + pull deletions", \@x01, \@X08, @O08);
 
 # size restriction tests
 
@@ -144,9 +144,9 @@ my @x10 = (
     ],
 );
 
-#show("10", "11", "MaxSize 1k\n", "MaxSize 1k\n", "");
+my @O11 = ("MaxSize 1k\n", "MaxSize 1k\n", "");
+#show("10", "11", "11");
 my @X11 = (
- [ "MaxSize 1k\n", "MaxSize 1k\n", "" ],
  [ 2,
    1, 1, "", 2, 2, "*" ],
  [ 2,
@@ -154,16 +154,13 @@ my @X11 = (
  [ 2, 0, 1,
    -1, 1, "", 1, 2, "", 2, -1, "" ],
 );
-test("max size", \@x10, \@X11);
+test("max size", \@x10, \@X11, @O11);
 
-my @x20 = @X11[1,2,3];
+test("max size verification", \@X11, \@X11, @O11);
 
-#show("20", "11", "MaxSize 1k\n", "MaxSize 1k\n", ""); # sic! - 11
-test("max size verification", \@x20, \@X11);
-
-#show("20", "22", "", "MaxSize 1k\n", "");
+my @O22 = ("", "MaxSize 1k\n", "");
+#show("11", "22", "22");
 my @X22 = (
- [ "", "MaxSize 1k\n", "" ],
  [ 3,
    1, 1, "", 2, 2, "*", 3, 3, "*" ],
  [ 2,
@@ -171,7 +168,7 @@ my @X22 = (
  [ 2, 0, 1,
    3, 1, "", 1, 2, "", 2, -1, "" ],
 );
-test("slave max size", \@x20, \@X22);
+test("slave max size", \@X11, \@X22, @O22);
 
 # expiration tests
 
@@ -184,9 +181,9 @@ my @x30 = (
     ],
 );
 
-#show("30", "31", "", "", "MaxMessages 3\n");
+my @O31 = ("", "", "MaxMessages 3\n");
+#show("30", "31", "31");
 my @X31 = (
- [ "", "", "MaxMessages 3\n" ],
  [ 5,
    1, 1, "F", 2, 2, "S", 3, 3, "S", 4, 4, "", 5, 5, "" ],
  [ 5,
@@ -194,13 +191,11 @@ my @X31 = (
  [ 5, 0, 0,
    1, 1, "F", 2, 2, "S", 3, 3, "S", 4, 4, "", 5, 5, "" ],
 );
-test("max messages", \@x30, \@X31);
+test("max messages", \@x30, \@X31, @O31);
 
-my @x40 = @X31[1,2,3];
-
-#show("40", "41", "", "", "MaxMessages 3\nExpunge Both\n");
+my @O41 = ("", "", "MaxMessages 3\nExpunge Both\n");
+#show("40", "41", "41");
 my @X41 = (
- [ "", "", "MaxMessages 3\nExpunge Both\n" ],
  [ 5,
    1, 1, "F", 2, 2, "S", 3, 3, "S", 4, 4, "", 5, 5, "" ],
  [ 5,
@@ -208,7 +203,7 @@ my @X41 = (
  [ 5, 2, 0,
    1, 1, "F", 3, 3, "S", 4, 4, "", 5, 5, "" ],
 );
-test("max messages catch-up", \@x40, \@X41);
+test("max messages catch-up", \@X31, \@X41, @O41);
 
 my @x50 = (
  [ 5,
@@ -219,9 +214,9 @@ my @x50 = (
    1, 1, "FS", 2, 2, "XS", 3, 3, "", 4, 4, "", 5, 5, "" ],
 );
 
-#show("50", "51", "", "", "MaxMessages 3\nExpunge Both\n");
+my @O51 = ("", "", "MaxMessages 3\nExpunge Both\n");
+#show("50", "51", "51");
 my @X51 = (
- [ "", "", "MaxMessages 3\nExpunge Both\n" ],
  [ 5,
    1, 1, "S", 2, 2, "FS", 3, 3, "", 4, 4, "", 5, 5, "" ],
  [ 5,
@@ -229,7 +224,7 @@ my @X51 = (
  [ 5, 2, 0,
    2, 2, "FS", 3, 3, "", 4, 4, "", 5, 5, "" ],
 );
-test("max messages + expire", \@x50, \@X51);
+test("max messages + expire", \@x50, \@X51, @O51);
 
 
 ################################################################################
@@ -407,12 +402,13 @@ sub showchan($)
 	showstate($fn);
 }
 
-# $source_state_name, $target_state_name, $master_configs, $slave_configs, $channel_configs
-sub show($$@)
+# $source_state_name, $target_state_name, $configs_name
+sub show($$$)
 {
-	my ($sx, $tx, @sfx) = @_;
-	my @sp;
+	my ($sx, $tx, $sfxn) = @_;
+	my (@sp, @sfx);
 	eval "\@sp = \@x$sx";
+	eval "\@sfx = \@O$sfxn";
 	mkchan($sp[0], $sp[1], @{ $sp[2] });
 	print "my \@x$sx = (\n";
 	showchan("slave/.mbsyncstate");
@@ -421,10 +417,9 @@ sub show($$@)
 	runsync("");
 	killcfg();
 	print "my \@X$tx = (\n";
-	print " [ ".join(", ", map('"'.qm($_).'"', @sfx))." ],\n";
 	showchan("slave/.mbsyncstate");
 	print ");\n";
-	print "test(\\\@x$sx, \\\@X$tx);\n\n";
+	print "test(\"\", \\\@x$sx, \\\@X$tx, \@O$sfxn);\n\n";
 	rmtree "slave";
 	rmtree "master";
 }
@@ -540,13 +535,13 @@ sub ckstate($@)
 	return 0;
 }
 
-# \@master, \@slave, @syncstate
-sub ckchan($$@)
+# \@chan_state
+sub ckchan($)
 {
-	my ($M, $S, @T) = @_;
-	my $rslt = ckstate("slave/.mbsyncstate.new", @T);
-	$rslt |= &ckbox("master", @{ $M });
-	$rslt |= &ckbox("slave", @{ $S });
+	my ($cs) = @_;
+	my $rslt = ckstate("slave/.mbsyncstate.new", @{ $$cs[2] });
+	$rslt |= &ckbox("master", @{ $$cs[0] });
+	$rslt |= &ckbox("slave", @{ $$cs[1] });
 	return $rslt;
 }
 
@@ -586,44 +581,44 @@ sub printstate(@)
 	close FILE;
 }
 
-# \@master, \@slave, @syncstate
-sub printchan($$@)
+# \@chan_state
+sub printchan($)
 {
-	my ($m, $s, @t) = @_;
+	my ($cs) = @_;
 
-	&printbox("master", @{ $m });
-	&printbox("slave", @{ $s });
-	printstate(@t);
+	&printbox("master", @{ $$cs[0] });
+	&printbox("slave", @{ $$cs[1] });
+	printstate(@{ $$cs[2] });
 }
 
-# $title, \@source_state, \@target_state
-sub test($$$)
+# $title, \@source_state, \@target_state, @channel_configs
+sub test($$$@)
 {
-	my ($ttl, $sx, $tx) = @_;
+	my ($ttl, $sx, $tx, @sfx) = @_;
 
 	return 0 if (scalar(@ARGV) && !grep { $_ eq $ttl } @ARGV);
 	print "Testing: ".$ttl." ...\n";
 	mkchan($$sx[0], $$sx[1], @{ $$sx[2] });
-	&writecfg(@{ $$tx[0] });
+	&writecfg(@sfx);
 	my ($xc, @ret) = runsync("-J");
 	if ($xc) {
 		print "Input:\n";
-		printchan($$sx[0], $$sx[1], @{ $$sx[2] });
+		printchan($sx);
 		print "Options:\n";
-		print " [ ".join(", ", map('"'.qm($_).'"', @{ $$tx[0] }))." ]\n";
+		print " [ ".join(", ", map('"'.qm($_).'"', @sfx))." ]\n";
 		print "Expected result:\n";
-		printchan($$tx[1], $$tx[2], @{ $$tx[3] });
+		printchan($tx);
 		print "Debug output:\n";
 		print @ret;
 		exit 1;
 	}
-	if (ckchan($$tx[1], $$tx[2], @{ $$tx[3] })) {
+	if (ckchan($tx)) {
 		print "Input:\n";
-		printchan($$sx[0], $$sx[1], @{ $$sx[2] });
+		printchan($sx);
 		print "Options:\n";
-		print " [ ".join(", ", map('"'.qm($_).'"', @{ $$tx[0] }))." ]\n";
+		print " [ ".join(", ", map('"'.qm($_).'"', @sfx))." ]\n";
 		print "Expected result:\n";
-		printchan($$tx[1], $$tx[2], @{ $$tx[3] });
+		printchan($tx);
 		print "Actual result:\n";
 		showchan("slave/.mbsyncstate.new");
 		print "Debug output:\n";
@@ -639,22 +634,22 @@ sub test($$$)
 	if ($xc) {
 		print "Journal replay failed.\n";
 		print "Input == Expected result:\n";
-		printchan($$tx[1], $$tx[2], @{ $$tx[3] });
+		printchan($tx);
 		print "Options:\n";
-		print " [ ".join(", ", map('"'.qm($_).'"', @{ $$tx[0] }))." ], [ \"-0\", \"--no-expunge\" ]\n";
+		print " [ ".join(", ", map('"'.qm($_).'"', @sfx))." ], [ \"-0\", \"--no-expunge\" ]\n";
 		print "Debug output:\n";
 		print @ret;
 		exit 1;
 	}
-	if (ckstate("slave/.mbsyncstate", @{ $$tx[3] })) {
+	if (ckstate("slave/.mbsyncstate", @{ $$tx[2] })) {
 		print "Journal replay failed.\n";
 		print "Options:\n";
-		print " [ ".join(", ", map('"'.qm($_).'"', @{ $$tx[0] }))." ]\n";
+		print " [ ".join(", ", map('"'.qm($_).'"', @sfx))." ]\n";
 		print "Old State:\n";
 		printstate(@{ $$sx[2] });
 		print "Journal:\n".join("", @nj)."\n";
 		print "Expected New State:\n";
-		printstate(@{ $$tx[3] });
+		printstate(@{ $$tx[2] });
 		print "New State:\n";
 		showstate("slave/.mbsyncstate");
 		print "Debug output:\n";
