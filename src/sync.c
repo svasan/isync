@@ -1085,7 +1085,6 @@ box_loaded( int sts, void *aux )
 			if (++idx == hashsz)
 				idx = 0;
 		}
-		tmsg->srec = 0;
 		debug( "new\n" );
 		continue;
 	  found:
