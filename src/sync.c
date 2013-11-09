@@ -1380,7 +1380,7 @@ box_loaded( int sts, void *aux )
 					if (nflags & F_FLAGGED) {
 						/* Flagged messages are always kept. */
 						todel--;
-					} else if ((tmsg->flags & F_SEEN) &&
+					} else if ((nflags & F_SEEN) &&
 					         (todel > 0 ||
 					          ((srec->status & (S_EXPIRE|S_EXPIRED)) == (S_EXPIRE|S_EXPIRED)) ||
 					          ((srec->status & (S_EXPIRE|S_EXPIRED)) && (tmsg->flags & F_DELETED)))) {
