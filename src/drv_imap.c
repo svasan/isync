@@ -816,6 +816,23 @@ parse_namespace_rsp_p3( imap_store_t *ctx, list_t *list, char *s ATTR_UNUSED )
 	return LIST_OK;
 }
 
+static time_t
+parse_date( const char *str )
+{
+	char *end;
+	time_t date;
+	int hours, mins;
+	struct tm datetime;
+
+	if (!(end = strptime( str, "%d-%b-%Y %H:%M:%S ", &datetime )))
+		return -1;
+	if ((date = mktime( &datetime )) == -1)
+		return -1;
+	if (sscanf( end, "%3d%2d", &hours, &mins ) != 2)
+		return -1;
+	return date - (hours * 60 + mins) * 60 - timezone;
+}
+
 static int
 parse_fetch_rsp( imap_store_t *ctx, list_t *list, char *s ATTR_UNUSED )
 {
@@ -827,7 +844,6 @@ parse_fetch_rsp( imap_store_t *ctx, list_t *list, char *s ATTR_UNUSED )
 	int uid = 0, mask = 0, status = 0, size = 0;
 	unsigned i;
 	time_t date = 0;
-	struct tm datetime;
 
 	if (!is_list( list )) {
 		error( "IMAP error: bogus FETCH response\n" );
@@ -872,9 +888,7 @@ parse_fetch_rsp( imap_store_t *ctx, list_t *list, char *s ATTR_UNUSED )
 			} else if (!strcmp( "INTERNALDATE", tmp->val )) {
 				tmp = tmp->next;
 				if (is_atom( tmp )) {
-					if (strptime( tmp->val, "%d-%b-%Y %H:%M:%S %z", &datetime ))
-						date = mktime( &datetime );
-					else
+					if ((date = parse_date( tmp->val )) == -1)
 						error( "IMAP error: unable to parse INTERNALDATE format\n" );
 				} else
 					error( "IMAP error: unable to parse INTERNALDATE\n" );

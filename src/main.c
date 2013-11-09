@@ -28,6 +28,7 @@
 #include <string.h>
 #include <fcntl.h>
 #include <signal.h>
+#include <time.h>
 #include <sys/wait.h>
 
 int Pid;		/* for maildir and imap */
@@ -219,6 +220,7 @@ main( int argc, char **argv )
 	char *config = 0, *opt, *ochar;
 	int cops = 0, op, pseudo = 0;
 
+	tzset();
 	gethostname( Hostname, sizeof(Hostname) );
 	if ((ochar = strchr( Hostname, '.' )))
 		*ochar = 0;
