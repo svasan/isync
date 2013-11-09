@@ -20,8 +20,8 @@ int main(void)
 {
     time_t t = 0;
     char buf[32];
-    strftime(buf, sizeof(buf), "%z", gmtime(&t));
-    return !!strcmp(buf, "+0000");
+    strftime(buf, sizeof(buf), "%z", localtime(&t));
+    return !(buf[0] == '+' || buf[0] == '-');
 }
 ], [ob_cv_strftime_z=yes], [ob_cv_strftime_z=no], [ob_cv_strftime_z="yes (assumed)"])])
 if test "x$ob_cv_strftime_z" = x"no"; then
