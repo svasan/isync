@@ -1354,8 +1354,8 @@ box_loaded( int sts, void *aux )
 
 	if ((svars->chan->ops[S] & (OP_NEW|OP_RENEW|OP_FLAGS)) && svars->chan->max_messages) {
 		/* Note: When this branch is entered, we have loaded all slave messages. */
-		/* Expire excess messages. Flagged messages and not yet synced messages older
-		 * than the first not expired message are not counted towards the total. */
+		/* Expire excess messages. Important (flagged, unread, or unpropagated) messages
+		 * older than the first not expired message are not counted towards the total. */
 		todel = svars->ctx[S]->count + svars->new_total[S] - svars->chan->max_messages;
 		debug( "%d excess messages on slave\n", todel );
 		for (tmsg = svars->ctx[S]->msgs; tmsg && todel > 0; tmsg = tmsg->next) {
@@ -1377,14 +1377,13 @@ box_loaded( int sts, void *aux )
 				nflags = (tmsg->flags | srec->aflags[S]) & ~srec->dflags[S];
 				if (!(nflags & F_DELETED) || (srec->status & (S_EXPIRE|S_EXPIRED))) {
 					/* The message is not deleted, or is already (being) expired. */
-					if (nflags & F_FLAGGED) {
-						/* Flagged messages are always kept. */
+					if ((nflags & F_FLAGGED) || !(nflags & F_SEEN)) {
+						/* Important messages are always kept. */
 						todel--;
-					} else if ((nflags & F_SEEN) &&
-					         (todel > 0 ||
-					          ((srec->status & (S_EXPIRE|S_EXPIRED)) == (S_EXPIRE|S_EXPIRED)) ||
-					          ((srec->status & (S_EXPIRE|S_EXPIRED)) && (tmsg->flags & F_DELETED)))) {
-						/* The message is not new, and it is excess or was already (being) expired. */
+					} else if (todel > 0 ||
+					           ((srec->status & (S_EXPIRE|S_EXPIRED)) == (S_EXPIRE|S_EXPIRED)) ||
+					           ((srec->status & (S_EXPIRE|S_EXPIRED)) && (tmsg->flags & F_DELETED))) {
+						/* The message is excess or was already (being) expired. */
 						srec->status |= S_NEXPIRE;
 						debug( "  pair(%d,%d)\n", srec->uid[M], srec->uid[S] );
 						todel--;
