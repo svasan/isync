@@ -477,7 +477,7 @@ sub ckbox($$$@)
 
 	my ($mu, %ms) = readbox($bn);
 	if ($mu != $MU) {
-		print STDERR "MAXUID mismatch for '$bn'.\n";
+		print STDERR "MAXUID mismatch for '$bn' (got $mu, wanted $MU).\n";
 		return 1;
 	}
 	while (@MS) {
@@ -522,11 +522,19 @@ sub ckstate($@)
 		return 1;
 	} else {
 		for $l (@ls) {
+			if (!@T) {
+				print STDERR "Excess sync state entry: '$l'.\n";
+				return 1;
+			}
 			$xl = shift(@T)." ".shift(@T)." ".shift(@T);
 			if ($l ne $xl) {
 				print STDERR "Sync state entry mismatch: '$l' instead of '$xl'.\n";
 				return 1;
 			}
+		}
+		if (@T) {
+			print STDERR "Missing sync state entry: '".shift(@T)." ".shift(@T)." ".shift(@T)."'.\n";
+			return 1;
 		}
 	}
 	return 0;
