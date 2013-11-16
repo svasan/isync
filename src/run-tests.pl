@@ -362,34 +362,32 @@ sub showstate($)
 		print STDERR " Cannot read sync state $fn: $!\n";
 		return;
 	}
-	$_ = <FILE>;
+	chomp(my @ls = <FILE>);
+	close FILE;
+	$_ = shift(@ls);
 	if (!defined $_) {
 		print STDERR " Missing sync state header.\n";
-		close FILE;
 		return;
 	}
-	if (!/^1:(\d+) 1:(\d+):(\d+)\n$/) {
-		chomp;
+	if (!/^1:(\d+) 1:(\d+):(\d+)$/) {
 		print STDERR " Malformed sync state header '$_'.\n";
-		close FILE;
 		return;
 	}
 	print " [ $1, $2, $3,\n   ";
 	my $frst = 1;
-	for (<FILE>) {
+	for (@ls) {
 		if ($frst) {
 			$frst = 0;
 		} else {
 			print ", ";
 		}
-		if (!/^(-?\d+) (-?\d+) (.*)\n$/) {
+		if (!/^(-?\d+) (-?\d+) (.*)$/) {
 			print "??, ??, \"??\"";
 		} else {
 			print "$1, $2, \"$3\"";
 		}
 	}
 	print " ],\n";
-	close FILE;
 }
 
 # $filename
