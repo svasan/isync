@@ -30,6 +30,7 @@
 #include <unistd.h>
 #include <time.h>
 #include <fcntl.h>
+#include <ctype.h>
 #include <string.h>
 #include <errno.h>
 #include <sys/stat.h>
@@ -723,22 +724,51 @@ box_selected( int sts, void *aux )
 	}
 	if ((jfp = fopen( svars->dname, "r" ))) {
 		debug( "reading sync state %s ...\n", svars->dname );
-		if (!fgets( buf, sizeof(buf), jfp ) || !(t = strlen( buf )) || buf[t - 1] != '\n') {
-			error( "Error: incomplete sync state header in %s\n", svars->dname );
-		  jbail:
-			fclose( jfp );
-		  bail:
-			svars->ret = SYNC_FAIL;
-			sync_bail( svars );
-			return;
+		line = 0;
+		while (fgets( buf, sizeof(buf), jfp )) {
+			line++;
+			if (!(t = strlen( buf )) || buf[t - 1] != '\n') {
+				error( "Error: incomplete sync state header entry at %s:%d\n", svars->dname, line );
+			  jbail:
+				fclose( jfp );
+			  bail:
+				svars->ret = SYNC_FAIL;
+				sync_bail( svars );
+				return;
+			}
+			if (t == 1)
+				goto gothdr;
+			if (line == 1 && isdigit( buf[0] )) {
+				if (sscanf( buf, "%63s %63s", buf1, buf2 ) != 2 ||
+				    sscanf( buf1, "%d:%d", &svars->uidval[M], &svars->maxuid[M] ) < 2 ||
+				    sscanf( buf2, "%d:%d:%d", &svars->uidval[S], &svars->smaxxuid, &svars->maxuid[S] ) < 3) {
+					error( "Error: invalid sync state header in %s\n", svars->dname );
+					goto jbail;
+				}
+				goto gothdr;
+			}
+			if (sscanf( buf, "%63s %d", buf1, &t1 ) != 2) {
+				error( "Error: malformed sync state header entry at %s:%d\n", svars->dname, line );
+				goto jbail;
+			}
+			if (!strcmp( buf1, "MasterUidValidity" ))
+				svars->uidval[M] = t1;
+			else if (!strcmp( buf1, "SlaveUidValidity" ))
+				svars->uidval[S] = t1;
+			else if (!strcmp( buf1, "MaxPulledUid" ))
+				svars->maxuid[M] = t1;
+			else if (!strcmp( buf1, "MaxPushedUid" ))
+				svars->maxuid[S] = t1;
+			else if (!strcmp( buf1, "MaxExpiredSlaveUid" ))
+				svars->smaxxuid = t1;
+			else {
+				error( "Error: unrecognized sync state header entry at %s:%d\n", svars->dname, line );
+				goto jbail;
+			}
 		}
-		if (sscanf( buf, "%63s %63s", buf1, buf2 ) != 2 ||
-		    sscanf( buf1, "%d:%d", &svars->uidval[M], &svars->maxuid[M] ) < 2 ||
-		    sscanf( buf2, "%d:%d:%d", &svars->uidval[S], &svars->smaxxuid, &svars->maxuid[S] ) < 3) {
-			error( "Error: invalid sync state header in %s\n", svars->dname );
-			goto jbail;
-		}
-		line = 1;
+		error( "Error: unterminated sync state header in %s\n", svars->dname );
+		goto jbail;
+	  gothdr:
 		while (fgets( buf, sizeof(buf), jfp )) {
 			line++;
 			if (!(t = strlen( buf )) || buf[t - 1] != '\n') {
@@ -1747,9 +1777,12 @@ box_closed_p2( sync_vars_t *svars, int t )
 		}
 	}
 
-	Fprintf( svars->nfp, "%d:%d %d:%d:%d\n",
-	         svars->uidval[M], svars->maxuid[M],
-	         svars->uidval[S], svars->smaxxuid, svars->maxuid[S] );
+	Fprintf( svars->nfp,
+	         "MasterUidValidity %d\nSlaveUidValidity %d\nMaxPulledUid %d\nMaxPushedUid %d\n",
+	         svars->uidval[M], svars->uidval[S], svars->maxuid[M], svars->maxuid[S] );
+	if (svars->smaxxuid)
+		Fprintf( svars->nfp, "MaxExpiredSlaveUid %d\n", svars->smaxxuid );
+	Fprintf( svars->nfp, "\n" );
 	for (srec = svars->srecs; srec; srec = srec->next) {
 		if (srec->status & S_DEAD)
 			continue;

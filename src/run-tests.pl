@@ -364,16 +364,24 @@ sub showstate($)
 	}
 	chomp(my @ls = <FILE>);
 	close FILE;
-	$_ = shift(@ls);
-	if (!defined $_) {
-		print STDERR " Missing sync state header.\n";
+	my %hdr;
+	OUTER: while (1) {
+		while (@ls) {
+			$_ = shift(@ls);
+			last OUTER if (!length($_));
+			if (!/^([^ ]+) (\d+)$/) {
+				print STDERR "Malformed sync state header entry: $_\n";
+				close FILE;
+				return;
+			}
+			$hdr{$1} = $2;
+		}
+		print STDERR "Unterminated sync state header.\n";
+		close FILE;
 		return;
 	}
-	if (!/^1:(\d+) 1:(\d+):(\d+)$/) {
-		print STDERR " Malformed sync state header '$_'.\n";
-		return;
-	}
-	print " [ $1, $2, $3,\n   ";
+	print " [ ".($hdr{'MaxPulledUid'} // "missing").", ".
+	            ($hdr{'MaxExpiredSlaveUid'} // "0").", ".($hdr{'MaxPushedUid'} // "missing").",\n   ";
 	my $frst = 1;
 	for (@ls) {
 		if ($frst) {
@@ -456,7 +464,8 @@ sub mkchan($$@)
 	&mkbox("slave", @{ $s });
 	open(FILE, ">", "slave/.mbsyncstate") or
 		die "Cannot create sync state.\n";
-	print FILE "1:".shift(@t)." 1:".shift(@t).":".shift(@t)."\n";
+	print FILE "MasterUidValidity 1\nMaxPulledUid ".shift(@t)."\n".
+	           "SlaveUidValidity 1\nMaxExpiredSlaveUid ".shift(@t)."\nMaxPushedUid ".shift(@t)."\n\n";
 	while (@t) {
 		print FILE shift(@t)." ".shift(@t)." ".shift(@t)."\n";
 	}
@@ -499,36 +508,56 @@ sub ckbox($$$@)
 # $filename, @syncstate
 sub ckstate($@)
 {
-	my ($fn, @T) = @_;
+	my ($fn, $mmaxuid, $smaxxuid, $smaxuid, @T) = @_;
+	my %hdr;
+	$hdr{'MasterUidValidity'} = "1";
+	$hdr{'SlaveUidValidity'} = "1";
+	$hdr{'MaxPulledUid'} = $mmaxuid;
+	$hdr{'MaxPushedUid'} = $smaxuid;
+	$hdr{'MaxExpiredSlaveUid'} = $smaxxuid if ($smaxxuid ne 0);
 	open(FILE, "<", $fn) or die "Cannot read sync state $fn.\n";
-	my $l = <FILE>;
 	chomp(my @ls = <FILE>);
 	close FILE;
-	if (!defined $l) {
-		print STDERR "Sync state header missing.\n";
+	OUTER: while (1) {
+		while (@ls) {
+			my $l = shift(@ls);
+			last OUTER if (!length($l));
+			if ($l !~ /^([^ ]+) (\d+)$/) {
+				print STDERR "Malformed sync state header entry: $l\n";
+				return 1;
+			}
+			my $want = delete $hdr{$1};
+			if (!defined($want)) {
+				print STDERR "Unexpected sync state header entry: $1\n";
+				return 1;
+			}
+			if ($2 != $want) {
+				print STDERR "Sync state header entry $1 mismatch: got $2, wanted $want\n";
+				return 1;
+			}
+		}
+		print STDERR "Unterminated sync state header.\n";
 		return 1;
 	}
-	chomp($l);
-	my $xl = "1:".shift(@T)." 1:".shift(@T).":".shift(@T);
-	if ($l ne $xl) {
-		print STDERR "Sync state header mismatch: '$l' instead of '$xl'.\n";
+	my @ky = keys %hdr;
+	if (@ky) {
+		print STDERR "Keys missing from sync state header: @ky\n";
 		return 1;
-	} else {
-		for $l (@ls) {
-			if (!@T) {
-				print STDERR "Excess sync state entry: '$l'.\n";
-				return 1;
-			}
-			$xl = shift(@T)." ".shift(@T)." ".shift(@T);
-			if ($l ne $xl) {
-				print STDERR "Sync state entry mismatch: '$l' instead of '$xl'.\n";
-				return 1;
-			}
-		}
-		if (@T) {
-			print STDERR "Missing sync state entry: '".shift(@T)." ".shift(@T)." ".shift(@T)."'.\n";
+	}
+	for my $l (@ls) {
+		if (!@T) {
+			print STDERR "Excess sync state entry: '$l'.\n";
 			return 1;
 		}
+		my $xl = shift(@T)." ".shift(@T)." ".shift(@T);
+		if ($l ne $xl) {
+			print STDERR "Sync state entry mismatch: '$l' instead of '$xl'.\n";
+			return 1;
+		}
+	}
+	if (@T) {
+		print STDERR "Missing sync state entry: '".shift(@T)." ".shift(@T)." ".shift(@T)."'.\n";
+		return 1;
 	}
 	return 0;
 }
