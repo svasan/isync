@@ -1628,7 +1628,7 @@ msgs_flags_set( sync_vars_t *svars, int t )
 	    (svars->ctx[t]->conf->trash || (svars->ctx[1-t]->conf->trash && svars->ctx[1-t]->conf->trash_remote_new))) {
 		debug( "trashing in %s\n", str_ms[t] );
 		for (tmsg = svars->ctx[t]->msgs; tmsg; tmsg = tmsg->next)
-			if (tmsg->flags & F_DELETED) {
+			if ((tmsg->flags & F_DELETED) && (t == M || !tmsg->srec || !(tmsg->srec->status & (S_EXPIRE|S_EXPIRED)))) {
 				if (svars->ctx[t]->conf->trash) {
 					if (!svars->ctx[t]->conf->trash_only_new || !tmsg->srec || tmsg->srec->uid[1-t] < 0) {
 						debug( "%s: trashing message %d\n", str_ms[t], tmsg->uid );
