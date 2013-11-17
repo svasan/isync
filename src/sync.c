@@ -1154,38 +1154,17 @@ box_loaded( int sts, void *aux )
 				minwuid = srec->uid[M];
 		}
 		debug( "  min non-orphaned master uid is %d\n", minwuid );
-		/* Next, calculate the exception fetch.
-		 * The svars->maxuid[M] >= srec->uid[M] checks catch messages which we Pushed
-		 * to the range we never Pulled from (which we may still do). */
+		/* Next, calculate the exception fetch. */
 		mexcs = 0;
 		nmexcs = rmexcs = 0;
-		for (srec = svars->srecs; srec; srec = srec->next) {
-			if (srec->status & S_DEAD)
-				continue;
-			if (srec->status & S_EXP_S) {
-				if (minwuid > srec->uid[M] && svars->maxuid[M] >= srec->uid[M]) {
-					/* The pair is in the range that will not be synced any more. */
-					debug( "  -> killing (%d,%d)\n", srec->uid[M], srec->uid[S] );
-					srec->status = S_DEAD;
-					Fprintf( svars->jfp, "- %d %d\n", srec->uid[M], srec->uid[S] );
-				} else if (srec->uid[S]) {
-					/* The message disappeared just now, and the pair is still needed. */
-					debug( "  -> orphaning (%d,[%d])\n", srec->uid[M], srec->uid[S] );
-					Fprintf( svars->jfp, "> %d %d 0\n", srec->uid[M], srec->uid[S] );
-					srec->uid[S] = 0;
-				}
-			} else if (minwuid > srec->uid[M]) {
-				if (srec->uid[S] < 0) {
-					/* The message was never synced over ... */
-					if (svars->maxuid[M] >= srec->uid[M]) {
-						/* ... and the range is dead now. */
-						debug( "  -> killing (%d,%d)\n", srec->uid[M], srec->uid[S] );
-						srec->status = S_DEAD;
-						Fprintf( svars->jfp, "- %d %d\n", srec->uid[M], srec->uid[S] );
-					}
-				} else if (srec->uid[M] > 0 && srec->uid[S] && (svars->ctx[M]->opts & OPEN_OLD) &&
-				           (!(svars->ctx[M]->opts & OPEN_NEW) || svars->maxuid[M] >= srec->uid[M])) {
-					/* The pair is alive, but outside the bulk range, and we want to sync old entries. */
+		if (svars->ctx[M]->opts & OPEN_OLD) {
+			for (srec = svars->srecs; srec; srec = srec->next) {
+				if (srec->status & S_DEAD)
+					continue;
+				if (srec->uid[M] > 0 && srec->uid[S] > 0 &&
+				    !(srec->status & S_EXP_S) && minwuid > srec->uid[M] &&
+				    (!(svars->ctx[M]->opts & OPEN_NEW) || svars->maxuid[M] >= srec->uid[M])) {
+					/* The pair is alive, but outside the bulk range. */
 					if (nmexcs == rmexcs) {
 						rmexcs = rmexcs * 2 + 100;
 						mexcs = nfrealloc( mexcs, rmexcs * sizeof(int) );
@@ -1311,18 +1290,26 @@ box_loaded( int sts, void *aux )
 					debug( "  no more %s\n", str_ms[t] );
 				} else if (del[1-t]) {
 					/* c.4) d.9) / b.4) d.4) */
-					if (srec->msg[t] && (srec->msg[t]->status & M_FLAGS) && srec->msg[t]->flags != srec->flags)
-						info( "Info: conflicting changes in (%d,%d)\n", srec->uid[M], srec->uid[S] );
-					if (svars->chan->ops[t] & OP_DELETE) {
-						debug( "  %sing delete\n", str_hl[t] );
-						svars->flags_total[t]++;
-						stats( svars );
-						fv = nfmalloc( sizeof(*fv) );
-						fv->aux = AUX;
-						fv->srec = srec;
-						DRIVER_CALL(set_flags( svars->ctx[t], srec->msg[t], srec->uid[t], F_DELETED, 0, flags_set_del, fv ));
-					} else
-						debug( "  not %sing delete\n", str_hl[t] );
+					if ((t == M) && (srec->status & (S_EXPIRE|S_EXPIRED))) {
+						/* Don't propagate deletion resulting from expiration. */
+						debug( "  slave expired, orphaning master\n" );
+						Fprintf( svars->jfp, "> %d %d 0\n", srec->uid[M], srec->uid[S] );
+						srec->uid[S] = 0;
+					} else {
+						if (srec->msg[t] && (srec->msg[t]->status & M_FLAGS) && srec->msg[t]->flags != srec->flags)
+							info( "Info: conflicting changes in (%d,%d)\n", srec->uid[M], srec->uid[S] );
+						if (svars->chan->ops[t] & OP_DELETE) {
+							debug( "  %sing delete\n", str_hl[t] );
+							svars->flags_total[t]++;
+							stats( svars );
+							fv = nfmalloc( sizeof(*fv) );
+							fv->aux = AUX;
+							fv->srec = srec;
+							DRIVER_CALL(set_flags( svars->ctx[t], srec->msg[t], srec->uid[t], F_DELETED, 0, flags_set_del, fv ));
+						} else {
+							debug( "  not %sing delete\n", str_hl[t] );
+						}
+					}
 				} else if (!srec->msg[1-t])
 					/* c.1) c.2) d.7) d.8) / b.1) b.2) d.2) d.3) */
 					;
@@ -1335,6 +1322,7 @@ box_loaded( int sts, void *aux )
 						sflags = srec->msg[1-t]->flags;
 						if ((t == M) && (srec->status & (S_EXPIRE|S_EXPIRED))) {
 							/* Don't propagate deletion resulting from expiration. */
+							debug( "  slave expiring\n" );
 							sflags &= ~F_DELETED;
 						}
 						srec->aflags[t] = sflags & ~srec->flags;
@@ -1416,6 +1404,8 @@ box_loaded( int sts, void *aux )
 		if (srec->status & (S_DEAD|S_DONE))
 			continue;
 		for (t = 0; t < 2; t++) {
+			if (srec->uid[t] <= 0)
+				continue;
 			aflags = srec->aflags[t];
 			dflags = srec->dflags[t];
 			if ((t == S) && ((mvBit(srec->status, S_EXPIRE, S_EXPIRED) ^ srec->status) & S_EXPIRED)) {
@@ -1739,7 +1729,7 @@ box_closed_p2( sync_vars_t *svars, int t )
 	if (!(svars->state[1-t] & ST_CLOSED))
 		return;
 
-	if ((svars->state[M] | svars->state[S]) & ST_DID_EXPUNGE) {
+	if (((svars->state[M] | svars->state[S]) & ST_DID_EXPUNGE) || svars->smaxxuid) {
 		/* This cleanup is not strictly necessary, as the next full sync
 		   would throw out the dead entries anyway. But ... */
 
