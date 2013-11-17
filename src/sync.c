@@ -1383,12 +1383,19 @@ box_loaded( int sts, void *aux )
 				continue;
 			nex = (srec->status / S_NEXPIRE) & 1;
 			if (nex != ((srec->status / S_EXPIRED) & 1)) {
+				/* The record needs a state change ... */
 				if (nex != ((srec->status / S_EXPIRE) & 1)) {
+					/* ... and we need to start a transaction. */
 					Fprintf( svars->jfp, "~ %d %d %d\n", srec->uid[M], srec->uid[S], nex );
 					debug( "  pair(%d,%d): %d (pre)\n", srec->uid[M], srec->uid[S], nex );
 					srec->status = (srec->status & ~S_EXPIRE) | (nex * S_EXPIRE);
-				} else
+				} else {
+					/* ... but the "right" transaction is already pending. */
 					debug( "  pair(%d,%d): %d (pending)\n", srec->uid[M], srec->uid[S], nex );
+				}
+			} else {
+				/* Note: the "wrong" transaction may be pending here,
+				 * e.g.: S_NEXPIRE = 0, S_EXPIRE = 1, S_EXPIRED = 0. */
 			}
 		}
 	}
@@ -1408,8 +1415,9 @@ box_loaded( int sts, void *aux )
 					continue;
 				}
 			} else {
+				/* The trigger is an expiration transaction being ongoing ... */
 				if ((t == S) && ((mvBit(srec->status, S_EXPIRE, S_EXPIRED) ^ srec->status) & S_EXPIRED)) {
-					/* Derive deletion action from expiration state. */
+					/* ... but the actual action derives from the wanted state. */
 					if (srec->status & S_NEXPIRE)
 						aflags |= F_DELETED;
 					else
