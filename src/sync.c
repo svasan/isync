@@ -1193,7 +1193,6 @@ box_loaded( int sts, void *aux )
 	debug( "synchronizing new entries\n" );
 	svars->osrecadd = svars->srecadd;
 	for (t = 0; t < 2; t++) {
-		Fprintf( svars->jfp, "%c %d\n", "{}"[t], svars->ctx[t]->uidnext );
 		for (tmsg = svars->ctx[1-t]->msgs; tmsg; tmsg = tmsg->next) {
 			/* If we have a srec:
 			 * - message is old (> 0) or expired (0) => ignore
@@ -1241,19 +1240,10 @@ box_loaded( int sts, void *aux )
 							t2 = arc4_getbyte() & 0x3f;
 							srec->tuid[t1] = t2 < 26 ? t2 + 'A' : t2 < 52 ? t2 + 'a' - 26 : t2 < 62 ? t2 + '0' - 52 : t2 == 62 ? '+' : '/';
 						}
-						svars->new_total[t]++;
-						stats( svars );
-						cv = nfmalloc( sizeof(*cv) );
-						cv->cb = msg_copied;
-						cv->aux = AUX;
-						cv->srec = srec;
-						cv->msg = tmsg;
 						Fprintf( svars->jfp, "# %d %d %." stringify(TUIDL) "s\n", srec->uid[M], srec->uid[S], srec->tuid );
 						if (FSyncLevel >= FSYNC_THOROUGH)
 							fdatasync( fileno( svars->jfp ) );
 						debug( "  -> %sing message, TUID %." stringify(TUIDL) "s\n", str_hl[t], srec->tuid );
-						if (copy_msg( cv ))
-							return;
 					} else {
 						if (srec->uid[t] == -1) {
 							debug( "  -> not %sing - still too big\n", str_hl[t] );
@@ -1265,8 +1255,6 @@ box_loaded( int sts, void *aux )
 				}
 			}
 		}
-		svars->state[t] |= ST_SENT_NEW;
-		msgs_copied( svars, t );
 	}
 
 	debug( "synchronizing old entries\n" );
@@ -1462,6 +1450,26 @@ box_loaded( int sts, void *aux )
 		svars->state[t] |= ST_SENT_FLAGS;
 		if (msgs_flags_set( svars, t ))
 			return;
+	}
+
+	debug( "propagating new messages\n" );
+	for (t = 0; t < 2; t++) {
+		Fprintf( svars->jfp, "%c %d\n", "{}"[t], svars->ctx[t]->uidnext );
+		for (tmsg = svars->ctx[1-t]->msgs; tmsg; tmsg = tmsg->next) {
+			if ((srec = tmsg->srec) && srec->tuid[0]) {
+				svars->new_total[t]++;
+				stats( svars );
+				cv = nfmalloc( sizeof(*cv) );
+				cv->cb = msg_copied;
+				cv->aux = AUX;
+				cv->srec = srec;
+				cv->msg = tmsg;
+				if (copy_msg( cv ))
+					return;
+			}
+		}
+		svars->state[t] |= ST_SENT_NEW;
+		msgs_copied( svars, t );
 	}
 }
 
