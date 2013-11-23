@@ -1067,7 +1067,7 @@ box_loaded( int sts, void *aux )
 	message_t *tmsg;
 	copy_vars_t *cv;
 	flag_vars_t *fv;
-	int uid, minwuid, *mexcs, nmexcs, rmexcs, no[2], del[2], todel, t1, t2;
+	int uid, minwuid, *mexcs, nmexcs, rmexcs, no[2], del[2], alive, todel, t1, t2;
 	int sflags, nflags, aflags, dflags, nex;
 	unsigned hashsz, idx;
 	char fbuf[16]; /* enlarge when support for keywords is added */
@@ -1356,17 +1356,21 @@ box_loaded( int sts, void *aux )
 		/* Note: When this branch is entered, we have loaded all slave messages. */
 		/* Expire excess messages. Important (flagged, unread, or unpropagated) messages
 		 * older than the first not expired message are not counted towards the total. */
-		todel = svars->ctx[S]->count + svars->new_total[S] - svars->chan->max_messages;
-		debug( "%d excess messages on slave\n", todel );
-		for (tmsg = svars->ctx[S]->msgs; tmsg && todel > 0; tmsg = tmsg->next) {
+		debug( "preparing message expiration\n" );
+		alive = 0;
+		for (tmsg = svars->ctx[S]->msgs; tmsg; tmsg = tmsg->next) {
 			if (tmsg->status & M_DEAD)
 				continue;
 			if ((srec = tmsg->srec) && srec->uid[M] > 0 &&
 			    ((tmsg->flags | srec->aflags[S]) & ~srec->dflags[S] & F_DELETED) &&
-			    !(srec->status & (S_EXPIRE|S_EXPIRED)))
-				todel--;
+			    !(srec->status & (S_EXPIRE|S_EXPIRED))) {
+				/* Message was not propagated yet, or is deleted. */
+			} else {
+				alive++;
+			}
 		}
-		debug( "... of which %d are not deleted\n", todel );
+		todel = alive - svars->chan->max_messages;
+		debug( "%d alive messages, %d excess - expiring\n", alive, todel );
 		for (tmsg = svars->ctx[S]->msgs; tmsg; tmsg = tmsg->next) {
 			if (tmsg->status & M_DEAD)
 				continue;
