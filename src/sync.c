@@ -992,14 +992,12 @@ box_selected( int sts, void *aux )
 				opts[t] |= OPEN_NEW|OPEN_FLAGS;
 		}
 	}
-	if ((chan->ops[S] & (OP_NEW|OP_RENEW)) && chan->max_messages)
+	if ((chan->ops[S] & (OP_NEW|OP_RENEW|OP_FLAGS)) && chan->max_messages)
 		opts[S] |= OPEN_OLD|OPEN_NEW|OPEN_FLAGS;
 	if (line)
 		for (srec = svars->srecs; srec; srec = srec->next) {
 			if (srec->status & S_DEAD)
 				continue;
-			if ((mvBit(srec->status, S_EXPIRE, S_EXPIRED) ^ srec->status) & S_EXPIRED)
-				opts[S] |= OPEN_OLD|OPEN_FLAGS;
 			if (srec->tuid[0]) {
 				if (srec->uid[M] == -2)
 					opts[M] |= OPEN_NEW|OPEN_FIND, svars->state[M] |= ST_FIND_OLD;
@@ -1355,6 +1353,7 @@ box_loaded( int sts, void *aux )
 	}
 
 	if ((svars->chan->ops[S] & (OP_NEW|OP_RENEW|OP_FLAGS)) && svars->chan->max_messages) {
+		/* Note: When this branch is entered, we have loaded all slave messages. */
 		/* Expire excess messages. Flagged messages and not yet synced messages older
 		 * than the first not expired message are not counted towards the total. */
 		todel = svars->ctx[S]->count + svars->new_total[S] - svars->chan->max_messages;
