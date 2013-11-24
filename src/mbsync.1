@@ -400,10 +400,20 @@ This is useful for mailboxes where you keep a complete archive on the server,
 but want to mirror only the last messages (for instance, for mailing lists).
 The messages that were the first to arrive in the mailbox (independently of
 the actual date of the message) will be deleted first.
-Messages that are flagged (marked as important) and unread messages will not
-be automatically deleted.
+Messages that are flagged (marked as important) and (by default) unread
+messages will not be automatically deleted.
 If \fIcount\fR is 0, the maximum number of messages is \fBunlimited\fR
 (Default: \fI0\fR).
+..
+.TP
+\fBExpireUnread\fR \fIyes\fR|\fIno\fR
+Selects whether unread messages should be affected by \fBMaxMessages\fR.
+Normally, unread messages are considered important and thus never expired.
+This ensures that you never miss new messages even after an extended absence.
+However, if your archive contains large amounts of unread messages by design,
+treating them as important would practically defeat \fBMaxMessages\fR. In this
+case you need to enable this option.
+(Default: \fIno\fR).
 ..
 .TP
 \fBSync\fR {\fINone\fR|[\fIPull\fR] [\fIPush\fR] [\fINew\fR] [\fIReNew\fR] [\fIDelete\fR] [\fIFlags\fR]|\fIAll\fR}

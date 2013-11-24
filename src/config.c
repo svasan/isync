@@ -233,6 +233,8 @@ getopt_helper( conffile_t *cfile, int *cops, channel_conf_t *conf )
 		conf->use_internal_date = parse_bool( cfile );
 	else if (!strcasecmp( "MaxMessages", cfile->cmd ))
 		conf->max_messages = parse_int( cfile );
+	else if (!strcasecmp( "ExpireUnread", cfile->cmd ))
+		conf->expire_unread = parse_bool( cfile );
 	else
 		return 0;
 	return 1;
@@ -347,6 +349,7 @@ load_config( const char *where, int pseudo )
 	cfile.err = 0;
 
 	gcops = 0;
+	global_conf.expire_unread = -1;
   reloop:
 	while (getcline( &cfile )) {
 		if (!cfile.cmd)
@@ -369,6 +372,7 @@ load_config( const char *where, int pseudo )
 			channel = nfcalloc( sizeof(*channel) );
 			channel->name = nfstrdup( cfile.val );
 			channel->max_messages = global_conf.max_messages;
+			channel->expire_unread = global_conf.expire_unread;
 			channel->use_internal_date = global_conf.use_internal_date;
 			cops = 0;
 			max_size = -1;

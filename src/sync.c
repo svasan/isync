@@ -1370,6 +1370,7 @@ box_loaded( int sts, void *aux )
 		}
 		todel = alive - svars->chan->max_messages;
 		debug( "%d alive messages, %d excess - expiring\n", alive, todel );
+		alive = 0;
 		for (tmsg = svars->ctx[S]->msgs; tmsg; tmsg = tmsg->next) {
 			if (tmsg->status & M_DEAD)
 				continue;
@@ -1381,7 +1382,7 @@ box_loaded( int sts, void *aux )
 				nflags = (tmsg->flags | srec->aflags[S]) & ~srec->dflags[S];
 				if (!(nflags & F_DELETED) || (srec->status & (S_EXPIRE|S_EXPIRED))) {
 					/* The message is not deleted, or is already (being) expired. */
-					if ((nflags & F_FLAGGED) || !(nflags & F_SEEN)) {
+					if ((nflags & F_FLAGGED) || !((nflags & F_SEEN) || ((void)(todel > 0 && alive++), svars->chan->expire_unread > 0))) {
 						/* Important messages are always kept. */
 						debug( "  old pair(%d,%d) important\n", srec->uid[M], srec->uid[S] );
 						todel--;
@@ -1400,7 +1401,7 @@ box_loaded( int sts, void *aux )
 			if ((srec = tmsg->srec) && srec->tuid[0]) {
 				nflags = tmsg->flags;
 				if (!(nflags & F_DELETED)) {
-					if ((nflags & F_FLAGGED) || !(nflags & F_SEEN)) {
+					if ((nflags & F_FLAGGED) || !((nflags & F_SEEN) || ((void)(todel > 0 && alive++), svars->chan->expire_unread > 0))) {
 						/* Important messages are always fetched. */
 						debug( "  new pair(%d,%d) important\n", srec->uid[M], srec->uid[S] );
 						todel--;
@@ -1415,6 +1416,14 @@ box_loaded( int sts, void *aux )
 			}
 		}
 		debug( "%d excess messages remain\n", todel );
+		if (svars->chan->expire_unread < 0 && (unsigned)alive * 2 > svars->chan->max_messages) {
+			error( "%s: %d unread messages in excess of MaxMessages (%d).\n"
+			       "Please set ExpireUnread to decide outcome. Skipping mailbox.\n",
+			       svars->ctx[S]->orig_name, alive, svars->chan->max_messages );
+			svars->ret |= SYNC_FAIL;
+			cancel_sync( svars );
+			return;
+		}
 		for (srec = svars->srecs; srec; srec = srec->next) {
 			if (srec->status & S_DEAD)
 				continue;
