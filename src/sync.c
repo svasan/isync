@@ -670,7 +670,7 @@ box_selected( int sts, void *aux )
 		return;
 
 	chan = svars->chan;
-	if (!strcmp( chan->sync_state ? chan->sync_state : global_sync_state, "*" )) {
+	if (!strcmp( chan->sync_state ? chan->sync_state : global_conf.sync_state, "*" )) {
 		if (!ctx[S]->path) {
 			error( "Error: store '%s' does not support in-box sync state\n", chan->stores[S]->name );
 		  sbail:
@@ -685,7 +685,7 @@ box_selected( int sts, void *aux )
 			nfasprintf( &svars->dname, "%s%s", chan->sync_state, csname );
 		else {
 			cmname = clean_strdup( ctx[M]->name );
-			nfasprintf( &svars->dname, "%s:%s:%s_:%s:%s", global_sync_state,
+			nfasprintf( &svars->dname, "%s:%s:%s_:%s:%s", global_conf.sync_state,
 			            chan->stores[M]->name, cmname, chan->stores[S]->name, csname );
 			free( cmname );
 		}

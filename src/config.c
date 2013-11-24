@@ -34,11 +34,10 @@
 
 driver_t *drivers[N_DRIVERS] = { &maildir_driver, &imap_driver };
 
+channel_conf_t global_conf;
 store_conf_t *stores;
 channel_conf_t *channels;
 group_conf_t *groups;
-int global_ops[2];
-char *global_sync_state;
 int FSyncLevel = FSYNC_NORMAL;
 
 #define ARG_OPTIONAL 0
@@ -152,7 +151,7 @@ parse_size( conffile_t *cfile )
 }
 
 static int
-getopt_helper( conffile_t *cfile, int *cops, int ops[], char **sync_state )
+getopt_helper( conffile_t *cfile, int *cops, channel_conf_t *conf )
 {
 	char *arg;
 
@@ -172,21 +171,21 @@ getopt_helper( conffile_t *cfile, int *cops, int ops[], char **sync_state )
 			else if (!strcasecmp( "Flags", arg ))
 				*cops |= OP_FLAGS;
 			else if (!strcasecmp( "PullReNew", arg ))
-				ops[S] |= OP_RENEW;
+				conf->ops[S] |= OP_RENEW;
 			else if (!strcasecmp( "PullNew", arg ))
-				ops[S] |= OP_NEW;
+				conf->ops[S] |= OP_NEW;
 			else if (!strcasecmp( "PullDelete", arg ))
-				ops[S] |= OP_DELETE;
+				conf->ops[S] |= OP_DELETE;
 			else if (!strcasecmp( "PullFlags", arg ))
-				ops[S] |= OP_FLAGS;
+				conf->ops[S] |= OP_FLAGS;
 			else if (!strcasecmp( "PushReNew", arg ))
-				ops[M] |= OP_RENEW;
+				conf->ops[M] |= OP_RENEW;
 			else if (!strcasecmp( "PushNew", arg ))
-				ops[M] |= OP_NEW;
+				conf->ops[M] |= OP_NEW;
 			else if (!strcasecmp( "PushDelete", arg ))
-				ops[M] |= OP_DELETE;
+				conf->ops[M] |= OP_DELETE;
 			else if (!strcasecmp( "PushFlags", arg ))
-				ops[M] |= OP_FLAGS;
+				conf->ops[M] |= OP_FLAGS;
 			else if (!strcasecmp( "All", arg ) || !strcasecmp( "Full", arg ))
 				*cops |= XOP_PULL|XOP_PUSH;
 			else if (strcasecmp( "None", arg ) && strcasecmp( "Noop", arg )) {
@@ -195,41 +194,41 @@ getopt_helper( conffile_t *cfile, int *cops, int ops[], char **sync_state )
 				cfile->err = 1;
 			}
 		while ((arg = get_arg( cfile, ARG_OPTIONAL, 0 )));
-		ops[M] |= XOP_HAVE_TYPE;
+		conf->ops[M] |= XOP_HAVE_TYPE;
 	} else if (!strcasecmp( "Expunge", cfile->cmd )) {
 		arg = cfile->val;
 		do
 			if (!strcasecmp( "Both", arg ))
 				*cops |= OP_EXPUNGE;
 			else if (!strcasecmp( "Master", arg ))
-				ops[M] |= OP_EXPUNGE;
+				conf->ops[M] |= OP_EXPUNGE;
 			else if (!strcasecmp( "Slave", arg ))
-				ops[S] |= OP_EXPUNGE;
+				conf->ops[S] |= OP_EXPUNGE;
 			else if (strcasecmp( "None", arg )) {
 				error( "%s:%d: invalid Expunge arg '%s'\n",
 				       cfile->file, cfile->line, arg );
 				cfile->err = 1;
 			}
 		while ((arg = get_arg( cfile, ARG_OPTIONAL, 0 )));
-		ops[M] |= XOP_HAVE_EXPUNGE;
+		conf->ops[M] |= XOP_HAVE_EXPUNGE;
 	} else if (!strcasecmp( "Create", cfile->cmd )) {
 		arg = cfile->val;
 		do
 			if (!strcasecmp( "Both", arg ))
 				*cops |= OP_CREATE;
 			else if (!strcasecmp( "Master", arg ))
-				ops[M] |= OP_CREATE;
+				conf->ops[M] |= OP_CREATE;
 			else if (!strcasecmp( "Slave", arg ))
-				ops[S] |= OP_CREATE;
+				conf->ops[S] |= OP_CREATE;
 			else if (strcasecmp( "None", arg )) {
 				error( "%s:%d: invalid Create arg '%s'\n",
 				       cfile->file, cfile->line, arg );
 				cfile->err = 1;
 			}
 		while ((arg = get_arg( cfile, ARG_OPTIONAL, 0 )));
-		ops[M] |= XOP_HAVE_CREATE;
+		conf->ops[M] |= XOP_HAVE_CREATE;
 	} else if (!strcasecmp( "SyncState", cfile->cmd ))
-		*sync_state = expand_strdup( cfile->val );
+		conf->sync_state = expand_strdup( cfile->val );
 	else
 		return 0;
 	return 1;
@@ -407,7 +406,7 @@ load_config( const char *where, int pseudo )
 				  stpcom:
 					if (*++p)
 						channel->boxes[ms] = nfstrdup( p );
-				} else if (!getopt_helper( &cfile, &cops, channel->ops, &channel->sync_state )) {
+				} else if (!getopt_helper( &cfile, &cops, channel )) {
 					error( "%s:%d: unknown keyword '%s'\n", cfile.file, cfile.line, cfile.cmd );
 					cfile.err = 1;
 				}
@@ -473,7 +472,7 @@ load_config( const char *where, int pseudo )
 			else if (!strcasecmp( "Thorough", arg ))
 				FSyncLevel = FSYNC_THOROUGH;
 		}
-		else if (!getopt_helper( &cfile, &gcops, global_ops, &global_sync_state ))
+		else if (!getopt_helper( &cfile, &gcops, &global_conf ))
 		{
 			error( "%s:%d: unknown section keyword '%s'\n",
 			       cfile.file, cfile.line, cfile.cmd );
@@ -485,9 +484,9 @@ load_config( const char *where, int pseudo )
 		}
 	}
 	fclose (cfile.fp);
-	cfile.err |= merge_ops( gcops, global_ops );
-	if (!global_sync_state)
-		global_sync_state = expand_strdup( "~/." EXE "/" );
+	cfile.err |= merge_ops( gcops, global_conf.ops );
+	if (!global_conf.sync_state)
+		global_conf.sync_state = expand_strdup( "~/." EXE "/" );
 	if (!cfile.err && pseudo)
 		unlink( where );
 	return cfile.err;

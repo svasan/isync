@@ -484,10 +484,9 @@ void sync_boxes( store_t *ctx[], const char *names[], channel_conf_t *chan,
 #define N_DRIVERS 2
 extern driver_t *drivers[N_DRIVERS];
 
+extern channel_conf_t global_conf;
 extern channel_conf_t *channels;
 extern group_conf_t *groups;
-extern int global_ops[2];
-extern char *global_sync_state;
 
 #define FSYNC_NONE     0
 #define FSYNC_NORMAL   1

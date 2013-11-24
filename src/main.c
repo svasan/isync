@@ -179,9 +179,9 @@ merge_actions( channel_conf_t *chan, int ops[], int have, int mask, int def )
 		chan->ops[S] &= ~mask;
 		chan->ops[S] |= ops[S] & mask;
 	} else if (!(chan->ops[M] & have)) {
-		if (global_ops[M] & have) {
-			chan->ops[M] |= global_ops[M] & mask;
-			chan->ops[S] |= global_ops[S] & mask;
+		if (global_conf.ops[M] & have) {
+			chan->ops[M] |= global_conf.ops[M] & mask;
+			chan->ops[S] |= global_conf.ops[S] & mask;
 		} else {
 			chan->ops[M] |= def;
 			chan->ops[S] |= def;
