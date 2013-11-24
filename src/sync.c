@@ -1333,7 +1333,7 @@ box_loaded( int sts, void *aux )
 					/* a) & b.3) / c.3) */
 					if (svars->chan->ops[t] & OP_FLAGS) {
 						sflags = srec->msg[1-t]->flags;
-						if ((srec->status & (S_EXPIRE|S_EXPIRED)) && (t == M)) {
+						if ((t == M) && (srec->status & (S_EXPIRE|S_EXPIRED))) {
 							/* Don't propagate deletion resulting from expiration. */
 							sflags &= ~F_DELETED;
 						}
