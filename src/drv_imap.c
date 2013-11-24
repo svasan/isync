@@ -43,16 +43,16 @@ typedef struct imap_server_conf {
 	char *pass_cmd;
 	int max_in_progress;
 #ifdef HAVE_LIBSSL
-	unsigned require_ssl:1;
-	unsigned require_cram:1;
+	char require_ssl;
+	char require_cram;
 #endif
 } imap_server_conf_t;
 
 typedef struct imap_store_conf {
 	store_conf_t gen;
 	imap_server_conf_t *server;
-	unsigned use_namespace:1;
 	char *delimiter;
+	char use_namespace;
 } imap_store_conf_t;
 
 typedef struct imap_message {
@@ -123,11 +123,10 @@ struct imap_cmd {
 		char *data;
 		int data_len;
 		int uid; /* to identify fetch responses */
-		unsigned
-			high_prio:1, /* if command is queued, put it at the front of the queue. */
-			to_trash:1, /* we are storing to trash, not current. */
-			create:1, /* create the mailbox if we get an error ... */
-			trycreate:1; /* ... but only if this is true or the server says so. */
+		char high_prio; /* if command is queued, put it at the front of the queue. */
+		char to_trash; /* we are storing to trash, not current. */
+		char create; /* create the mailbox if we get an error ... */
+		char trycreate; /* ... but only if this is true or the server says so. */
 	} param;
 };
 

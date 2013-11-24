@@ -198,7 +198,7 @@ typedef struct {
 	const char *names[2];
 	char **argv, *boxlist, *boxp;
 	int oind, ret, multiple, all, list, ops[2], state[2];
-	unsigned done:1, skip:1, cben:1;
+	char done, skip, cben;
 } main_vars_t;
 
 #define AUX &mvars->t[t]

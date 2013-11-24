@@ -59,15 +59,11 @@ typedef struct server_conf {
 	int port;
 #ifdef HAVE_LIBSSL
 	char *cert_file;
-	unsigned use_imaps:1;
-	unsigned use_sslv2:1;
-	unsigned use_sslv3:1;
-	unsigned use_tlsv1:1;
-	unsigned use_tlsv11:1;
-	unsigned use_tlsv12:1;
+	char use_imaps;
+	char use_sslv2, use_sslv3, use_tlsv1, use_tlsv11, use_tlsv12;
 
 	/* these are actually variables and are leaked at the end */
-	unsigned ssl_ctx_valid:1;
+	char ssl_ctx_valid;
 	unsigned num_trusted;
 	SSL_CTX *SSLContext;
 #endif
@@ -151,7 +147,7 @@ typedef struct store_conf {
 	const char *map_inbox;
 	const char *trash;
 	unsigned max_size; /* off_t is overkill */
-	unsigned trash_remote_new:1, trash_only_new:1;
+	char trash_remote_new, trash_only_new;
 } store_conf_t;
 
 typedef struct string_list {
@@ -171,7 +167,7 @@ typedef struct channel_conf {
 	string_list_t *patterns;
 	int ops[2];
 	unsigned max_messages; /* for slave only */
-	unsigned use_internal_date:1;
+	char use_internal_date;
 } channel_conf_t;
 
 typedef struct group_conf {
@@ -221,7 +217,7 @@ typedef struct store {
 	struct store *next;
 	store_conf_t *conf; /* foreign */
 	string_list_t *boxes; /* _list results - own */
-	unsigned listed:1; /* was _list already run? */
+	char listed; /* was _list already run? */
 
 	void (*bad_callback)( void *aux );
 	void *bad_callback_aux;
