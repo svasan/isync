@@ -229,6 +229,10 @@ getopt_helper( conffile_t *cfile, int *cops, channel_conf_t *conf )
 		conf->ops[M] |= XOP_HAVE_CREATE;
 	} else if (!strcasecmp( "SyncState", cfile->cmd ))
 		conf->sync_state = expand_strdup( cfile->val );
+	else if (!strcasecmp( "CopyArrivalDate", cfile->cmd ))
+		conf->use_internal_date = parse_bool( cfile );
+	else if (!strcasecmp( "MaxMessages", cfile->cmd ))
+		conf->max_messages = parse_int( cfile );
 	else
 		return 0;
 	return 1;
@@ -364,15 +368,13 @@ load_config( const char *where, int pseudo )
 		{
 			channel = nfcalloc( sizeof(*channel) );
 			channel->name = nfstrdup( cfile.val );
+			channel->max_messages = global_conf.max_messages;
+			channel->use_internal_date = global_conf.use_internal_date;
 			cops = 0;
 			max_size = -1;
 			while (getcline( &cfile ) && cfile.cmd) {
 				if (!strcasecmp( "MaxSize", cfile.cmd ))
 					max_size = parse_size( &cfile );
-				else if (!strcasecmp( "MaxMessages", cfile.cmd ))
-					channel->max_messages = parse_int( &cfile );
-				else if (!strcasecmp( "CopyArrivalDate", cfile.cmd ))
-					channel->use_internal_date = parse_bool( &cfile );
 				else if (!strcasecmp( "Pattern", cfile.cmd ) ||
 				         !strcasecmp( "Patterns", cfile.cmd ))
 				{

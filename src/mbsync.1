@@ -472,11 +472,6 @@ does not exist.
 Permanently remove all messages [on the Master/Slave] marked for deletion.
 (Global default: \fINone\fR)
 ..
-.P
-\fBSync\fR, \fBCreate\fR and \fBExpunge\fR can be used outside any section for
-a global effect. The global settings are overridden by Channel-specific options,
-which in turn are overridden by command line switches.
-..
 .TP
 \fBCopyArrivalDate\fR {\fIyes\fR|\fIno\fR}
 Selects whether their arrival time should be propagated together with
@@ -486,6 +481,13 @@ sorting intact.
 Note that IMAP does not guarantee that the time stamp (termed \fBinternal
 date\fR) is actually the arrival time, but it is usually close enough.
 (Default: \fIno\fR)
+..
+.P
+\fBSync\fR, \fBCreate\fR, \fBExpunge\fR,
+\fBMaxMessages\fR, and \fBCopyArrivalDate\fR
+can be used before any section for a global effect.
+The global settings are overridden by Channel-specific options,
+which in turn are overridden by command line switches.
 ..
 .TP
 \fBSyncState\fR {\fB*\fR|\fIpath\fR}
