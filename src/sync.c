@@ -100,6 +100,7 @@ make_flags( int flags, char *buf )
 #define S_EXPIRED      (1<<4)  /* the entry is expired (slave message removal confirmed) */
 #define S_EXPIRE       (1<<5)  /* the entry is being expired (slave message removal scheduled) */
 #define S_NEXPIRE      (1<<6)  /* temporary: new expiration state */
+#define S_DELETE       (1<<7)  /* ephemeral: flags propagation is a deletion */
 
 #define mvBit(in,ib,ob) ((unsigned char)(((unsigned)in) * (ob) / (ib)))
 
@@ -1106,9 +1107,8 @@ typedef struct {
 	sync_rec_t *srec;
 } sync_rec_map_t;
 
-static void flags_set_del( int sts, void *aux );
-static void flags_set_sync( int sts, void *aux );
-static void flags_set_sync_p2( sync_vars_t *svars, sync_rec_t *srec, int t );
+static void flags_set( int sts, void *aux );
+static void flags_set_p2( sync_vars_t *svars, sync_rec_t *srec, int t );
 static int msgs_flags_set( sync_vars_t *svars, int t );
 static void msg_copied( int sts, int uid, copy_vars_t *vars );
 static void msg_copied_p2( sync_vars_t *svars, sync_rec_t *srec, int t, message_t *tmsg, int uid );
@@ -1298,12 +1298,8 @@ box_loaded( int sts, void *aux )
 							info( "Info: conflicting changes in (%d,%d)\n", srec->uid[M], srec->uid[S] );
 						if (svars->chan->ops[t] & OP_DELETE) {
 							debug( "  %sing delete\n", str_hl[t] );
-							svars->flags_total[t]++;
-							stats( svars );
-							fv = nfmalloc( sizeof(*fv) );
-							fv->aux = AUX;
-							fv->srec = srec;
-							DRIVER_CALL(set_flags( svars->ctx[t], srec->msg[t], srec->uid[t], F_DELETED, 0, flags_set_del, fv ));
+							srec->aflags[t] = F_DELETED;
+							srec->status |= S_DELETE;
 						} else {
 							debug( "  not %sing delete\n", str_hl[t] );
 						}
@@ -1406,12 +1402,19 @@ box_loaded( int sts, void *aux )
 				continue;
 			aflags = srec->aflags[t];
 			dflags = srec->dflags[t];
-			if ((t == S) && ((mvBit(srec->status, S_EXPIRE, S_EXPIRED) ^ srec->status) & S_EXPIRED)) {
-				/* Derive deletion action from expiration state. */
-				if (srec->status & S_NEXPIRE)
-					aflags |= F_DELETED;
-				else
-					dflags |= F_DELETED;
+			if (srec->status & S_DELETE) {
+				if (!aflags) {
+					/* This deletion propagation goes the other way round. */
+					continue;
+				}
+			} else {
+				if ((t == S) && ((mvBit(srec->status, S_EXPIRE, S_EXPIRED) ^ srec->status) & S_EXPIRED)) {
+					/* Derive deletion action from expiration state. */
+					if (srec->status & S_NEXPIRE)
+						aflags |= F_DELETED;
+					else
+						dflags |= F_DELETED;
+				}
 			}
 			if ((svars->chan->ops[t] & OP_EXPUNGE) && (((srec->msg[t] ? srec->msg[t]->flags : 0) | aflags) & ~dflags & F_DELETED) &&
 			    (!svars->ctx[t]->conf->trash || svars->ctx[t]->conf->trash_only_new))
@@ -1434,9 +1437,9 @@ box_loaded( int sts, void *aux )
 				fv->srec = srec;
 				fv->aflags = aflags;
 				fv->dflags = dflags;
-				DRIVER_CALL(set_flags( svars->ctx[t], srec->msg[t], srec->uid[t], aflags, dflags, flags_set_sync, fv ));
+				DRIVER_CALL(set_flags( svars->ctx[t], srec->msg[t], srec->uid[t], aflags, dflags, flags_set, fv ));
 			} else
-				flags_set_sync_p2( svars, srec, t );
+				flags_set_p2( svars, srec, t );
 		}
 	}
 	for (t = 0; t < 2; t++) {
@@ -1540,24 +1543,7 @@ msgs_new_done( sync_vars_t *svars, int t )
 }
 
 static void
-flags_set_del( int sts, void *aux )
-{
-	SVARS_CHECK_RET_VARS(flag_vars_t);
-	switch (sts) {
-	case DRV_OK:
-		vars->srec->status |= S_DEL(t);
-		Fprintf( svars->jfp, "%c %d %d 0\n", "><"[t], vars->srec->uid[M], vars->srec->uid[S] );
-		vars->srec->uid[1-t] = 0;
-		break;
-	}
-	free( vars );
-	svars->flags_done[t]++;
-	stats( svars );
-	msgs_flags_set( svars, t );
-}
-
-static void
-flags_set_sync( int sts, void *aux )
+flags_set( int sts, void *aux )
 {
 	SVARS_CHECK_RET_VARS(flag_vars_t);
 	switch (sts) {
@@ -1566,7 +1552,7 @@ flags_set_sync( int sts, void *aux )
 			vars->srec->status |= S_DEL(t);
 		else if (vars->dflags & F_DELETED)
 			vars->srec->status &= ~S_DEL(t);
-		flags_set_sync_p2( svars, vars->srec, t );
+		flags_set_p2( svars, vars->srec, t );
 		break;
 	}
 	free( vars );
@@ -1576,28 +1562,32 @@ flags_set_sync( int sts, void *aux )
 }
 
 static void
-flags_set_sync_p2( sync_vars_t *svars, sync_rec_t *srec, int t )
+flags_set_p2( sync_vars_t *svars, sync_rec_t *srec, int t )
 {
-	int nflags, nex;
-
-	nflags = (srec->flags | srec->aflags[t]) & ~srec->dflags[t];
-	if (srec->flags != nflags) {
-		debug( "  pair(%d,%d): updating flags (%u -> %u; %sed)\n", srec->uid[M], srec->uid[S], srec->flags, nflags, str_hl[t] );
-		srec->flags = nflags;
-		Fprintf( svars->jfp, "* %d %d %u\n", srec->uid[M], srec->uid[S], nflags );
-	}
-	if (t == S) {
-		nex = (srec->status / S_NEXPIRE) & 1;
-		if (nex != ((srec->status / S_EXPIRED) & 1)) {
-			if (nex && (svars->smaxxuid < srec->uid[S]))
-				svars->smaxxuid = srec->uid[S];
-			Fprintf( svars->jfp, "/ %d %d\n", srec->uid[M], srec->uid[S] );
-			debug( "  pair(%d,%d): expired %d (commit)\n", srec->uid[M], srec->uid[S], nex );
-			srec->status = (srec->status & ~S_EXPIRED) | (nex * S_EXPIRED);
-		} else if (nex != ((srec->status / S_EXPIRE) & 1)) {
-			Fprintf( svars->jfp, "\\ %d %d\n", srec->uid[M], srec->uid[S] );
-			debug( "  pair(%d,%d): expire %d (cancel)\n", srec->uid[M], srec->uid[S], nex );
-			srec->status = (srec->status & ~S_EXPIRE) | (nex * S_EXPIRE);
+	if (srec->status & S_DELETE) {
+		debug( "  pair(%d,%d): resetting %s UID\n", srec->uid[M], srec->uid[S], str_ms[1-t] );
+		Fprintf( svars->jfp, "%c %d %d 0\n", "><"[t], srec->uid[M], srec->uid[S] );
+		srec->uid[1-t] = 0;
+	} else {
+		int nflags = (srec->flags | srec->aflags[t]) & ~srec->dflags[t];
+		if (srec->flags != nflags) {
+			debug( "  pair(%d,%d): updating flags (%u -> %u; %sed)\n", srec->uid[M], srec->uid[S], srec->flags, nflags, str_hl[t] );
+			srec->flags = nflags;
+			Fprintf( svars->jfp, "* %d %d %u\n", srec->uid[M], srec->uid[S], nflags );
+		}
+		if (t == S) {
+			int nex = (srec->status / S_NEXPIRE) & 1;
+			if (nex != ((srec->status / S_EXPIRED) & 1)) {
+				if (nex && (svars->smaxxuid < srec->uid[S]))
+					svars->smaxxuid = srec->uid[S];
+				Fprintf( svars->jfp, "/ %d %d\n", srec->uid[M], srec->uid[S] );
+				debug( "  pair(%d,%d): expired %d (commit)\n", srec->uid[M], srec->uid[S], nex );
+				srec->status = (srec->status & ~S_EXPIRED) | (nex * S_EXPIRED);
+			} else if (nex != ((srec->status / S_EXPIRE) & 1)) {
+				Fprintf( svars->jfp, "\\ %d %d\n", srec->uid[M], srec->uid[S] );
+				debug( "  pair(%d,%d): expire %d (cancel)\n", srec->uid[M], srec->uid[S], nex );
+				srec->status = (srec->status & ~S_EXPIRE) | (nex * S_EXPIRE);
+			}
 		}
 	}
 }
