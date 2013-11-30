@@ -824,6 +824,7 @@ parse_date( const char *str )
 	int hours, mins;
 	struct tm datetime;
 
+	memset( &datetime, 0, sizeof(datetime) );
 	if (!(end = strptime( str, "%d-%b-%Y %H:%M:%S ", &datetime )))
 		return -1;
 	if ((date = mktime( &datetime )) == -1)
