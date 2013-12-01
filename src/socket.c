@@ -369,7 +369,7 @@ socket_connect( conn_t *sock, void (*cb)( int ok, void *aux ) )
 		infon( "Resolving %s... ", conf->host );
 		he = gethostbyname( conf->host );
 		if (!he) {
-			error( "IMAP error: Cannot resolve server '%s'\n", conf->host );
+			error( "IMAP error: Cannot resolve server '%s': %s\n", conf->host, hstrerror( h_errno ) );
 			socket_connect_bail( sock );
 			return;
 		}
