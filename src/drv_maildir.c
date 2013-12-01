@@ -66,7 +66,7 @@ typedef struct maildir_message {
 
 typedef struct maildir_store {
 	store_t gen;
-	int uvfd, uvok, nuid;
+	int uvfd, uvok, nuid, fresh;
 	int minuid, maxuid, newuid, nexcs, *excs;
 	char *trash;
 #ifdef USE_DB
@@ -355,6 +355,7 @@ maildir_validate( const char *box, int create, maildir_store_t *ctx )
 			sys_error( "Maildir error: cannot access mailbox '%s'", buf );
 			return DRV_BOX_BAD;
 		}
+		ctx->fresh = 1;
 	} else {
 		for (i = 0; i < 3; i++) {
 			memcpy( buf + bl, subdirs[i], 4 );
@@ -385,6 +386,7 @@ maildir_validate( const char *box, int create, maildir_store_t *ctx )
 			}
 		}
 		closedir( dirp );
+		ctx->fresh = 0;
 	}
 	return DRV_OK;
 }
@@ -1026,6 +1028,9 @@ maildir_load( store_t *gctx, int minuid, int maxuid, int newuid, int *excs, int 
 	ctx->excs = nfrealloc( excs, nexcs * sizeof(int) );
 	ctx->nexcs = nexcs;
 
+	if (ctx->fresh)
+		goto dontscan;
+
 	if (maildir_scan( ctx, &msglist ) != DRV_OK) {
 		cb( DRV_BOX_BAD, aux );
 		return;
@@ -1035,6 +1040,7 @@ maildir_load( store_t *gctx, int minuid, int maxuid, int newuid, int *excs, int 
 		maildir_app_msg( ctx, &msgapp, msglist.ents + i );
 	maildir_free_scan( &msglist );
 
+  dontscan:
 	cb( DRV_OK, aux );
 }
 
