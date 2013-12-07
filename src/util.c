@@ -146,16 +146,21 @@ sys_error( const char *msg, ... )
 }
 
 void
-add_string_list( string_list_t **list, const char *str )
+add_string_list_n( string_list_t **list, const char *str, int len )
 {
 	string_list_t *elem;
-	int len;
 
-	len = strlen( str );
 	elem = nfmalloc( sizeof(*elem) + len );
 	elem->next = *list;
 	*list = elem;
-	memcpy( elem->string, str, len + 1 );
+	memcpy( elem->string, str, len );
+	elem->string[len] = 0;
+}
+
+void
+add_string_list( string_list_t **list, const char *str )
+{
+	add_string_list_n( list, str, strlen( str ) );
 }
 
 void

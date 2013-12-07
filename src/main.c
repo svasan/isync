@@ -196,9 +196,9 @@ typedef struct {
 	store_t *ctx[2];
 	string_list_t *boxes[2], *cboxes, *chanptr;
 	const char *names[2];
-	char **argv, *boxlist, *boxp;
+	char **argv;
 	int oind, ret, multiple, all, list, ops[2], state[2];
-	char done, skip, cben;
+	char done, skip, cben, boxlist;
 } main_vars_t;
 
 #define AUX &mvars->t[t]
@@ -514,7 +514,7 @@ sync_chans( main_vars_t *mvars, int ent )
 	channel_conf_t *chan;
 	store_t *store;
 	string_list_t *mbox, *sbox, **mboxp, **sboxp;
-	char *channame;
+	char *channame, *boxp, *nboxp;
 	int t;
 
 	if (!mvars->cben)
@@ -525,6 +525,7 @@ sync_chans( main_vars_t *mvars, int ent )
 	}
 	for (;;) {
 		mvars->boxlist = 0;
+		mvars->boxes[M] = mvars->boxes[S] = mvars->cboxes = 0;
 		if (!mvars->all) {
 			if (mvars->chanptr)
 				channame = mvars->chanptr->string;
@@ -538,8 +539,8 @@ sync_chans( main_vars_t *mvars, int ent )
 				channame = mvars->argv[mvars->oind];
 			  gotgrp: ;
 			}
-			if ((mvars->boxlist = strchr( channame, ':' )))
-				*mvars->boxlist++ = 0;
+			if ((boxp = strchr( channame, ':' )))
+				*boxp++ = 0;
 			for (chan = channels; chan; chan = chan->next)
 				if (!strcmp( chan->name, channame ))
 					goto gotchan;
@@ -548,6 +549,25 @@ sync_chans( main_vars_t *mvars, int ent )
 			goto gotnone;
 		  gotchan:
 			mvars->chan = chan;
+			if (boxp) {
+				mvars->boxlist = 1;
+				for (;;) {
+					nboxp = strpbrk( boxp, ",\n" );
+					if (nboxp) {
+						t = nboxp - boxp;
+						*nboxp++ = 0;
+					} else {
+						t = strlen( boxp );
+					}
+					if (t)
+						add_string_list_n( &mvars->cboxes, boxp, t );
+					else
+						add_string_list_n( &mvars->cboxes, "INBOX", 5 );
+					if (!nboxp)
+						break;
+					boxp = nboxp;
+				}
+			}
 		}
 		merge_actions( mvars->chan, mvars->ops, XOP_HAVE_TYPE, OP_MASK_TYPE, OP_MASK_TYPE );
 		merge_actions( mvars->chan, mvars->ops, XOP_HAVE_CREATE, OP_CREATE, 0 );
@@ -555,7 +575,6 @@ sync_chans( main_vars_t *mvars, int ent )
 
 		mvars->state[M] = mvars->state[S] = ST_FRESH;
 		info( "Channel %s\n", mvars->chan->name );
-		mvars->boxes[M] = mvars->boxes[S] = mvars->cboxes = 0;
 		mvars->skip = mvars->cben = 0;
 		for (t = 0; t < 2; t++) {
 			mvars->drv[t] = mvars->chan->stores[t]->driver;
@@ -574,9 +593,8 @@ sync_chans( main_vars_t *mvars, int ent )
 		if (mvars->state[M] != ST_OPEN || mvars->state[S] != ST_OPEN)
 			return;
 
-		if (mvars->boxlist)
-			mvars->boxp = mvars->boxlist;
-		else if (mvars->chan->patterns) {
+		if (!mvars->boxlist && mvars->chan->patterns) {
+			mvars->boxlist = 1;
 			mvars->boxes[M] = filter_boxes( mvars->ctx[M]->boxes, mvars->chan->patterns );
 			mvars->boxes[S] = filter_boxes( mvars->ctx[S]->boxes, mvars->chan->patterns );
 			for (mboxp = &mvars->boxes[M]; (mbox = *mboxp); ) {
@@ -600,18 +618,6 @@ sync_chans( main_vars_t *mvars, int ent )
 		mvars->done = mvars->cben = 0;
 	  syncmlx:
 		if (mvars->boxlist) {
-			if ((mvars->names[S] = strsep( &mvars->boxp, ",\n" ))) {
-				if (!*mvars->names[S])
-					mvars->names[S] = 0;
-				if (!mvars->list) {
-					mvars->names[M] = mvars->names[S];
-					sync_boxes( mvars->ctx, mvars->names, mvars->chan, done_sync, mvars );
-					goto syncw;
-				}
-				puts( nz( mvars->names[S], "INBOX" ) );
-				goto syncmlx;
-			}
-		} else if (mvars->chan->patterns) {
 			if ((mbox = mvars->cboxes)) {
 				mvars->cboxes = mbox->next;
 				if (!mvars->list) {
