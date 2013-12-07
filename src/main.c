@@ -550,6 +550,11 @@ sync_chans( main_vars_t *mvars, int ent )
 		  gotchan:
 			mvars->chan = chan;
 			if (boxp) {
+				if (!chan->patterns) {
+					error( "Cannot override mailbox in channel '%s' - no Patterns.\n", channame );
+					mvars->ret = 1;
+					goto gotnone;
+				}
 				mvars->boxlist = 1;
 				for (;;) {
 					nboxp = strpbrk( boxp, ",\n" );

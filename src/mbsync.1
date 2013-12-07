@@ -367,10 +367,8 @@ Define the Channel \fIname\fR, opening a section for its parameters.
 .TP
 {\fBMaster\fR|\fBSlave\fR} \fB:\fIstore\fB:\fR[\fImailbox\fR]
 Specify the Master resp. Slave Store to be connected by this Channel.
-If \fImailbox\fR is omitted, \fBINBOX\fR is assumed.
-The \fImailbox\fR specification can be overridden by \fBPatterns\fR, which
-in turn can be overridden by a mailbox list in a Channel reference (a Group
-specification or the command line).
+If \fBPatterns\fR are specified, \fImailbox\fR is ignored.
+Otherwise, if \fImailbox\fR is omitted, \fBINBOX\fR is assumed.
 ..
 .TP
 \fBPattern\fR[\fBs\fR] [\fB!\fR]\fIpattern\fR ...
@@ -384,6 +382,9 @@ times); later matches take precedence.
 .br
 Note that \fBINBOX\fR is not matched by wildcards, unless it lives under
 \fBPath\fR.
+.br
+The mailbox list selected by \fBPatterns\fR can be overridden by a mailbox
+list in a channel reference (a \fBGroup\fR specification or the command line).
 .br
 Example: "\fBPatterns\fR\ \fI%\ !Trash\fR"
 ..
@@ -524,8 +525,9 @@ with the same name on the command line.
 One or more Channels can be specified on the same line.
 .br
 If you supply one or more \fIbox\fRes to a \fIchannel\fR, they will be used
-instead of what is specified in the Channel. The same can be done on the command
-line, except that there newlines can be used as mailbox name separators as well.
+instead of what is specified in the Channel's Patterns.
+The same can be done on the command line, except that there newlines can be
+used as mailbox name separators as well.
 ..
 .TP
 \fBChannel\fR[\fBs\fR] \fIchannel\fR[\fB:\fIbox\fR[\fB,\fR...]] ...
