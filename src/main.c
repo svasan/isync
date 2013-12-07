@@ -502,6 +502,7 @@ main( int argc, char **argv )
 
 static void store_opened( store_t *ctx, void *aux );
 static void store_listed( int sts, void *aux );
+static int sync_listed_boxes( main_vars_t *mvars, string_list_t *mbox );
 static void done_sync_dyn( int sts, void *aux );
 static void done_sync( int sts, void *aux );
 
@@ -625,25 +626,17 @@ sync_chans( main_vars_t *mvars, int ent )
 		if (mvars->boxlist) {
 			if ((mbox = mvars->cboxes)) {
 				mvars->cboxes = mbox->next;
-				if (!mvars->list) {
-					mvars->names[M] = mvars->names[S] = mbox->string;
-					sync_boxes( mvars->ctx, mvars->names, mvars->chan, done_sync_dyn, mvars );
+				if (sync_listed_boxes( mvars, mbox ))
 					goto syncw;
-				}
-				puts( mbox->string );
-				free( mbox );
 				goto syncmlx;
 			}
 			for (t = 0; t < 2; t++)
 				if ((mbox = mvars->boxes[t])) {
 					mvars->boxes[t] = mbox->next;
 					if ((mvars->chan->ops[1-t] & OP_MASK_TYPE) && (mvars->chan->ops[1-t] & OP_CREATE)) {
-						if (!mvars->list) {
-							mvars->names[M] = mvars->names[S] = mbox->string;
-							sync_boxes( mvars->ctx, mvars->names, mvars->chan, done_sync_dyn, mvars );
+						if (sync_listed_boxes( mvars, mbox ))
 							goto syncw;
-						}
-						puts( mbox->string );
+						goto syncmlx;
 					}
 					free( mbox );
 					goto syncmlx;
@@ -787,6 +780,19 @@ store_listed( int sts, void *aux )
 	}
 	mvars->state[t] = ST_OPEN;
 	sync_chans( mvars, E_OPEN );
+}
+
+static int
+sync_listed_boxes( main_vars_t *mvars, string_list_t *mbox )
+{
+	if (!mvars->list) {
+		mvars->names[M] = mvars->names[S] = mbox->string;
+		sync_boxes( mvars->ctx, (const char **)mvars->names, mvars->chan, done_sync_dyn, mvars );
+		return 1;
+	}
+	puts( mbox->string );
+	free( mbox );
+	return 0;
 }
 
 static void
