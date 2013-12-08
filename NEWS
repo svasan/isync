@@ -10,7 +10,15 @@ UIDPLUS extension (e.g., M$ Exchange).
 
 More automatic handling of SSL certificates.
 
-Data safety in case of system crashes is improved.
+IPv6 support.
+
+IMAP password query can be scripted.
+
+Message arrival dates can be propagated.
+
+Data safety in case of system crashes was improved.
+
+MaxMessages was made vastly more useful.
 
 [1.0.0]
 

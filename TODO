@@ -5,15 +5,24 @@ f{,data}sync() usage could be optimized by batching the calls.
 add some marker about message being already [remotely] trashed.
 real transactions would be certainly not particularly useful ...
 
-check whether disappearing (M_DEAD) messages (due to maildir rescans) are
-properly accounted for by the syncing code.
-
 make sync_chans() aware of servers, so a bad server (e.g., wrong password)
 won't cause the same error message for every attached store.
+
+add support for more authentication methods: oauth, ntlm, ... use SASL?
+possibly by calling an external command. that might be overkill, and
+wouldn't be very user-friendly, though.
 
 make SSL (connect) timeouts produce a bit more than "Unidentified socket error".
 
 network timeout handling in general would be a good idea.
+lock timeout handling, too.
+
+add message expiration based on arrival date (message date would be too
+unreliable). MaxAge; probably mutually exclusive to MaxMessages.
+
+add alternative treatments of expired messages. ExpiredMessageMode: Prune
+(delete messages like now), Keep (just don't sync) and Archive (move to
+separate folder - ArchiveSuffix, default .archive).
 
 unify maildir locking between the two UID storage schemes.
 re-opening the db may be expensive, so keep it open.
@@ -26,21 +35,26 @@ can name a single (in-)box (curr. broken with maildir). an empty box name
 actually means empty, so the IMAP mailbox should use INBOX for Path (can't
 make that the default, as it would mess up the NAMESPACE).
 
+add regexp-based mailbox path rewriting to the drivers. user would provide
+expressions for both directions. every transformation would be immediately
+verified with the inverse transform. PathDelimiter and Flatten would become
+special cases of this.
+
 add daemon mode. primary goal: keep imap password in memory.
 also: idling mode.
 
 parallel fetching of multiple mailboxes.
 
-set_flags:
-- imap: grouping commands for efficiency
-- callback should get the flags actually affected. but then, why could flag
-  changes fail at all?
+imap_set_flags(): group commands for efficiency, don't call back until
+imap_commit().
 
 add streaming from fetching to storing.
 
 handle custom flags (keywords).
 
-handle google IMAP extensions.
+make use of IMAP CONDSTORE extension (rfc4551; CHANGEDSINCE FETCH Modifier);
+make use of IMAP QRESYNC extension (rfc5162) to avoid SEARCH to find vanished
+messages.
 
 use MULTIAPPEND and FETCH with multiple messages.
 
@@ -48,33 +62,23 @@ create dummies describing MIME structure of messages bigger than MaxSize.
 flagging the dummy would fetch the real message. possibly remove --renew.
 note that all interaction needs to happen on the slave side probably.
 
+propagate folder deletions. for safety, the target must be empty.
+
 don't SELECT boxes unless really needed; in particular not for appending,
 and in write-only mode not before changes are made.
 problem: UIDVALIDITY change detection is delayed, significantly complicating
 matters.
 
-possibly request message attributes on a per-message basis from the drivers.
-considerations:
-- record non-existing UID ranges in the sync database, so IMAP FETCHes needn't
-  to exclude anyway non-existing messages explicitly.
-- when detect unborn pairs and orphaned messages being gone? implied by expunge:
-  with trashing, by local driver, or of messages we deleted in this run. the
-  remaining cases could be handled by automatic periodical cleanup passes, an 
-  explicit --cleanup action, or be implied by one of the other actions.
-- the benefit of this is questionable, as fine-grained requests will result
-  in sending huge amounts of data, and upstream is often way slower than
-  downstream.
-
-maildir: possibly timestamp mails with remote arrival date.
-
-maybe throw out the ctx->recent stuff - it's used only for one info message.
-
 possibly use ^[[1m to highlight error messages.
 
-consider alternative trash implementation: trash only messages we delete,
-and trash before marking them deleted in the mailbox. downside: all other
-programs have to do the same. and what if the deleted flag is unset?
+consider alternative approach to trashing: instead of the current trash-before-
+expunge done by mbsync, let MUAs do the trashing (as modern ones typically do).
+mbsync wouldn't do any trashing by itself, but should track the moves for
+optimization. additionally, there should be a mode to move trashed messages to
+the remote store. TrashMode Internal|External, AbsorbRemoteTrash.
+a yet different approach to trashing is treating the trash like a normal mailbox.
+however, this implies a huge working set.
 
-items out of scope of purely UID based approach:
-- detect message moves between folders
-- recovering from UIDVALIDITY change (uw-imap < 2004.352 does this a lot)
+consider optional use of messages-id (and X-GM-MSGID):
+- detection of message moves between folders
+- recovery from unmotivated UIDVALIDITY change, or total loss of sync state

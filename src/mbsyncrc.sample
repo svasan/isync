@@ -19,7 +19,7 @@ Pass xxxxxxxx
 #PassCmd "sed -n -e 's,^machine work\.host\.com login tehuser password \(.*\),\1,p' < $HOME/.netrc"
 # Fetch password from a gpg-encrypted file:
 #PassCmd "gpg --quiet --for-your-eyes-only --decrypt $HOME/imappassword.gpg"
-# Fetch password from pwmd (http://bjk.sourceforge.net/pwmd/):
+# Fetch password from pwmd (http://pwmd.sourceforge.net/):
 #PassCmd "echo -ne 'GET myIsp\tpassword' | pwmc datafile"
 # On Mac OS X, run "KeyChain Access" -- File->New Password Item. Fill out form using
 #  "Keychain Item Name" http://IMAPSERVER  (note: the "http://" is a hack)
