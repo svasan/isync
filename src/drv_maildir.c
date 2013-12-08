@@ -228,11 +228,6 @@ maildir_list_recurse( store_t *gctx, int isBox, int *flags, const char *inbox,
 			if (maildir_list_inbox( gctx, flags ) < 0)
 				return -1;
 		} else {
-			if (!memcmp( ent, "INBOX", 6 )) {
-				path[pathLen] = 0;
-				warn( "Maildir warning: ignoring INBOX in %s\n", path );
-				continue;
-			}
 			if (*ent == '.') {
 				if (!isBox)
 					continue;
@@ -242,6 +237,11 @@ maildir_list_recurse( store_t *gctx, int isBox, int *flags, const char *inbox,
 			} else {
 				if (isBox)
 					continue;
+				if (!memcmp( ent, "INBOX", 6 )) {
+					path[pathLen] = 0;
+					warn( "Maildir warning: ignoring INBOX in %s\n", path );
+					continue;
+				}
 			}
 			nl = nameLen + nfsnprintf( name + nameLen, _POSIX_PATH_MAX - nameLen, "%s", ent );
 			if (maildir_list_recurse( gctx, 1, flags, inbox, path, pl, name, nl ) < 0)
