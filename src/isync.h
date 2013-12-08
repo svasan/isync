@@ -289,9 +289,6 @@ struct driver {
 	/* Mark the store as available for recycling. Server connection may be kept alive. */
 	void (*disown_store)( store_t *ctx );
 
-	/* Try to recycle a store with the given configuration. */
-	store_t *(*own_store)( store_conf_t *conf );
-
 	/* Discard the store after a bad_callback. The server connections will be closed.
 	 * Pending commands will have their callbacks synchronously invoked with DRV_CANCELED. */
 	void (*cancel_store)( store_t *ctx );

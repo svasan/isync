@@ -178,12 +178,6 @@ maildir_disown_store( store_t *gctx )
 	free( gctx );
 }
 
-static store_t *
-maildir_own_store( store_conf_t *conf ATTR_UNUSED )
-{
-	return 0;
-}
-
 static void
 maildir_cleanup_drv( void )
 {
@@ -1478,7 +1472,6 @@ struct driver maildir_driver = {
 	maildir_cleanup_drv,
 	maildir_open_store,
 	maildir_disown_store,
-	maildir_own_store,
 	maildir_disown_store, /* _cancel_, but it's the same */
 	maildir_list,
 	maildir_prepare_opts,

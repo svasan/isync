@@ -1351,7 +1351,7 @@ imap_invoke_bad_callback( imap_store_t *ctx )
 	ctx->gen.bad_callback( ctx->gen.bad_callback_aux );
 }
 
-/******************* imap_disown_store & imap_own_store *******************/
+/******************* imap_disown_store *******************/
 
 static store_t *unowned;
 
@@ -1376,19 +1376,6 @@ imap_disown_store( store_t *gctx )
 	set_bad_callback( gctx, imap_cancel_unowned, gctx );
 	gctx->next = unowned;
 	unowned = gctx;
-}
-
-static store_t *
-imap_own_store( store_conf_t *conf )
-{
-	store_t *store, **storep;
-
-	for (storep = &unowned; (store = *storep); storep = &store->next)
-		if (store->conf == conf) {
-			*storep = store->next;
-			return store;
-		}
-	return 0;
 }
 
 /******************* imap_cleanup *******************/
@@ -1470,6 +1457,12 @@ imap_open_store( store_conf_t *conf,
 	imap_store_t *ctx;
 	store_t **ctxp;
 
+	for (ctxp = &unowned; (ctx = (imap_store_t *)*ctxp); ctxp = &ctx->gen.next)
+		if (ctx->gen.conf == conf) {
+			*ctxp = ctx->gen.next;
+			cb( &ctx->gen, aux );
+			return;
+		}
 	for (ctxp = &unowned; (ctx = (imap_store_t *)*ctxp); ctxp = &ctx->gen.next)
 		if (((imap_store_conf_t *)ctx->gen.conf)->server == srvc) {
 			*ctxp = ctx->gen.next;
@@ -2359,7 +2352,6 @@ struct driver imap_driver = {
 	imap_cleanup,
 	imap_open_store,
 	imap_disown_store,
-	imap_own_store,
 	imap_cancel_store,
 	imap_list,
 	imap_prepare_opts,
