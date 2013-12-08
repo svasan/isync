@@ -622,24 +622,21 @@ sync_chans( main_vars_t *mvars, int ent )
 			printf( "%s:\n", mvars->chan->name );
 	  syncml:
 		mvars->done = mvars->cben = 0;
-	  syncmlx:
 		if (mvars->boxlist) {
-			if ((mbox = mvars->cboxes)) {
+			while ((mbox = mvars->cboxes)) {
 				mvars->cboxes = mbox->next;
 				if (sync_listed_boxes( mvars, mbox ))
 					goto syncw;
-				goto syncmlx;
 			}
 			for (t = 0; t < 2; t++)
-				if ((mbox = mvars->boxes[t])) {
+				while ((mbox = mvars->boxes[t])) {
 					mvars->boxes[t] = mbox->next;
 					if ((mvars->chan->ops[1-t] & OP_MASK_TYPE) && (mvars->chan->ops[1-t] & OP_CREATE)) {
 						if (sync_listed_boxes( mvars, mbox ))
 							goto syncw;
-						goto syncmlx;
+					} else {
+						free( mbox );
 					}
-					free( mbox );
-					goto syncmlx;
 				}
 		} else {
 			if (!mvars->list) {
