@@ -122,7 +122,7 @@ maildir_join_path( const char *prefix, const char *box )
 }
 
 static void
-maildir_open_store( store_conf_t *conf,
+maildir_open_store( store_conf_t *conf, const char *label ATTR_UNUSED,
                     void (*cb)( store_t *ctx, void *aux ), void *aux )
 {
 	maildir_store_t *ctx;

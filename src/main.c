@@ -519,6 +519,7 @@ sync_chans( main_vars_t *mvars, int ent )
 	channel_conf_t *chan;
 	string_list_t *mbox, *sbox, **mboxp, **sboxp;
 	char *channame, *boxp, *nboxp;
+	const char *labels[2];
 	int t;
 
 	if (!mvars->cben)
@@ -585,10 +586,14 @@ sync_chans( main_vars_t *mvars, int ent )
 		mvars->state[M] = mvars->state[S] = ST_FRESH;
 		info( "Channel %s\n", mvars->chan->name );
 		mvars->skip = mvars->cben = 0;
+		if (mvars->chan->stores[M]->driver->flags & mvars->chan->stores[S]->driver->flags & DRV_VERBOSE)
+			labels[M] = "M: ", labels[S] = "S: ";
+		else
+			labels[M] = labels[S] = "";
 		for (t = 0; t < 2; t++) {
 			info( "Opening %s %s...\n", str_ms[t], mvars->chan->stores[t]->name );
 			mvars->drv[t] = mvars->chan->stores[t]->driver;
-			mvars->drv[t]->open_store( mvars->chan->stores[t], store_opened, AUX );
+			mvars->drv[t]->open_store( mvars->chan->stores[t], labels[t], store_opened, AUX );
 			if (mvars->skip)
 				break;
 		}

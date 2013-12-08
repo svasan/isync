@@ -268,6 +268,10 @@ typedef struct {
    and as CRLF is the canonical format, we convert.
 */
 #define DRV_CRLF        1
+/*
+   This flag says that the driver will act upon (DFlags & VERBOSE).
+*/
+#define DRV_VERBOSE     2
 
 #define LIST_PATH       1
 #define LIST_INBOX      2
@@ -283,7 +287,7 @@ struct driver {
 
 	/* Open a store with the given configuration. This may recycle existing
 	 * server connections. Upon failure, a null store is passed to the callback. */
-	void (*open_store)( store_conf_t *conf,
+	void (*open_store)( store_conf_t *conf, const char *label,
 	                    void (*cb)( store_t *ctx, void *aux ), void *aux );
 
 	/* Mark the store as available for recycling. Server connection may be kept alive. */

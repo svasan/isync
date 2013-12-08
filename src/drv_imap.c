@@ -83,6 +83,7 @@ struct imap_cmd;
 
 typedef struct imap_store {
 	store_t gen;
+	const char *label; /* foreign */
 	const char *prefix;
 	int ref_count;
 	/* trash folder's existence is not confirmed yet */
@@ -254,9 +255,9 @@ send_imap_cmd( imap_store_t *ctx, struct imap_cmd *cmd )
 		if (ctx->num_in_progress)
 			printf( "(%d in progress) ", ctx->num_in_progress );
 		if (memcmp( cmd->cmd, "LOGIN", 5 ))
-			printf( ">>> %s", buf );
+			printf( "%s>>> %s", ctx->label, buf );
 		else
-			printf( ">>> %d LOGIN <user> <pass>\n", cmd->tag );
+			printf( "%s>>> %d LOGIN <user> <pass>\n", ctx->label, cmd->tag );
 		fflush( stdout );
 	}
 	if (socket_write( &ctx->conn, buf, bufl, KeepOwn ) < 0)
@@ -692,9 +693,9 @@ parse_imap_list( imap_store_t *ctx, char **sp, parse_list_state_t *sts )
 				goto postpone;
 
 			if (DFlags & XVERBOSE) {
-				puts( "=========" );
+				printf( "%s=========\n", ctx->label );
 				fwrite( cur->val, cur->len, 1, stdout );
-				puts( "=========" );
+				printf( "%s=========\n", ctx->label );
 				fflush( stdout );
 			}
 
@@ -702,7 +703,7 @@ parse_imap_list( imap_store_t *ctx, char **sp, parse_list_state_t *sts )
 			if (!(s = socket_read_line( &ctx->conn )))
 				goto postpone;
 			if (DFlags & VERBOSE) {
-				puts( s );
+				printf( "%s%s\n", ctx->label, s );
 				fflush( stdout );
 			}
 		} else if (*s == '"') {
@@ -1167,7 +1168,7 @@ imap_socket_read( void *aux )
 		if (!(cmd = socket_read_line( &ctx->conn )))
 			return;
 		if (DFlags & VERBOSE) {
-			puts( cmd );
+			printf( "%s%s\n", ctx->label, cmd );
 			fflush( stdout );
 		}
 
@@ -1425,7 +1426,7 @@ do_cram_auth( imap_store_t *ctx, struct imap_cmd *cmdp, const char *prompt )
 	cram( prompt, srvc->user, srvc->pass, &resp, &l );
 
 	if (DFlags & VERBOSE) {
-		printf( ">+> %s\n", resp );
+		printf( "%s>+> %s\n", ctx->label, resp );
 		fflush( stdout );
 	}
 	if (socket_write( &ctx->conn, resp, l, GiveOwn ) < 0)
@@ -1457,7 +1458,7 @@ static void imap_open_store_ssl_bail( imap_store_t * );
 static void imap_open_store_bail( imap_store_t * );
 
 static void
-imap_open_store( store_conf_t *conf,
+imap_open_store( store_conf_t *conf, const char *label,
                  void (*cb)( store_t *srv, void *aux ), void *aux )
 {
 	imap_store_conf_t *cfg = (imap_store_conf_t *)conf;
@@ -1468,12 +1469,14 @@ imap_open_store( store_conf_t *conf,
 	for (ctxp = &unowned; (ctx = (imap_store_t *)*ctxp); ctxp = &ctx->gen.next)
 		if (ctx->gen.conf == conf) {
 			*ctxp = ctx->gen.next;
+			ctx->label = label;
 			cb( &ctx->gen, aux );
 			return;
 		}
 	for (ctxp = &unowned; (ctx = (imap_store_t *)*ctxp); ctxp = &ctx->gen.next)
 		if (((imap_store_conf_t *)ctx->gen.conf)->server == srvc) {
 			*ctxp = ctx->gen.next;
+			ctx->label = label;
 			/* One could ping the server here, but given that the idle timeout
 			 * is at least 30 minutes, this sounds pretty pointless. */
 			free_string_list( ctx->gen.boxes );
@@ -1491,6 +1494,7 @@ imap_open_store( store_conf_t *conf,
 
 	ctx = nfcalloc( sizeof(*ctx) );
 	ctx->gen.conf = conf;
+	ctx->label = label;
 	ctx->ref_count = 1;
 	ctx->callbacks.imap_open = cb;
 	ctx->callback_aux = aux;
@@ -2355,7 +2359,7 @@ imap_parse_store( conffile_t *cfg, store_conf_t **storep )
 }
 
 struct driver imap_driver = {
-	DRV_CRLF,
+	DRV_CRLF | DRV_VERBOSE,
 	imap_parse_store,
 	imap_cleanup,
 	imap_open_store,
