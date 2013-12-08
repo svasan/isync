@@ -5,10 +5,10 @@ Makefile
 Makefile.in
 autom4te.cache
 aclocal.m4
+autodefs.h
+autodefs.h.in
 build-stamp
 compile
-config.h
-config.h.in
 config.cache
 config.guess
 config.log

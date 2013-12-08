@@ -21,17 +21,7 @@
  * despite that library's more restrictive license.
  */
 
-/* This must come before isync.h to avoid our #define S messing up
- * blowfish.h on MacOS X. */
-#include <config.h>
-#ifdef HAVE_LIBSSL
-# include <openssl/ssl.h>
-# include <openssl/err.h>
-# include <openssl/hmac.h>
-# include <openssl/x509v3.h>
-#endif
-
-#include "isync.h"
+#include "socket.h"
 
 #include <assert.h>
 #include <unistd.h>
@@ -46,6 +36,12 @@
 #include <netinet/tcp.h>
 #include <arpa/inet.h>
 #include <netdb.h>
+#ifdef HAVE_LIBSSL
+# include <openssl/ssl.h>
+# include <openssl/err.h>
+# include <openssl/hmac.h>
+# include <openssl/x509v3.h>
+#endif
 
 enum {
 	SCK_CONNECTING,

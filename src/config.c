@@ -20,7 +20,9 @@
  * despite that library's more restrictive license.
  */
 
-#include "isync.h"
+#include "config.h"
+
+#include "sync.h"
 
 #include <assert.h>
 #include <unistd.h>
@@ -32,13 +34,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-driver_t *drivers[N_DRIVERS] = { &maildir_driver, &imap_driver };
-
-channel_conf_t global_conf;
 store_conf_t *stores;
-channel_conf_t *channels;
-group_conf_t *groups;
-int UseFSync = 1;
 
 #define ARG_OPTIONAL 0
 #define ARG_REQUIRED 1
@@ -490,32 +486,4 @@ load_config( const char *where, int pseudo )
 	if (!cfile.err && pseudo)
 		unlink( where );
 	return cfile.err;
-}
-
-void
-parse_generic_store( store_conf_t *store, conffile_t *cfg )
-{
-	if (!strcasecmp( "Trash", cfg->cmd ))
-		store->trash = nfstrdup( cfg->val );
-	else if (!strcasecmp( "TrashRemoteNew", cfg->cmd ))
-		store->trash_remote_new = parse_bool( cfg );
-	else if (!strcasecmp( "TrashNewOnly", cfg->cmd ))
-		store->trash_only_new = parse_bool( cfg );
-	else if (!strcasecmp( "MaxSize", cfg->cmd ))
-		store->max_size = parse_size( cfg );
-	else if (!strcasecmp( "MapInbox", cfg->cmd ))
-		store->map_inbox = nfstrdup( cfg->val );
-	else if (!strcasecmp( "Flatten", cfg->cmd )) {
-		const char *p;
-		for (p = cfg->val; *p; p++)
-			if (*p == '/') {
-				error( "%s:%d: flattened hierarchy delimiter cannot contain the canonical delimiter '/'\n", cfg->file, cfg->line );
-				cfg->err = 1;
-				return;
-			}
-		store->flat_delim = nfstrdup( cfg->val );
-	} else {
-		error( "%s:%d: unknown keyword '%s'\n", cfg->file, cfg->line, cfg->cmd );
-		cfg->err = 1;
-	}
 }

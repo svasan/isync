@@ -21,7 +21,7 @@
  * despite that library's more restrictive license.
  */
 
-#include "isync.h"
+#include "driver.h"
 
 #include <assert.h>
 #include <limits.h>

@@ -20,7 +20,7 @@
  * despite that library's more restrictive license.
  */
 
-#include "isync.h"
+#include "common.h"
 
 #include <assert.h>
 #include <stdlib.h>
@@ -29,7 +29,6 @@
 #include <string.h>
 #include <pwd.h>
 
-int DFlags;
 static int need_nl;
 
 void
@@ -171,17 +170,6 @@ free_string_list( string_list_t *list )
 	for (; list; list = tlist) {
 		tlist = list->next;
 		free( list );
-	}
-}
-
-void
-free_generic_messages( message_t *msgs )
-{
-	message_t *tmsg;
-
-	for (; msgs; msgs = tmsg) {
-		tmsg = msgs->next;
-		free( msgs );
 	}
 }
 

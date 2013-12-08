@@ -21,7 +21,9 @@
  * despite that library's more restrictive license.
  */
 
-#include "isync.h"
+#include "driver.h"
+
+#include "socket.h"
 
 #include <assert.h>
 #include <unistd.h>

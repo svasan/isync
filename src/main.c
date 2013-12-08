@@ -20,7 +20,7 @@
  * despite that library's more restrictive license.
  */
 
-#include "isync.h"
+#include "sync.h"
 
 #include <stdlib.h>
 #include <stddef.h>
@@ -30,6 +30,9 @@
 #include <signal.h>
 #include <time.h>
 #include <sys/wait.h>
+
+int DFlags;
+int UseFSync = 1;
 
 int Pid;		/* for maildir and imap */
 char Hostname[256];	/* for maildir */

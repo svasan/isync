@@ -1,5 +1,5 @@
 AC_INIT([isync], [1.1.0])
-AC_CONFIG_HEADERS([config.h])
+AC_CONFIG_HEADERS([autodefs.h])
 AM_INIT_AUTOMAKE
 
 AM_MAINTAINER_MODE

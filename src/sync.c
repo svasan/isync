@@ -20,7 +20,7 @@
  * despite that library's more restrictive license.
  */
 
-#include "isync.h"
+#include "sync.h"
 
 #include <assert.h>
 #include <stdio.h>
@@ -38,6 +38,10 @@
 #ifndef _POSIX_SYNCHRONIZED_IO
 # define fdatasync fsync
 #endif
+
+channel_conf_t global_conf;
+channel_conf_t *channels;
+group_conf_t *groups;
 
 const char *str_ms[] = { "master", "slave" }, *str_hl[] = { "push", "pull" };
 

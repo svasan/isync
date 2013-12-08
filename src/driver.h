@@ -20,121 +20,10 @@
  * despite that library's more restrictive license.
  */
 
-#include <config.h>
+#ifndef DRIVER_H
+#define DRIVER_H
 
-#include <sys/types.h>
-#include <stdarg.h>
-#include <stdio.h>
-
-#define as(ar) (sizeof(ar)/sizeof(ar[0]))
-
-#define __stringify(x) #x
-#define stringify(x) __stringify(x)
-
-#if __GNUC__ > 2 || (__GNUC__ == 2 && __GNUC_MINOR__ > 4)
-# define ATTR_UNUSED __attribute__((unused))
-# define ATTR_NORETURN __attribute__((noreturn))
-# define ATTR_PRINTFLIKE(fmt,var) __attribute__((format(printf,fmt,var)))
-#else
-# define ATTR_UNUSED
-# define ATTR_NORETURN
-# define ATTR_PRINTFLIKE(fmt,var)
-#endif
-
-#ifdef __GNUC__
-# define INLINE __inline__
-#else
-# define INLINE
-#endif
-
-#define EXE "mbsync"
-
-typedef struct ssl_st SSL;
-typedef struct ssl_ctx_st SSL_CTX;
-typedef struct x509_store_st X509_STORE;
-
-typedef struct server_conf {
-	char *tunnel;
-	char *host;
-	int port;
-#ifdef HAVE_LIBSSL
-	char *cert_file;
-	char use_imaps;
-	char use_sslv2, use_sslv3, use_tlsv1, use_tlsv11, use_tlsv12;
-
-	/* these are actually variables and are leaked at the end */
-	char ssl_ctx_valid;
-	unsigned num_trusted;
-	SSL_CTX *SSLContext;
-#endif
-} server_conf_t;
-
-typedef struct buff_chunk {
-	struct buff_chunk *next;
-	char *data;
-	int len;
-	char buf[1];
-} buff_chunk_t;
-
-typedef struct {
-	/* connection */
-	int fd;
-	int state;
-	const server_conf_t *conf; /* needed during connect */
-#ifdef HAVE_IPV6
-	struct addrinfo *addrs, *curr_addr; /* needed during connect */
-#else
-	char **curr_addr; /* needed during connect */
-#endif
-	char *name;
-#ifdef HAVE_LIBSSL
-	SSL *ssl;
-	int force_trusted;
-#endif
-
-	void (*bad_callback)( void *aux ); /* async fail while sending or listening */
-	void (*read_callback)( void *aux ); /* data available for reading */
-	int (*write_callback)( void *aux ); /* all *queued* data was sent */
-	union {
-		void (*connect)( int ok, void *aux );
-		void (*starttls)( int ok, void *aux );
-	} callbacks;
-	void *callback_aux;
-
-	/* writing */
-	buff_chunk_t *write_buf, **write_buf_append; /* buffer head & tail */
-	int write_offset; /* offset into buffer head */
-
-	/* reading */
-	int offset; /* start of filled bytes in buffer */
-	int bytes; /* number of filled bytes in buffer */
-	int scanoff; /* offset to continue scanning for newline at, relative to 'offset' */
-	char buf[100000];
-} conn_t;
-
-typedef struct {
-	const char *file;
-	FILE *fp;
-	char *buf;
-	int bufl;
-	int line;
-	int err;
-	char *cmd, *val, *rest;
-} conffile_t;
-
-#define OP_NEW             (1<<0)
-#define OP_RENEW           (1<<1)
-#define OP_DELETE          (1<<2)
-#define OP_FLAGS           (1<<3)
-#define  OP_MASK_TYPE      (OP_NEW|OP_RENEW|OP_DELETE|OP_FLAGS) /* asserted in the target ops */
-#define OP_EXPUNGE         (1<<4)
-#define OP_CREATE          (1<<5)
-#define XOP_PUSH           (1<<6)
-#define XOP_PULL           (1<<7)
-#define  XOP_MASK_DIR      (XOP_PUSH|XOP_PULL)
-#define XOP_HAVE_TYPE      (1<<8)
-#define XOP_HAVE_EXPUNGE   (1<<9)
-#define XOP_HAVE_CREATE    (1<<10)
+#include "config.h"
 
 typedef struct driver driver_t;
 
@@ -149,33 +38,6 @@ typedef struct store_conf {
 	unsigned max_size; /* off_t is overkill */
 	char trash_remote_new, trash_only_new;
 } store_conf_t;
-
-typedef struct string_list {
-	struct string_list *next;
-	char string[1];
-} string_list_t;
-
-#define M 0 /* master */
-#define S 1 /* slave */
-
-typedef struct channel_conf {
-	struct channel_conf *next;
-	const char *name;
-	store_conf_t *stores[2];
-	const char *boxes[2];
-	char *sync_state;
-	string_list_t *patterns;
-	int ops[2];
-	unsigned max_messages; /* for slave only */
-	signed char expire_unread;
-	char use_internal_date;
-} channel_conf_t;
-
-typedef struct group_conf {
-	struct group_conf *next;
-	const char *name;
-	string_list_t *channels;
-} group_conf_t;
 
 /* For message->flags */
 /* Keep the mailbox driver flag definitions in sync! */
@@ -362,143 +224,12 @@ struct driver {
 	void (*commit)( store_t *ctx );
 };
 
-
-/* main.c */
-
-extern int Pid;
-extern char Hostname[256];
-extern const char *Home;
-
-
-/* socket.c */
-
-/* call this before doing anything with the socket */
-static INLINE void socket_init( conn_t *conn,
-                                const server_conf_t *conf,
-                                void (*bad_callback)( void *aux ),
-                                void (*read_callback)( void *aux ),
-                                int (*write_callback)( void *aux ),
-                                void *aux )
-{
-	conn->conf = conf;
-	conn->bad_callback = bad_callback;
-	conn->read_callback = read_callback;
-	conn->write_callback = write_callback;
-	conn->callback_aux = aux;
-	conn->fd = -1;
-	conn->name = 0;
-	conn->write_buf_append = &conn->write_buf;
-}
-void socket_connect( conn_t *conn, void (*cb)( int ok, void *aux ) );
-void socket_start_tls(conn_t *conn, void (*cb)( int ok, void *aux ) );
-void socket_close( conn_t *sock );
-int socket_read( conn_t *sock, char *buf, int len ); /* never waits */
-char *socket_read_line( conn_t *sock ); /* don't free return value; never waits */
-typedef enum { KeepOwn = 0, GiveOwn } ownership_t;
-int socket_write( conn_t *sock, char *buf, int len, ownership_t takeOwn );
-
-void cram( const char *challenge, const char *user, const char *pass,
-           char **_final, int *_finallen );
-
-
-/* util.c */
-
-#define DEBUG        1
-#define VERBOSE      2
-#define XVERBOSE     4
-#define QUIET        8
-#define VERYQUIET    16
-#define KEEPJOURNAL  32
-#define ZERODELAY    64
-#define CRASHDEBUG   128
-
-extern int DFlags;
-
-void ATTR_PRINTFLIKE(1, 2) debug( const char *, ... );
-void ATTR_PRINTFLIKE(1, 2) debugn( const char *, ... );
-void ATTR_PRINTFLIKE(1, 2) info( const char *, ... );
-void ATTR_PRINTFLIKE(1, 2) infon( const char *, ... );
-void ATTR_PRINTFLIKE(1, 2) warn( const char *, ... );
-void ATTR_PRINTFLIKE(1, 2) error( const char *, ... );
-void ATTR_PRINTFLIKE(1, 2) sys_error( const char *, ... );
-void flushn( void );
-
-void add_string_list_n( string_list_t **list, const char *str, int len );
-void add_string_list( string_list_t **list, const char *str );
-void free_string_list( string_list_t *list );
-
 void free_generic_messages( message_t * );
 
-#ifndef HAVE_MEMRCHR
-void *memrchr( const void *s, int c, size_t n );
-#endif
-
-void *nfmalloc( size_t sz );
-void *nfcalloc( size_t sz );
-void *nfrealloc( void *mem, size_t sz );
-char *nfstrdup( const char *str );
-int nfvasprintf( char **str, const char *fmt, va_list va );
-int ATTR_PRINTFLIKE(2, 3) nfasprintf( char **str, const char *fmt, ... );
-int ATTR_PRINTFLIKE(3, 4) nfsnprintf( char *buf, int blen, const char *fmt, ... );
-void ATTR_NORETURN oob( void );
-
-char *expand_strdup( const char *s );
-
-int map_name(const char *arg, char **result, int reserve, const char *in, const char *out );
-
-void sort_ints( int *arr, int len );
-
-void arc4_init( void );
-unsigned char arc4_getbyte( void );
-
-int bucketsForSize( int size );
-
-#ifdef HAVE_SYS_POLL_H
-# include <sys/poll.h>
-#else
-# define POLLIN 1
-# define POLLOUT 4
-# define POLLERR 8
-#endif
-
-void add_fd( int fd, void (*cb)( int events, void *aux ), void *aux );
-void conf_fd( int fd, int and_events, int or_events );
-void fake_fd( int fd, int events );
-void del_fd( int fd );
-void main_loop( void );
-
-/* sync.c */
-
-extern const char *str_ms[2], *str_hl[2];
-
-#define SYNC_OK       0 /* assumed to be 0 */
-#define SYNC_FAIL     1
-#define SYNC_FAIL_ALL 2
-#define SYNC_BAD(ms)  (4<<(ms))
-#define SYNC_NOGOOD   16 /* internal */
-#define SYNC_CANCELED 32 /* internal */
-
-/* All passed pointers must stay alive until cb is called. */
-void sync_boxes( store_t *ctx[], const char *names[], channel_conf_t *chan,
-                 void (*cb)( int sts, void *aux ), void *aux );
-
-/* config.c */
+void parse_generic_store( store_conf_t *store, conffile_t *cfg );
 
 #define N_DRIVERS 2
 extern driver_t *drivers[N_DRIVERS];
-
-extern channel_conf_t global_conf;
-extern channel_conf_t *channels;
-extern group_conf_t *groups;
-extern int UseFSync;
-
-int parse_bool( conffile_t *cfile );
-int parse_int( conffile_t *cfile );
-int parse_size( conffile_t *cfile );
-int getcline( conffile_t *cfile );
-int merge_ops( int cops, int ops[] );
-int load_config( const char *filename, int pseudo );
-void parse_generic_store( store_conf_t *store, conffile_t *cfg );
-
-/* drv_*.c */
 extern driver_t maildir_driver, imap_driver;
+
+#endif
