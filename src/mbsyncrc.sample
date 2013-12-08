@@ -94,3 +94,9 @@ Slave :mirror:
 Patterns %
 
 Group partial o2o:inbox,sent-mail,foobar
+
+# INBOX => server, INBOX.foo => server.foo, etc.
+Channel inbox
+Master :server:INBOX
+Slave :mirror:server
+Patterns *

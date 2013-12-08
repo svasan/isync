@@ -144,13 +144,16 @@ matches( const char *t, const char *p )
 }
 
 static string_list_t *
-filter_boxes( string_list_t *boxes, string_list_t *patterns )
+filter_boxes( string_list_t *boxes, const char *prefix, string_list_t *patterns )
 {
 	string_list_t *nboxes = 0, *cpat;
 	const char *ps;
-	int not, fnot;
+	int not, fnot, pfxl;
 
+	pfxl = prefix ? strlen( prefix ) : 0;
 	for (; boxes; boxes = boxes->next) {
+		if (memcmp( boxes->string, prefix, pfxl ))
+			continue;
 		fnot = 1;
 		for (cpat = patterns; cpat; cpat = cpat->next) {
 			ps = cpat->string;
@@ -159,13 +162,13 @@ filter_boxes( string_list_t *boxes, string_list_t *patterns )
 				not = 1;
 			} else
 				not = 0;
-			if (matches( boxes->string, ps )) {
+			if (matches( boxes->string + pfxl, ps )) {
 				fnot = not;
 				break;
 			}
 		}
 		if (!fnot)
-			add_string_list( &nboxes, boxes->string );
+			add_string_list( &nboxes, boxes->string + pfxl );
 	}
 	return nboxes;
 }
@@ -195,7 +198,7 @@ typedef struct {
 	driver_t *drv[2];
 	store_t *ctx[2];
 	string_list_t *boxes[2], *cboxes, *chanptr;
-	const char *names[2];
+	char *names[2];
 	char **argv;
 	int oind, ret, multiple, all, list, ops[2], state[2];
 	char done, skip, cben, boxlist;
@@ -504,6 +507,7 @@ static void store_opened( store_t *ctx, void *aux );
 static void store_listed( int sts, void *aux );
 static int sync_listed_boxes( main_vars_t *mvars, string_list_t *mbox );
 static void done_sync_dyn( int sts, void *aux );
+static void done_sync_2_dyn( int sts, void *aux );
 static void done_sync( int sts, void *aux );
 
 #define nz(a,b) ((a)?(a):(b))
@@ -601,8 +605,8 @@ sync_chans( main_vars_t *mvars, int ent )
 
 		if (!mvars->boxlist && mvars->chan->patterns) {
 			mvars->boxlist = 1;
-			mvars->boxes[M] = filter_boxes( mvars->ctx[M]->boxes, mvars->chan->patterns );
-			mvars->boxes[S] = filter_boxes( mvars->ctx[S]->boxes, mvars->chan->patterns );
+			mvars->boxes[M] = filter_boxes( mvars->ctx[M]->boxes, mvars->chan->boxes[M], mvars->chan->patterns );
+			mvars->boxes[S] = filter_boxes( mvars->ctx[S]->boxes, mvars->chan->boxes[S], mvars->chan->patterns );
 			for (mboxp = &mvars->boxes[M]; (mbox = *mboxp); ) {
 				for (sboxp = &mvars->boxes[S]; (sbox = *sboxp); sboxp = &sbox->next)
 					if (!strcmp( sbox->string, mbox->string )) {
@@ -710,10 +714,12 @@ store_opened( store_t *ctx, void *aux )
 		for (flags = 0, cpat = mvars->chan->patterns; cpat; cpat = cpat->next) {
 			const char *pat = cpat->string;
 			if (*pat != '!') {
+				char buf[8];
+				snprintf( buf, sizeof(buf), "%s%s", mvars->chan->boxes[t], pat );
 				/* Partial matches like "INB*" or even "*" are not considered,
 				 * except implicity when the INBOX lives under Path. */
-				if (!memcmp( pat, "INBOX", 5 )) {
-					char c = pat[5];
+				if (!memcmp( buf, "INBOX", 5 )) {
+					char c = buf[5];
 					if (!c) {
 						/* User really wants the INBOX. */
 						flags |= LIST_INBOX;
@@ -782,12 +788,25 @@ store_listed( int sts, void *aux )
 static int
 sync_listed_boxes( main_vars_t *mvars, string_list_t *mbox )
 {
-	if (!mvars->list) {
-		mvars->names[M] = mvars->names[S] = mbox->string;
-		sync_boxes( mvars->ctx, (const char **)mvars->names, mvars->chan, done_sync_dyn, mvars );
-		return 1;
+	if (mvars->chan->boxes[M] || mvars->chan->boxes[S]) {
+		const char *mpfx = nz( mvars->chan->boxes[M], "" );
+		const char *spfx = nz( mvars->chan->boxes[S], "" );
+		if (!mvars->list) {
+			nfasprintf( &mvars->names[M], "%s%s", mpfx, mbox->string );
+			nfasprintf( &mvars->names[S], "%s%s", spfx, mbox->string );
+			free( mbox );
+			sync_boxes( mvars->ctx, (const char **)mvars->names, mvars->chan, done_sync_2_dyn, mvars );
+			return 1;
+		}
+		printf( "%s%s <=> %s%s\n", mpfx, mbox->string, spfx, mbox->string );
+	} else {
+		if (!mvars->list) {
+			mvars->names[M] = mvars->names[S] = mbox->string;
+			sync_boxes( mvars->ctx, (const char **)mvars->names, mvars->chan, done_sync_dyn, mvars );
+			return 1;
+		}
+		puts( mbox->string );
 	}
-	puts( mbox->string );
 	free( mbox );
 	return 0;
 }
@@ -798,6 +817,16 @@ done_sync_dyn( int sts, void *aux )
 	main_vars_t *mvars = (main_vars_t *)aux;
 
 	free( ((char *)mvars->names[S]) - offsetof(string_list_t, string) );
+	done_sync( sts, aux );
+}
+
+static void
+done_sync_2_dyn( int sts, void *aux )
+{
+	main_vars_t *mvars = (main_vars_t *)aux;
+
+	free( mvars->names[M] );
+	free( mvars->names[S] );
 	done_sync( sts, aux );
 }
 

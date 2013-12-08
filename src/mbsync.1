@@ -367,7 +367,9 @@ Define the Channel \fIname\fR, opening a section for its parameters.
 .TP
 {\fBMaster\fR|\fBSlave\fR} \fB:\fIstore\fB:\fR[\fImailbox\fR]
 Specify the Master resp. Slave Store to be connected by this Channel.
-If \fBPatterns\fR are specified, \fImailbox\fR is ignored.
+If \fBPatterns\fR are specified, \fImailbox\fR is interpreted as a
+prefix which is not matched against the patterns, and which is not
+affected by mailbox list overrides.
 Otherwise, if \fImailbox\fR is omitted, \fBINBOX\fR is assumed.
 ..
 .TP
