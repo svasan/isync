@@ -701,6 +701,10 @@ parse_imap_list( imap_store_t *ctx, char **sp, parse_list_state_t *sts )
 		  getline:
 			if (!(s = socket_read_line( &ctx->conn )))
 				goto postpone;
+			if (DFlags & VERBOSE) {
+				puts( s );
+				fflush( stdout );
+			}
 		} else if (*s == '"') {
 			/* quoted string */
 			s++;
@@ -1162,6 +1166,10 @@ imap_socket_read( void *aux )
 		}
 		if (!(cmd = socket_read_line( &ctx->conn )))
 			return;
+		if (DFlags & VERBOSE) {
+			puts( cmd );
+			fflush( stdout );
+		}
 
 		arg = next_arg( &cmd );
 		if (!arg) {

@@ -591,10 +591,6 @@ socket_read_line( conn_t *b )
 	if (p != s && p[-1] == '\r')
 		p--;
 	*p = 0;
-	if (DFlags & VERBOSE) {
-		puts( s );
-		fflush( stdout );
-	}
 	return s;
 }
 
