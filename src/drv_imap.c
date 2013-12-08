@@ -170,6 +170,7 @@ enum CAPABILITY {
 #endif
 	UIDPLUS,
 	LITERALPLUS,
+	MOVE,
 	NAMESPACE
 };
 
@@ -181,6 +182,7 @@ static const char *cap_list[] = {
 #endif
 	"UIDPLUS",
 	"LITERAL+",
+	"MOVE",
 	"NAMESPACE"
 };
 
@@ -2052,7 +2054,7 @@ imap_trash_msg( store_t *gctx, message_t *msg,
 		return;
 	}
 	imap_exec( ctx, &cmd->gen, imap_done_simple_msg,
-	           "UID COPY %d \"%\\s\"", msg->uid, buf );
+	           CAP(MOVE) ? "UID MOVE %d \"%\\s\"" : "UID COPY %d \"%\\s\"", msg->uid, buf );
 	free( buf );
 }
 
