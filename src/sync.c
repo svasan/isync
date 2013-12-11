@@ -204,6 +204,7 @@ static int check_cancel( sync_vars_t *svars );
 #define ST_CANCELED        (1<<9)
 #define ST_SELECTED        (1<<10)
 #define ST_DID_EXPUNGE     (1<<11)
+#define ST_CLOSING         (1<<12)
 
 
 static void
@@ -1594,7 +1595,12 @@ msgs_copied( sync_vars_t *svars, int t )
 	if (!(svars->state[t] & ST_SENT_NEW) || svars->new_done[t] < svars->new_total[t])
 		return;
 
+	sync_ref( svars );
+
 	Fprintf( svars->jfp, "%c %d\n", ")("[t], svars->maxuid[1-t] );
+	sync_close( svars, 1-t );
+	if (check_cancel( svars ))
+		goto out;
 
 	if (svars->state[t] & ST_FIND_NEW) {
 		debug( "finding just copied messages on %s\n", str_ms[t] );
@@ -1602,6 +1608,9 @@ msgs_copied( sync_vars_t *svars, int t )
 	} else {
 		msgs_new_done( svars, t );
 	}
+
+  out:
+	sync_deref( svars );
 }
 
 static void
@@ -1775,9 +1784,13 @@ static void box_closed_p2( sync_vars_t *svars, int t );
 static void
 sync_close( sync_vars_t *svars, int t )
 {
-	if ((~svars->state[t] & (ST_FOUND_NEW|ST_SENT_TRASH)) ||
-	    svars->trash_done[t] < svars->trash_total[t])
+	if ((~svars->state[t] & (ST_FOUND_NEW|ST_SENT_TRASH)) || svars->trash_done[t] < svars->trash_total[t] ||
+	    !(svars->state[1-t] & ST_SENT_NEW) || svars->new_done[1-t] < svars->new_total[1-t])
 		return;
+
+	if (svars->state[t] & ST_CLOSING)
+		return;
+	svars->state[t] |= ST_CLOSING;
 
 	if ((svars->chan->ops[t] & OP_EXPUNGE) /*&& !(svars->state[t] & ST_TRASH_BAD)*/) {
 		debug( "expunging %s\n", str_ms[t] );
