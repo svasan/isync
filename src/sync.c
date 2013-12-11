@@ -182,13 +182,12 @@ static int check_cancel( sync_vars_t *svars );
 	sync_vars_t *svars = (sync_vars_t *)(((char *)(&((int *)aux)[-t])) - offsetof(sync_vars_t, t))
 
 /* operation dependencies:
-   select(S): -
-   select(M): select(S) | -
-   new(M), new(S), flags(M): select(M) & select(S)
-   flags(S): count(new(S))
+   select(x): -
+   load(x): select(x)
+   new(M), new(S), flags(M), flags(S): load(M) & load(S)
    find_new(x): new(x)
    trash(x): flags(x)
-   close(x): trash(x) & find_new(x) // with expunge
+   close(x): trash(x) & find_new(x) & new(!x) // with expunge
    cleanup: close(M) & close(S)
 */
 
@@ -1820,8 +1819,6 @@ box_closed_p2( sync_vars_t *svars, int t )
 		return;
 
 	if (((svars->state[M] | svars->state[S]) & ST_DID_EXPUNGE) || svars->chan->max_messages) {
-		/* This cleanup is not strictly necessary, as the next full sync
-		   would throw out the dead entries anyway. But ... */
 		debug( "purging obsolete entries\n" );
 
 		minwuid = INT_MAX;
