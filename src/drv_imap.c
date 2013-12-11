@@ -2009,7 +2009,7 @@ imap_close( store_t *gctx,
 {
 	imap_store_t *ctx = (imap_store_t *)gctx;
 
-	if (CAP(UIDPLUS)) {
+	if (ctx->gen.conf->trash && CAP(UIDPLUS)) {
 		struct imap_cmd_refcounted_state *sts = imap_refcounted_new_state( cb, aux );
 		message_t *msg, *fmsg, *nmsg;
 		int bl;
