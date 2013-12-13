@@ -1018,7 +1018,7 @@ box_selected( int sts, void *aux )
 			/* First, find out the lower bound for the bulk fetch. */
 			minwuid = INT_MAX;
 			for (srec = svars->srecs; srec; srec = srec->next) {
-				if (srec->status & S_DEAD)
+				if ((srec->status & S_DEAD) || srec->uid[M] <= 0)
 					continue;
 				if (srec->status & S_EXPIRED) {
 					if (!srec->uid[S]) {
