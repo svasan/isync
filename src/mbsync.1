@@ -20,7 +20,7 @@
 \" As a special exception, mbsync may be linked with the OpenSSL library,
 \" despite that library's more restrictive license.
 ..
-.TH mbsync 1 "2013 Aug 3"
+.TH mbsync 1 "2013 Dec 14"
 ..
 .SH NAME
 mbsync - synchronize IMAP4 and Maildir mailboxes
@@ -167,7 +167,8 @@ under \fBPath\fR, including the "INBOX\fIdelim\fR" prefix.
 .TP
 \fBTrash\fR \fImailbox\fR
 Specifies a mailbox (relative to \fBPath\fR) to copy deleted messages to
-prior to expunging. See \fBINHERENT PROBLEMS\fR below.
+prior to expunging.
+See \fBRECOMMENDATIONS\fR and \fBINHERENT PROBLEMS\fR below.
 (Default: none)
 ..
 .TP
@@ -483,6 +484,7 @@ does not exist.
 .TP
 \fBExpunge\fR {\fINone\fR|\fIMaster\fR|\fISlave\fR|\fIBoth\fR}
 Permanently remove all messages [on the Master/Slave] marked for deletion.
+See \fBRECOMMENDATIONS\fR below.
 (Global default: \fINone\fR)
 ..
 .TP
@@ -548,6 +550,34 @@ Enabling it is a wise choice for file systems mounted with data=writeback,
 in particular modern systems like ext4, btrfs and xfs. The performance impact
 on older file systems may be disproportionate.
 (Default: \fIyes\fR)
+..
+.SH RECOMMENDATIONS
+Make sure your IMAP server does not auto-expunge deleted messages - it is
+slow, and semantically somewhat questionable. Specifically, Gmail needs to
+be configured not to do it.
+.P
+By default, \fBmbsync\fR will not delete any messages - deletions are
+propagated by marking the messages as deleted on the remote store.
+Once you have verified that your setup works, you will typically want to
+set \fBExpunge\fR to \fBBoth\fR, so that deletions become effective.
+.P
+\fBmbsync\fR's built-in trash functionality relies on \fBmbsync\fR doing
+the expunging of deleted messages. This is the case when it propagates
+deletions of previously propagated messages, and the trash is on the target
+store (typically your IMAP server).
+.br
+However, when you intend \fBmbsync\fR to trash messages which were not
+propagated yet, the MUA must mark the messages as deleted without expunging
+them (e.g., \fBMutt\fR's \fBmaildir_trash\fR option). Note that most
+messages are propagated a long time before they are deleted, so this is a
+corner case you probably do not want to optimize for. This also implies
+that the \fBTrashNewOnly\fR and \fBTrashRemoteNew\fR options are typically
+not very useful.
+.P
+If your server supports auto-trashing (as Gmail does), it is probably a
+good idea to rely on that instead of \fBmbsync\fR's trash functionality.
+If you do that, and intend to synchronize the trash like other mailboxes,
+you should not use \fBmbsync\fR's \fBTrash\fR option at all.
 ..
 .SH INHERENT PROBLEMS
 Changes done after \fBmbsync\fR has retrieved the message list will not be
