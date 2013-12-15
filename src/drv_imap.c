@@ -1094,7 +1094,7 @@ parse_list_rsp_p2( imap_store_t *ctx, list_t *list, char *cmd ATTR_UNUSED )
 			goto skip;
 		}
 	}
-	if (!memcmp( arg + strlen( arg ) - 5, ".lock", 5 )) /* workaround broken servers */
+	if ((l = strlen( arg )) >= 5 && !memcmp( arg + l - 5, ".lock", 5 )) /* workaround broken servers */
 		goto skip;
 	if (map_name( arg, (char **)&narg, offsetof(string_list_t, string), ctx->delimiter, "/") < 0) {
 		warn( "IMAP warning: ignoring mailbox %s (reserved character '/' in name)\n", arg );
