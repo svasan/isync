@@ -43,7 +43,7 @@
 # define LEGACY_FLOCK 1
 #endif
 
-#ifndef _POSIX_SYNCHRONIZED_IO
+#if !defined(_POSIX_SYNCHRONIZED_IO) || _POSIX_SYNCHRONIZED_IO <= 0
 # define fdatasync fsync
 #endif
 
