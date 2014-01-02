@@ -94,6 +94,11 @@ void free_string_list( string_list_t *list );
 void *memrchr( const void *s, int c, size_t n );
 #endif
 
+#ifndef HAVE_TIMEGM
+# include <time.h>
+time_t timegm( struct tm *tm );
+#endif
+
 void *nfmalloc( size_t sz );
 void *nfcalloc( size_t sz );
 void *nfrealloc( void *mem, size_t sz );
