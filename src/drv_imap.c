@@ -922,9 +922,10 @@ parse_fetch_rsp( imap_store_t *ctx, list_t *list, char *s ATTR_UNUSED )
 					if (!is_atom( tmp ) || strcmp( tmp->val, "]" ))
 						goto bfail;
 					tmp = tmp->next;
-					if (!is_atom( tmp ) || memcmp( tmp->val, "X-TUID: ", 8 ))
+					if (!is_atom( tmp ))
 						goto bfail;
-					tuid = tmp->val + 8;
+					if (!memcmp( tmp->val, "X-TUID: ", 8 ))
+						tuid = tmp->val + 8;
 				} else {
 				  bfail:
 					error( "IMAP error: unable to parse BODY[HEADER.FIELDS ...]\n" );
