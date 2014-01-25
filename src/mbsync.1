@@ -199,7 +199,7 @@ versions 0.8 and 0.9.x. The invariant parts of the file names of the messages
 are used as keys into a Berkeley database named .isyncuidmap.db, which holds
 the UID validity as well.
 .br
-The \fBnative\fR scheme is faster, more space efficient, endianess independent
+The \fBnative\fR scheme is faster, more space efficient, endianness independent
 and "human readable", but will be disrupted if a message is copied from another
 mailbox without getting a new file name; this would result in duplicated UIDs
 sooner or later, which in turn results in a UID validity change, making
@@ -439,7 +439,7 @@ Store are marked as deleted only, i.e., they won't be really deleted until
 that Store is expunged.
 .br
 \fBFlags\fR - propagate flag changes. Note that Deleted/Trashed is a flag as
-well; this is particularily interesting if you use \fBmutt\fR with the
+well; this is particularly interesting if you use \fBmutt\fR with the
 maildir_trash option.
 .br
 \fBAll\fR (\fB--full\fR on the command line) - all of the above.
