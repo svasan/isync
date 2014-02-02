@@ -349,7 +349,7 @@ socket_connect( conn_t *sock, void (*cb)( int ok, void *aux ) )
 		memset( &hints, 0, sizeof(hints) );
 		hints.ai_family = AF_UNSPEC;
 		hints.ai_socktype = SOCK_STREAM;
-		hints.ai_flags = AI_V4MAPPED | AI_ADDRCONFIG;
+		hints.ai_flags = AI_ADDRCONFIG;
 		infon( "Resolving %s... ", conf->host );
 		if ((gaierr = getaddrinfo( conf->host, NULL, &hints, &sock->addrs ))) {
 			error( "IMAP error: Cannot resolve server '%s': %s\n", conf->host, gai_strerror( gaierr ) );
