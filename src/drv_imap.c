@@ -1818,6 +1818,7 @@ imap_select( store_t *gctx, int create,
 
 	free_generic_messages( gctx->msgs );
 	gctx->msgs = 0;
+	ctx->msgapp = &gctx->msgs;
 
 	if (prepare_box( &buf, ctx ) < 0) {
 		cb( DRV_BOX_BAD, aux );
@@ -1852,7 +1853,6 @@ imap_load( store_t *gctx, int minuid, int maxuid, int newuid, int *excs, int nex
 	} else {
 		struct imap_cmd_refcounted_state *sts = imap_refcounted_new_state( cb, aux );
 
-		ctx->msgapp = &ctx->gen.msgs;
 		sort_ints( excs, nexcs );
 		for (i = 0; i < nexcs; ) {
 			for (bl = 0; i < nexcs && bl < 960; i++) {
