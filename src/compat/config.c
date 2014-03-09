@@ -344,9 +344,9 @@ write_channel_parm( FILE *fp, config_t *cfg )
 		fprintf( fp, "MaxSize %d\n", cfg->max_size );
 	if (cfg->max_messages)
 		fprintf( fp, "MaxMessages %d\n", cfg->max_messages );
-	if (!cfg->delete && !delete)
-		fputs( "Sync New ReNew Flags\n", fp );
-	if (cfg->expunge || expunge)
+	if (cfg->delete && !global.delete && !delete)
+		fputs( "Sync All\n", fp );
+	if (cfg->expunge && !global.expunge && !expunge)
 		fputs( "Expunge Both\n", fp );
 	fputc( '\n', fp );
 }
@@ -373,7 +373,12 @@ write_config( int fd )
 		return;
 	}
 
-	fprintf( fp, "SyncState *\n\n" );
+	fputs( "SyncState *\n", fp );
+	if (!global.delete && !delete)
+		fputs( "Sync New ReNew Flags\n", fp );
+	if (global.expunge || expunge)
+		fputs( "Expunge Both\n", fp );
+	fputc( '\n', fp );
 	if (local_home || o2o)
 		fprintf( fp, "MaildirStore local\nPath \"%s/\"\nInbox \"%s/INBOX\"\nAltMap %s\n\n",
 		         maildir, maildir, tb( altmap > 0 ) );
