@@ -174,7 +174,7 @@ main( int argc, char **argv )
 	global.user = getenv( "LOGNAME" );
 #endif
 	global.port = 143;
-	global.box = "INBOX";
+	global.box = ""; /* implicit INBOX in resulting Master/Slave entries */
 	global.use_namespace = 1;
 	global.require_ssl = 1;
 	global.use_tlsv1 = 1;
