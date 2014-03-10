@@ -56,6 +56,9 @@ typedef struct config {
 
 	const char *store_name;
 	int stores;
+	const char *local_store_name;
+	const char *local_store_path;
+	int local_stores;
 	char *copy_deleted_to;
 	unsigned int use_namespace:1;
 
@@ -99,3 +102,7 @@ int nfasprintf( char **str, const char *fmt, ... );
 int nfsnprintf( char *buf, int blen, const char *fmt, ... );
 void sys_error( const char *, ... );
 void ATTR_NORETURN oob( void );
+
+#ifndef HAVE_MEMRCHR
+void *memrchr( const void *s, int c, size_t n );
+#endif

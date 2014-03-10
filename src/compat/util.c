@@ -87,6 +87,19 @@ vasprintf( char **strp, const char *fmt, va_list ap )
 }
 #endif
 
+#ifndef HAVE_MEMRCHR
+void *
+memrchr( const void *s, int c, size_t n )
+{
+	u_char *b = (u_char *)s, *e = b + n;
+
+	while (--e >= b)
+		if (*e == c)
+			return (void *)e;
+	return 0;
+}
+#endif
+
 void
 oob( void )
 {

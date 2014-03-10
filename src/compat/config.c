@@ -29,8 +29,6 @@
 #include <stdio.h>
 #include <ctype.h>
 
-static int local_home, local_root;
-
 static char *
 my_strndup( const char *s, size_t nchars )
 {
@@ -121,16 +119,6 @@ load_config( const char *path, config_t ***stor )
 			cfg = **stor = nfmalloc( sizeof(config_t) );
 			*stor = &cfg->next;
 			memcpy( cfg, &global, sizeof(config_t) );
-			if (val[0] == '~' && val[1] == '/') {
-				val += 2;
-				local_home = 1;
-			} else if (!memcmp( val, Home, HomeLen ) && val[HomeLen] == '/') {
-				val += HomeLen + 1;
-				local_home = 1;
-			} else if (val[0] == '/')
-				local_root = 1;
-			else
-				local_home = 1;
 			/* not expanded at this point */
 			cfg->path = nfstrdup( val );
 		} else if (!strcasecmp( "OneToOne", cmd )) {
@@ -382,7 +370,9 @@ write_config( int fd )
 {
 	FILE *fp;
 	const char *cn, *scn;
+	char *path, *local_box, *local_store;
 	config_t *box, *sbox, *pbox;
+	int pl;
 
 	if (!(fp = fdopen( fd, "w" ))) {
 		perror( "fdopen" );
@@ -395,15 +385,17 @@ write_config( int fd )
 	if (global.expunge || expunge)
 		fputs( "Expunge Both\n", fp );
 	fputc( '\n', fp );
-	if (local_home || o2o)
-		fprintf( fp, "MaildirStore local\nPath \"%s/\"\nInbox \"%s/INBOX\"\nAltMap %s\n\n",
-		         maildir, maildir, tb( altmap > 0 ) );
-	if (local_root)
-		fprintf( fp, "MaildirStore local_root\nPath /\nAltMap %s\n\n", tb( altmap > 0 ) );
 	if (o2o) {
 		write_imap_server( fp, &global );
 		write_imap_store( fp, &global );
-		fprintf( fp, "Channel o2o\nMaster :%s:\nSlave :local:\nPattern %%\n", global.store_name );
+		fprintf( fp, "MaildirStore local\nPath %s/\n", quotify( maildir ) );
+		if (!inbox) { /* just in case listing actually produces an INBOX ... */
+			nfasprintf( (char **)&inbox, "%s/INBOX", maildir );
+			fprintf( fp, "Inbox %s\n", quotify( inbox ) );
+		}
+		if (altmap > 0)
+			fputs( "AltMap yes\n", fp );
+		fprintf( fp, "\nChannel o2o\nMaster :%s:\nSlave :local:\nPattern %%\n", global.store_name );
 		write_channel_parm( fp, &global );
 	} else {
 		for (box = boxes; box; box = box->next) {
@@ -446,6 +438,55 @@ write_config( int fd )
 		  gotsrv:
 			write_imap_store( fp, box );
 		  gotall:
+
+			path = expand_strdup( box->path );
+			if (!memcmp( path, Home, HomeLen ) && path[HomeLen] == '/')
+				nfasprintf( &path, "~%s", path + HomeLen );
+			local_store = local_box = strrchr( path, '/' ) + 1;
+			pl = local_store - path;
+			/* try to re-use existing store */
+			for (pbox = boxes; pbox != box; pbox = pbox->next)
+				if (pbox->local_store_path && !memcmp( pbox->local_store_path, path, pl ) && !pbox->local_store_path[pl])
+					goto gotstor;
+			box->local_store_path = my_strndup( path, pl );
+			/* derive a suitable name */
+			if (!strcmp( box->local_store_path, "/var/mail/" ) || !strcmp( box->local_store_path, "/var/spool/mail/" )) {
+				local_store = nfstrdup( "spool" );
+			} else if (!strcmp( box->local_store_path, "~/" )) {
+				local_store = nfstrdup( "home" );
+			} else {
+				local_store = memrchr( box->local_store_path, '/', pl - 1 );
+				if (local_store) {
+					local_store = my_strndup( local_store + 1, pl - 2 - (local_store - box->local_store_path) );
+					for (pl = 0; local_store[pl]; pl++)
+						local_store[pl] = tolower( local_store[pl] );
+				} else {
+					local_store = nfstrdup( "local" );
+				}
+			}
+			/* avoid name clashes with imap stores */
+			for (pbox = boxes; pbox != box; pbox = pbox->next)
+				if (!strcmp( pbox->store_name, local_store )) {
+					nfasprintf( &local_store, "local_%s", local_store );
+					goto gotsdup;
+				}
+		  gotsdup:
+			/* avoid name clashes with other local stores */
+			for (pbox = boxes; pbox != box; pbox = pbox->next)
+				if (pbox->local_store_name && !strcmp( pbox->local_store_name, local_store )) {
+					nfasprintf( (char **)&box->local_store_name, "%s-%d", local_store, ++pbox->local_stores );
+					goto gotdup;
+				}
+			box->local_store_name = local_store;
+			box->local_stores = 1;
+		  gotdup:
+			fprintf( fp, "MaildirStore %s\nPath %s\n", box->local_store_name, quotify( box->local_store_path ) );
+			if (altmap > 0)
+				fputs( "AltMap yes\n", fp );
+			fputc( '\n', fp );
+			pbox = box;
+		  gotstor:
+
 			if (box->alias)
 				cn = box->alias;
 			else {
@@ -473,12 +514,9 @@ write_config( int fd )
 			box->channels = 1;
 			box->channel_name = cn;
 		  gotchan:
-			if (box->path[0] == '/')
-				fprintf( fp, "Channel %s\nMaster :%s:\"%s\"\nSlave :local_root:\"%s\"\n",
-				         box->channel_name, box->store_name, box->box, box->path + 1 );
-			else
-				fprintf( fp, "Channel %s\nMaster :%s:\"%s\"\nSlave :local:\"%s\"\n",
-				         box->channel_name, box->store_name, box->box, box->path );
+
+			fprintf( fp, "Channel %s\nMaster :%s:%s\nSlave :%s:%s\n",
+			             box->channel_name, box->store_name, quotify( box->box ), pbox->local_store_name, quotify( local_box ) );
 			write_channel_parm( fp, box );
 		}
 				
