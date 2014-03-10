@@ -27,6 +27,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <ctype.h>
 
 static int local_home, local_root;
 
@@ -234,6 +235,21 @@ tb( int on )
 	return on ? "yes" : "no";
 }
 
+static const char *
+quotify( const char *str )
+{
+	char *ostr;
+	int i;
+
+	for (i = 0; str[i]; i++) {
+		if (isspace( str[i] )) {
+			nfasprintf( &ostr, "\"%s\"", str );
+			return ostr;
+		}
+	}
+	return str;
+}
+
 static void
 write_imap_server( FILE *fp, config_t *cfg )
 {
@@ -304,16 +320,16 @@ write_imap_server( FILE *fp, config_t *cfg )
 		fprintf( fp, "Port %d\n", cfg->port );
 	}
 	if (cfg->user)
-		fprintf( fp, "User \"%s\"\n", cfg->user );
+		fprintf( fp, "User %s\n", quotify( cfg->user ) );
 	if (cfg->pass)
-		fprintf( fp, "Pass \"%s\"\n", cfg->pass );
+		fprintf( fp, "Pass %s\n", quotify( cfg->pass ) );
 	fprintf( fp, "RequireCRAM %s\nRequireSSL %s\n"
 	             "UseSSLv2 %s\nUseSSLv3 %s\nUseTLSv1 %s\n",
 	             tb(cfg->require_cram), tb(cfg->require_ssl),
 	             tb(cfg->use_sslv2), tb(cfg->use_sslv3), tb(cfg->use_tlsv1) );
 	if ((cfg->use_imaps || cfg->use_sslv2 || cfg->use_sslv3 || cfg->use_tlsv1) &&
 	    cfg->cert_file)
-		fprintf( fp, "CertificateFile %s\n", cfg->cert_file );
+		fprintf( fp, "CertificateFile %s\n", quotify( cfg->cert_file ) );
 	fputc( '\n', fp );
 }
 
@@ -327,13 +343,13 @@ write_imap_store( FILE *fp, config_t *cfg )
 	fprintf( fp, "IMAPStore %s\nAccount %s\n",
 	         cfg->store_name, cfg->server_name );
 	if (*folder)
-		fprintf( fp, "Path \"%s\"\n", folder );
+		fprintf( fp, "Path %s\n", quotify( folder ) );
 	else
 		fprintf( fp, "UseNamespace %s\n", tb(cfg->use_namespace) );
 	if (inbox)
-		fprintf( fp, "MapInbox \"%s\"\n", inbox );
+		fprintf( fp, "MapInbox %s\n", quotify( inbox ) );
 	if (cfg->copy_deleted_to)
-		fprintf( fp, "Trash \"%s\"\n", cfg->copy_deleted_to );
+		fprintf( fp, "Trash %s\n", quotify( cfg->copy_deleted_to ) );
 	fputc( '\n', fp );
 }
 
