@@ -422,8 +422,11 @@ load_config( const char *where, int pseudo )
 			} else if (merge_ops( cops, channel->ops ))
 				cfile.err = 1;
 			else {
-				if (max_size >= 0)
+				if (max_size >= 0) {
+					if (!max_size)
+						max_size = INT_MAX;
 					channel->stores[M]->max_size = channel->stores[S]->max_size = max_size;
+				}
 				*channelapp = channel;
 				channelapp = &channel->next;
 			}
