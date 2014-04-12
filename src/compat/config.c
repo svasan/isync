@@ -247,6 +247,8 @@ write_imap_server( FILE *fp, config_t *cfg )
 	char buf[128], ubuf[64];
 	static int tunnels;
 
+	/* The old server names determine the derived store names. They are kinda stupid,
+	 * but can't be changed, because store names are encoded in state file names. */
 	if (cfg->tunnel)
 		nfasprintf( (char **)&cfg->old_server_name, "tunnel%d", ++tunnels );
 	else {
@@ -266,7 +268,7 @@ write_imap_server( FILE *fp, config_t *cfg )
 		}
 		if (boxes) /* !o2o */
 			for (pbox = boxes; pbox != cfg; pbox = pbox->next)
-				if (!memcmp( pbox->server_name, buf, hl + 1 )) {
+				if (!memcmp( pbox->old_server_name, buf, hl + 1 )) {
 					nfasprintf( (char **)&cfg->old_server_name, "%s-%d", buf, ++pbox->old_servers );
 					goto gotsrv;
 				}
@@ -275,6 +277,8 @@ write_imap_server( FILE *fp, config_t *cfg )
 	  gotsrv: ;
 	}
 
+	/* The "new" server names determine the names of the accounts themselves.
+	 * They are optimized for descriptiveness, e.g. in password prompts. */
 	if (cfg->user)
 		nfsnprintf( ubuf, sizeof(ubuf), "%s@", cfg->user );
 	else
