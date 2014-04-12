@@ -307,7 +307,7 @@ main( int argc, char **argv )
 
 	if (!all && !o2o)
 		for (i = optind; argv[i]; i++)
-			if (!(box = find_box( argv[i] ))) {
+			if (!find_box( argv[i] )) {
 				box = nfmalloc( sizeof(config_t) );
 				memcpy( box, &global, sizeof(config_t) );
 				box->path = argv[i];
