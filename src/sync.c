@@ -1360,7 +1360,7 @@ box_loaded( int sts, void *aux )
 				continue;
 			if (!(srec = tmsg->srec) || srec->uid[M] <= 0) {
 				/* We did not push the message, so it must be kept. */
-				debug( "  old pair(%d,%d) unpropagated\n", srec->uid[M], srec->uid[S] );
+				debug( "  message %d unpropagated\n", tmsg->uid );
 				todel--;
 			} else {
 				nflags = (tmsg->flags | srec->aflags[S]) & ~srec->dflags[S];
