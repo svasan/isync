@@ -326,6 +326,7 @@ load_config( const char *where, int pseudo )
 	char buf[1024];
 
 	if (!where) {
+		assert( !pseudo );
 		nfsnprintf( path, sizeof(path), "%s/." EXE "rc", Home );
 		cfile.file = path;
 	} else
