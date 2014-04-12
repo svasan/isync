@@ -240,7 +240,10 @@ convert( config_t *box )
 			goto err4;
 		}
 		db->close( db, 0 );
-		rename( iumname, diumname );
+		if (rename( iumname, diumname )) {
+			sys_error( "Cannot rename %s to %s", iumname, diumname );
+			goto err4;
+		}
 	} else {
 		if (!(fp = fopen( uvname, "w" ))) {
 			sys_error( "Cannot create %s", uvname );
