@@ -1056,7 +1056,6 @@ maildir_rescan( maildir_store_t *ctx )
 
 	if (maildir_scan( ctx, &msglist ) != DRV_OK)
 		return DRV_BOX_BAD;
-	ctx->gen.recent = 0;
 	for (msgapp = &ctx->gen.msgs, i = 0;
 	     (msg = (maildir_message_t *)*msgapp) || i < msglist.nents; )
 	{
