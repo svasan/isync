@@ -49,7 +49,7 @@ void
 Fclose( FILE *f, int safe )
 {
 	if ((safe && (fflush( f ) || (UseFSync && fdatasync( fileno( f ) )))) || fclose( f ) == EOF) {
-		sys_error( "Error: cannot close file. Disk full?" );
+		sys_error( "Error: cannot close file" );
 		exit( 1 );
 	}
 }
@@ -64,7 +64,7 @@ Fprintf( FILE *f, const char *msg, ... )
 	r = vfprintf( f, msg, va );
 	va_end( va );
 	if (r < 0) {
-		sys_error( "Error: cannot write file. Disk full?" );
+		sys_error( "Error: cannot write file" );
 		exit( 1 );
 	}
 }
