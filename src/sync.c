@@ -1875,8 +1875,10 @@ box_closed_p2( sync_vars_t *svars, int t )
 	Fclose( svars->jfp, 0 );
 	if (!(DFlags & KEEPJOURNAL)) {
 		/* order is important! */
-		rename( svars->nname, svars->dname );
-		unlink( svars->jname );
+		if (rename( svars->nname, svars->dname ))
+			warn( "Warning: cannot commit sync state %s\n", svars->dname );
+		else if (unlink( svars->jname ))
+			warn( "Warning: cannot delete journal %s\n", svars->jname );
 	}
 
 	sync_bail( svars );
