@@ -1030,8 +1030,10 @@ maildir_load( store_t *gctx, int minuid, int maxuid, int newuid, int *excs, int 
 	ctx->excs = nfrealloc( excs, nexcs * sizeof(int) );
 	ctx->nexcs = nexcs;
 
-	if (ctx->fresh)
+	if (ctx->fresh) {
+		ctx->gen.count = ctx->gen.recent = 0;
 		goto dontscan;
+	}
 
 	if (maildir_scan( ctx, &msglist ) != DRV_OK) {
 		cb( DRV_BOX_BAD, aux );
