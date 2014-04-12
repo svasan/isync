@@ -496,7 +496,7 @@ maildir_uidval_lock( maildir_store_t *ctx )
 		return DRV_BOX_BAD;
 	}
 	lseek( ctx->uvfd, 0, SEEK_SET );
-	if ((n = read( ctx->uvfd, buf, sizeof(buf) )) <= 0 ||
+	if ((n = read( ctx->uvfd, buf, sizeof(buf) - 1 )) <= 0 ||
 	    (buf[n] = 0, sscanf( buf, "%d\n%d", &ctx->gen.uidvalidity, &ctx->nuid ) != 2)) {
 #if 1
 		/* In a generic driver, resetting the UID validity would be the right thing.

@@ -135,7 +135,7 @@ convert( const char *box, int altmap )
 	key.data = (void *)"UIDVALIDITY";
 	key.size = 11;
 	if (altmap) {
-		if ((n = read( sfd, buf, sizeof(buf) )) <= 0 ||
+		if ((n = read( sfd, buf, sizeof(buf) - 1 )) <= 0 ||
 		    (buf[n] = 0, sscanf( buf, "%d\n%d", &uv[0], &uv[1] ) != 2))
 		{
 			fprintf( stderr, "Error: cannot read UIDVALIDITY of '%s'.\n", box );
