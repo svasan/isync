@@ -289,9 +289,9 @@ main( int argc, char **argv )
 					if (!*opt)
 						cops |= op;
 					else if (!strcmp( opt, "-master" ))
-						mvars->ops[M] |= op, ochar++;
+						mvars->ops[M] |= op;
 					else if (!strcmp( opt, "-slave" ))
-						mvars->ops[S] |= op, ochar++;
+						mvars->ops[S] |= op;
 					else
 						goto badopt;
 					mvars->ops[M] |= op & (XOP_HAVE_CREATE|XOP_HAVE_EXPUNGE);
