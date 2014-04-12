@@ -787,7 +787,7 @@ box_selected( int sts, void *aux )
 		fclose( jfp );
 	} else {
 		if (errno != ENOENT) {
-			error( "Error: cannot read sync state %s\n", svars->dname );
+			sys_error( "Error: cannot read sync state %s", svars->dname );
 			goto bail;
 		}
 	}
@@ -932,7 +932,7 @@ box_selected( int sts, void *aux )
 		fclose( jfp );
 	} else {
 		if (errno != ENOENT) {
-			error( "Error: cannot read journal %s\n", svars->jname );
+			sys_error( "Error: cannot read journal %s", svars->jname );
 			goto bail;
 		}
 	}
@@ -948,11 +948,11 @@ box_selected( int sts, void *aux )
 		goto bail;
 
 	if (!(svars->nfp = fopen( svars->nname, "w" ))) {
-		error( "Error: cannot write new sync state %s\n", svars->nname );
+		sys_error( "Error: cannot create new sync state %s", svars->nname );
 		goto bail;
 	}
 	if (!(svars->jfp = fopen( svars->jname, "a" ))) {
-		error( "Error: cannot write journal %s\n", svars->jname );
+		sys_error( "Error: cannot create journal %s", svars->jname );
 		fclose( svars->nfp );
 		goto bail;
 	}
