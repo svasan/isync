@@ -219,8 +219,10 @@ maildir_list_recurse( store_t *gctx, int isBox, int *flags, const char *inbox,
 		const char *ent = de->d_name;
 		pl = pathLen + nfsnprintf( path + pathLen, _POSIX_PATH_MAX - pathLen, "%s", ent );
 		if (inbox && !memcmp( path, inbox, pl ) && !inbox[pl]) {
-			if (maildir_list_inbox( gctx, flags ) < 0)
+			if (maildir_list_inbox( gctx, flags ) < 0) {
+				closedir( dir );
 				return -1;
+			}
 		} else {
 			if (*ent == '.') {
 				if (!isBox)
@@ -238,8 +240,10 @@ maildir_list_recurse( store_t *gctx, int isBox, int *flags, const char *inbox,
 				}
 			}
 			nl = nameLen + nfsnprintf( name + nameLen, _POSIX_PATH_MAX - nameLen, "%s", ent );
-			if (maildir_list_recurse( gctx, 1, flags, inbox, path, pl, name, nl ) < 0)
+			if (maildir_list_recurse( gctx, 1, flags, inbox, path, pl, name, nl ) < 0) {
+				closedir( dir );
 				return -1;
+			}
 		}
 	}
 	closedir (dir);
@@ -677,6 +681,7 @@ maildir_scan( maildir_store_t *ctx, msglist_t *msglist )
 							ctx->db->err( ctx->db, ret, "Maildir error: db->get()" );
 						  mbork:
 							maildir_free_scan( msglist );
+							closedir( d );
 							goto bork;
 						}
 						uid = INT_MAX;
