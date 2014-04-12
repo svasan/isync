@@ -993,11 +993,13 @@ parse_response_code( imap_store_t *ctx, struct imap_cmd *cmd, char *s )
 		return RESP_OK;		/* no response code */
 	s++;
 	if (!(p = strchr( s, ']' ))) {
+	  bad_resp:
 		error( "IMAP error: malformed response code\n" );
 		return RESP_CANCEL;
 	}
 	*p++ = 0;
-	arg = next_arg( &s );
+	if (!(arg = next_arg( &s )))
+		goto bad_resp;
 	if (!strcmp( "UIDVALIDITY", arg )) {
 		if (!(arg = next_arg( &s )) ||
 		    (ctx->gen.uidvalidity = strtoll( arg, &earg, 10 ), *earg))
