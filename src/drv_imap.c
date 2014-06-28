@@ -687,7 +687,8 @@ parse_imap_list( imap_store_t *ctx, char **sp, parse_list_state_t *sts )
 			if (*s != '}' || *++s)
 				goto bail;
 
-			s = cur->val = nfmalloc( cur->len );
+			s = cur->val = nfmalloc( cur->len + 1 );
+			s[cur->len] = 0;
 
 		  getbytes:
 			bytes -= socket_read( &ctx->conn, s, bytes );
