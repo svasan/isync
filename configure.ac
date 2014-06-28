@@ -1,4 +1,4 @@
-AC_INIT([isync], [1.1.1])
+AC_INIT([isync], [1.1.2])
 AC_CONFIG_HEADERS([autodefs.h])
 AM_INIT_AUTOMAKE
 
