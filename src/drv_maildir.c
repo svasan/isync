@@ -787,6 +787,13 @@ maildir_scan( maildir_store_t *ctx, msglist_t *msglist )
 #endif
 				}
 				uid = entry->uid;
+				if (uid > ctx->nuid) {
+					/* In principle, we could just warn and top up nuid. However, getting into this
+					 * situation might indicate some serious trouble, so let's not make it worse. */
+					error( "Maildir error: UID %d is beyond highest assigned UID %d.\n", uid, ctx->nuid );
+					maildir_free_scan( msglist );
+					return DRV_BOX_BAD;
+				}
 				if ((ctx->gen.opts & OPEN_SIZE) || ((ctx->gen.opts & OPEN_FIND) && uid >= ctx->newuid))
 					nfsnprintf( buf + bl, sizeof(buf) - bl, "%s/%s", subdirs[entry->recent], entry->base );
 #ifdef USE_DB
