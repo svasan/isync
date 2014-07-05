@@ -2229,6 +2229,7 @@ imap_parse_store( conffile_t *cfg, store_conf_t **storep )
 {
 	imap_store_conf_t *store;
 	imap_server_conf_t *server, *srv, sserver;
+	const char *type, *name;
 	int acc_opt = 0;
 
 	if (!strcasecmp( "IMAPAccount", cfg->cmd )) {
@@ -2344,20 +2345,18 @@ imap_parse_store( conffile_t *cfg, store_conf_t **storep )
 		}
 		acc_opt = 1;
 	}
+	if (store)
+		type = "IMAP store", name = store->gen.name;
+	else
+		type = "IMAP account", name = server->name;
 	if (!store || !store->server) {
 		if (!server->sconf.tunnel && !server->sconf.host) {
-			if (store)
-				error( "IMAP store '%s' has incomplete/missing connection details\n", store->gen.name );
-			else
-				error( "IMAP account '%s' has incomplete/missing connection details\n", server->name );
+			error( "%s '%s' has incomplete/missing connection details\n", type, name );
 			cfg->err = 1;
 			return 1;
 		}
 		if (server->pass && server->pass_cmd) {
-			if (store)
-				error( "IMAP store '%s' has both Pass and PassCmd\n", store->gen.name );
-			else
-				error( "IMAP account '%s' has both Pass and PassCmd\n", server->name );
+			error( "%s '%s' has both Pass and PassCmd\n", type, name );
 			cfg->err = 1;
 			return 1;
 		}
@@ -2368,7 +2367,7 @@ imap_parse_store( conffile_t *cfg, store_conf_t **storep )
 			memcpy( store->server, &sserver, sizeof(sserver) );
 			store->server->name = store->gen.name;
 		} else if (acc_opt) {
-			error( "IMAP store '%s' has both Account and account-specific options\n", store->gen.name );
+			error( "%s '%s' has both Account and account-specific options\n", type, name );
 			cfg->err = 1;
 		}
 	}
