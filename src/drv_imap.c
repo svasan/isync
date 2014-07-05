@@ -1571,11 +1571,13 @@ imap_open_store_p2( imap_store_t *ctx, struct imap_cmd *cmd ATTR_UNUSED, int res
 static void
 imap_open_store_authenticate( imap_store_t *ctx )
 {
+#ifdef HAVE_LIBSSL
+	imap_store_conf_t *cfg = (imap_store_conf_t *)ctx->gen.conf;
+	imap_server_conf_t *srvc = cfg->server;
+#endif
+
 	if (ctx->greeting != GreetingPreauth) {
 #ifdef HAVE_LIBSSL
-		imap_store_conf_t *cfg = (imap_store_conf_t *)ctx->gen.conf;
-		imap_server_conf_t *srvc = cfg->server;
-
 		if (!srvc->sconf.use_imaps &&
 		    (srvc->sconf.use_sslv2 || srvc->sconf.use_sslv3 || srvc->sconf.use_tlsv1)) {
 			/* always try to select SSL support if available */
@@ -1595,6 +1597,13 @@ imap_open_store_authenticate( imap_store_t *ctx )
 #endif
 		imap_open_store_authenticate2( ctx );
 	} else {
+#ifdef HAVE_LIBSSL
+		if (!srvc->sconf.use_imaps && srvc->require_ssl) {
+			error( "IMAP error: SSL support not available\n" );
+			imap_open_store_bail( ctx );
+			return;
+		}
+#endif
 		imap_open_store_namespace( ctx );
 	}
 }

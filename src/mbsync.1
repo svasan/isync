@@ -267,6 +267,11 @@ Specify a command to run to establish a connection rather than opening a TCP
 socket.  This allows you to run an IMAP session over an SSH tunnel, for
 example.
 \fBHost\fR and \fBPort\fR are ignored when \fBTunnel\fR is set.
+.br
+If \fBUseIMAPS\fR is disabled and the tunnel opens a preauthenticated
+connection, \fBRequireSSL\fR also needs to be disabled.
+If the connection is not preauthenticated, but the tunnel is secure,
+disabling \fBRequireSSL\fR and \fBUseTLSv1\fR is recommended.
 ..
 .TP
 \fBRequireCRAM\fR \fIyes\fR|\fIno\fR
