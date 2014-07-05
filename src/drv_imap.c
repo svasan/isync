@@ -45,6 +45,7 @@ typedef struct imap_server_conf {
 	char *pass_cmd;
 	int max_in_progress;
 #ifdef HAVE_LIBSSL
+	char use_ssl;
 	char require_ssl;
 	char require_cram;
 #endif
@@ -1578,8 +1579,7 @@ imap_open_store_authenticate( imap_store_t *ctx )
 
 	if (ctx->greeting != GreetingPreauth) {
 #ifdef HAVE_LIBSSL
-		if (!srvc->sconf.use_imaps &&
-		    (srvc->sconf.use_sslv2 || srvc->sconf.use_sslv3 || srvc->sconf.use_tlsv1)) {
+		if (!srvc->sconf.use_imaps && srvc->use_ssl) {
 			/* always try to select SSL support if available */
 			if (CAP(STARTTLS)) {
 				imap_exec( ctx, 0, imap_open_store_authenticate_p2, "STARTTLS" );
@@ -2360,6 +2360,11 @@ imap_parse_store( conffile_t *cfg, store_conf_t **storep )
 			cfg->err = 1;
 			return 1;
 		}
+#ifdef HAVE_LIBSSL
+		server->use_ssl =
+		        server->sconf.use_sslv2 | server->sconf.use_sslv3 |
+		        server->sconf.use_tlsv1 | server->sconf.use_tlsv11 | server->sconf.use_tlsv12;
+#endif
 	}
 	if (store) {
 		if (!store->server) {
