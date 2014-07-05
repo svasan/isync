@@ -237,11 +237,16 @@ Define the IMAP4 Account \fIname\fR, opening a section for its parameters.
 .TP
 \fBHost\fR \fIhost\fR
 Specify the DNS name or IP address of the IMAP server.
+.br
+If \fBTunnel\fR is used, this setting is used only for SSL host certificate
+verification, if provided.
 ..
 .TP
 \fBPort\fR \fIport\fR
 Specify the TCP port number of the IMAP server.  (Default: 143 for IMAP,
 993 for IMAPS)
+.br
+If \fBTunnel\fR is used, this setting is ignored.
 ..
 .TP
 \fBUser\fR \fIusername\fR
@@ -266,7 +271,6 @@ optional.
 Specify a command to run to establish a connection rather than opening a TCP
 socket.  This allows you to run an IMAP session over an SSH tunnel, for
 example.
-\fBHost\fR and \fBPort\fR are ignored when \fBTunnel\fR is set.
 .br
 If \fBUseIMAPS\fR is disabled and the tunnel opens a preauthenticated
 connection, \fBRequireSSL\fR also needs to be disabled.
