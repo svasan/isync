@@ -17,6 +17,7 @@ config.sub
 configure
 configure.lineno
 configure-stamp
+cov-int
 depcomp
 install-sh
 isync.spec
