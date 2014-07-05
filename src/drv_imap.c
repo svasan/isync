@@ -2351,7 +2351,7 @@ imap_parse_store( conffile_t *cfg, store_conf_t **storep )
 		type = "IMAP account", name = server->name;
 	if (!store || !store->server) {
 		if (!server->sconf.tunnel && !server->sconf.host) {
-			error( "%s '%s' has incomplete/missing connection details\n", type, name );
+			error( "%s '%s' has neither Tunnel nor Host\n", type, name );
 			cfg->err = 1;
 			return 1;
 		}
