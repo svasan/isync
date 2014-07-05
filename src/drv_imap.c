@@ -2364,6 +2364,11 @@ imap_parse_store( conffile_t *cfg, store_conf_t **storep )
 		server->use_ssl =
 		        server->sconf.use_sslv2 | server->sconf.use_sslv3 |
 		        server->sconf.use_tlsv1 | server->sconf.use_tlsv11 | server->sconf.use_tlsv12;
+		if (server->require_ssl && !server->use_ssl) {
+			error( "%s '%s' requires SSL but no SSL versions enabled\n", type, name );
+			cfg->err = 1;
+			return 1;
+		}
 #endif
 	}
 	if (store) {
