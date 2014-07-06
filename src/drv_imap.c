@@ -46,6 +46,7 @@ typedef struct imap_server_conf {
 	int max_in_progress;
 #ifdef HAVE_LIBSSL
 	char use_ssl;
+	char use_imaps;
 	char require_ssl;
 	char require_cram;
 #endif
@@ -1531,7 +1532,7 @@ imap_open_store_connected( int ok, void *aux )
 	if (!ok)
 		imap_open_store_bail( ctx );
 #ifdef HAVE_LIBSSL
-	else if (srvc->sconf.use_imaps)
+	else if (srvc->use_imaps)
 		socket_start_tls( &ctx->conn, imap_open_store_tlsstarted1 );
 #endif
 }
@@ -1581,7 +1582,7 @@ imap_open_store_authenticate( imap_store_t *ctx )
 
 	if (ctx->greeting != GreetingPreauth) {
 #ifdef HAVE_LIBSSL
-		if (!srvc->sconf.use_imaps && srvc->use_ssl) {
+		if (!srvc->use_imaps && srvc->use_ssl) {
 			/* always try to select SSL support if available */
 			if (CAP(STARTTLS)) {
 				imap_exec( ctx, 0, imap_open_store_authenticate_p2, "STARTTLS" );
@@ -1600,7 +1601,7 @@ imap_open_store_authenticate( imap_store_t *ctx )
 		imap_open_store_authenticate2( ctx );
 	} else {
 #ifdef HAVE_LIBSSL
-		if (!srvc->sconf.use_imaps && srvc->require_ssl) {
+		if (!srvc->use_imaps && srvc->require_ssl) {
 			error( "IMAP error: SSL support not available\n" );
 			imap_open_store_bail( ctx );
 			return;
@@ -2272,7 +2273,7 @@ imap_parse_store( conffile_t *cfg, store_conf_t **storep )
 #ifdef HAVE_LIBSSL
 			if (starts_with( cfg->val, -1, "imaps:", 6 )) {
 				cfg->val += 6;
-				server->sconf.use_imaps = 1;
+				server->use_imaps = 1;
 				server->sconf.use_sslv2 = 1;
 				server->sconf.use_sslv3 = 1;
 			} else
@@ -2310,7 +2311,7 @@ imap_parse_store( conffile_t *cfg, store_conf_t **storep )
 		} else if (!strcasecmp( "RequireSSL", cfg->cmd ))
 			server->require_ssl = parse_bool( cfg );
 		else if (!strcasecmp( "UseIMAPS", cfg->cmd ))
-			server->sconf.use_imaps = parse_bool( cfg );
+			server->use_imaps = parse_bool( cfg );
 		else if (!strcasecmp( "UseSSLv2", cfg->cmd ))
 			server->sconf.use_sslv2 = parse_bool( cfg );
 		else if (!strcasecmp( "UseSSLv3", cfg->cmd ))
@@ -2377,6 +2378,12 @@ imap_parse_store( conffile_t *cfg, store_conf_t **storep )
 			return 1;
 		}
 #endif
+		if (!server->sconf.port)
+			server->sconf.port =
+#ifdef HAVE_LIBSSL
+				server->use_imaps ? 993 :
+#endif
+				143;
 	}
 	if (store) {
 		if (!store->server) {

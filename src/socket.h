@@ -34,7 +34,6 @@ typedef struct server_conf {
 	int port;
 #ifdef HAVE_LIBSSL
 	char *cert_file;
-	char use_imaps;
 	char use_sslv2, use_sslv3, use_tlsv1, use_tlsv11, use_tlsv12;
 
 	/* these are actually variables and are leaked at the end */

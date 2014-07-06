@@ -312,7 +312,7 @@ socket_connect( conn_t *sock, void (*cb)( int ok, void *aux ) )
 
 	sock->callbacks.connect = cb;
 
-	/* open connection to IMAP server */
+	/* open connection to server */
 	if (conf->tunnel) {
 		int a[2];
 
@@ -352,7 +352,7 @@ socket_connect( conn_t *sock, void (*cb)( int ok, void *aux ) )
 		hints.ai_flags = AI_ADDRCONFIG;
 		infon( "Resolving %s... ", conf->host );
 		if ((gaierr = getaddrinfo( conf->host, NULL, &hints, &sock->addrs ))) {
-			error( "IMAP error: Cannot resolve server '%s': %s\n", conf->host, gai_strerror( gaierr ) );
+			error( "Error: Cannot resolve server '%s': %s\n", conf->host, gai_strerror( gaierr ) );
 			socket_connect_bail( sock );
 			return;
 		}
@@ -365,7 +365,7 @@ socket_connect( conn_t *sock, void (*cb)( int ok, void *aux ) )
 		infon( "Resolving %s... ", conf->host );
 		he = gethostbyname( conf->host );
 		if (!he) {
-			error( "IMAP error: Cannot resolve server '%s': %s\n", conf->host, hstrerror( h_errno ) );
+			error( "Error: Cannot resolve server '%s': %s\n", conf->host, hstrerror( h_errno ) );
 			socket_connect_bail( sock );
 			return;
 		}
@@ -381,7 +381,6 @@ static void
 socket_connect_one( conn_t *sock )
 {
 	int s;
-	ushort port;
 #ifdef HAVE_IPV6
 	struct addrinfo *ai;
 #else
@@ -400,18 +399,13 @@ socket_connect_one( conn_t *sock )
 		return;
 	}
 
-	port = sock->conf->port ? sock->conf->port :
-#ifdef HAVE_LIBSSL
-	       sock->conf->use_imaps ? 993 :
-#endif
-	       143;
 #ifdef HAVE_IPV6
 	if (ai->ai_family == AF_INET6) {
 		struct sockaddr_in6 *in6 = ((struct sockaddr_in6 *)ai->ai_addr);
 		char sockname[64];
-		in6->sin6_port = htons( port );
+		in6->sin6_port = htons( sock->conf->port );
 		nfasprintf( &sock->name, "%s ([%s]:%hu)",
-		            sock->conf->host, inet_ntop( AF_INET6, &in6->sin6_addr, sockname, sizeof(sockname) ), port );
+		            sock->conf->host, inet_ntop( AF_INET6, &in6->sin6_addr, sockname, sizeof(sockname) ), sock->conf->port );
 	} else
 #endif
 	{
@@ -421,9 +415,9 @@ socket_connect_one( conn_t *sock )
 		in->sin_family = AF_INET;
 		in->sin_addr.s_addr = *((int *)*sock->curr_addr);
 #endif
-		in->sin_port = htons( port );
+		in->sin_port = htons( sock->conf->port );
 		nfasprintf( &sock->name, "%s (%s:%hu)",
-		            sock->conf->host, inet_ntoa( in->sin_addr ), port );
+		            sock->conf->host, inet_ntoa( in->sin_addr ), sock->conf->port );
 	}
 
 #ifdef HAVE_IPV6
