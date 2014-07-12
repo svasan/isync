@@ -288,6 +288,9 @@ main( int argc, char **argv )
 		}
 	}
 
+	if (!writeout)
+		fputs( "Notice: please run 'isync -w' and start using 'mbsync' directly.\n", stderr );
+
 	if (config) {
 		if (*config != '/') {
 			if (!getcwd( path1, sizeof(path1) )) {
