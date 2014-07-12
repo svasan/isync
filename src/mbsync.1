@@ -432,43 +432,43 @@ case you need to enable this option.
 \fBSync\fR {\fINone\fR|[\fIPull\fR] [\fIPush\fR] [\fINew\fR] [\fIReNew\fR] [\fIDelete\fR] [\fIFlags\fR]|\fIAll\fR}
 Select the synchronization operation(s) to perform:
 .br
-\fBPull\fR - propagate changes from Master to Slave.
+\fIPull\fR - propagate changes from Master to Slave.
 .br
-\fBPush\fR - propagate changes from Slave to Master.
+\fIPush\fR - propagate changes from Slave to Master.
 .br
-\fBNew\fR - propagate newly appeared messages.
+\fINew\fR - propagate newly appeared messages.
 .br
-\fBReNew\fR - previously refused messages are re-evaluated for propagation.
+\fIReNew\fR - previously refused messages are re-evaluated for propagation.
 Useful after flagging affected messages in the source Store or enlarging
 MaxSize in the destination Store.
 .br
-\fBDelete\fR - propagate message deletions. This applies only to messages that
+\fIDelete\fR - propagate message deletions. This applies only to messages that
 are actually gone, i.e., were expunged. The affected messages in the remote
 Store are marked as deleted only, i.e., they won't be really deleted until
 that Store is expunged.
 .br
-\fBFlags\fR - propagate flag changes. Note that Deleted/Trashed is a flag as
+\fIFlags\fR - propagate flag changes. Note that Deleted/Trashed is a flag as
 well; this is particularly interesting if you use \fBmutt\fR with the
 maildir_trash option.
 .br
-\fBAll\fR (\fB--full\fR on the command line) - all of the above.
+\fIAll\fR (\fB--full\fR on the command line) - all of the above.
 This is the global default.
 .br
-\fBNone\fR (\fB--noop\fR on the command line) - don't propagate anything.
+\fINone\fR (\fB--noop\fR on the command line) - don't propagate anything.
 Useful if you want to expunge only.
 .IP
-\fBPull\fR and \fBPush\fR are direction flags, while \fBNew\fR, \fBReNew\fR,
-\fBDelete\fR and \fBFlags\fR are type flags. The two flag classes make up a
+\fIPull\fR and \fIPush\fR are direction flags, while \fINew\fR, \fIReNew\fR,
+\fIDelete\fR and \fIFlags\fR are type flags. The two flag classes make up a
 two-dimensional matrix (a table). Its cells are the individual actions to
 perform. There are two styles of asserting the cells:
 .br
 In the first style, the flags select entire rows/colums in the matrix. Only
 the cells which are selected both horizontally and vertically are asserted.
 Specifying no flags from a class is like specifying all flags from this class.
-For example, "\fBSync\fR\ \fBPull\fR\ \fBNew\fR\ \fBFlags\fR" will propagate
+For example, "\fBSync\fR\ \fIPull\fR\ \fINew\fR\ \fIFlags\fR" will propagate
 new messages and flag changes from the Master to the Slave,
-"\fBSync\fR\ \fBNew\fR\ \fBDelete\fR" will propagate message arrivals and
-deletions both ways, and "\fBSync\fR\ \fBPush\fR" will propagate all changes
+"\fBSync\fR\ \fINew\fR\ \fIDelete\fR" will propagate message arrivals and
+deletions both ways, and "\fBSync\fR\ \fIPush\fR" will propagate all changes
 from the Slave to the Master.
 .br
 In the second style, direction flags are concatenated with type flags; every
@@ -476,12 +476,12 @@ compound flag immediately asserts a cell in the matrix. In addition to at least
 one compound flag, the individual flags can be used as well, but as opposed to
 the first style, they immediately assert all cells in their respective
 row/column. For example,
-"\fBSync\fR\ \fBPullNew\fR\ \fBPullDelete\fR\ \fBPush\fR" will propagate
+"\fBSync\fR\ \fIPullNew\fR\ \fIPullDelete\fR\ \fIPush\fR" will propagate
 message arrivals and deletions from the Master to the Slave and any changes
 from the Slave to the Master.
 Note that it is not allowed to assert a cell in two ways, e.g.
-"\fBSync\fR\ \fBPullNew\fR\ \fBPull\fR" and
-"\fBSync\fR\ \fBPullNew\fR\ \fBDelete\fR\ \fBPush\fR" induce error messages.
+"\fBSync\fR\ \fIPullNew\fR\ \fIPull\fR" and
+"\fBSync\fR\ \fIPullNew\fR\ \fIDelete\fR\ \fIPush\fR" induce error messages.
 ..
 .TP
 \fBCreate\fR {\fINone\fR|\fIMaster\fR|\fISlave\fR|\fIBoth\fR}
