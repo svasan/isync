@@ -6,6 +6,8 @@ The SSL/TLS configuration has been re-designed.
 SSL is now explicitly enabled or disabled - "use SSL if available" is gone.
 Notice: Tunnels are assumed to be secure and thus default to no SSL.
 
+More flexible configuration of the used authentication mechanism.
+
 [1.1.0]
 
 Support for hierarchical mailboxes in Patterns.

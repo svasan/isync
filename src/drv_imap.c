@@ -48,9 +48,9 @@ typedef struct imap_server_conf {
 	char *pass;
 	char *pass_cmd;
 	int max_in_progress;
+	string_list_t *auth_mechs;
 #ifdef HAVE_LIBSSL
 	char ssl_type;
-	char require_cram;
 #endif
 } imap_server_conf_t;
 
@@ -100,6 +100,7 @@ typedef struct imap_store {
 	list_t *ns_personal, *ns_other, *ns_shared; /* NAMESPACE info */
 	message_t **msgapp; /* FETCH results */
 	unsigned caps; /* CAPABILITY results */
+	string_list_t *auth_mechs;
 	parse_list_state_t parse_list_sts;
 	/* command queue */
 	int nexttag, num_in_progress;
@@ -173,7 +174,6 @@ struct imap_cmd_refcounted {
 enum CAPABILITY {
 	NOLOGIN = 0,
 #ifdef HAVE_LIBSSL
-	CRAM,
 	STARTTLS,
 #endif
 	UIDPLUS,
@@ -185,7 +185,6 @@ enum CAPABILITY {
 static const char *cap_list[] = {
 	"LOGINDISABLED",
 #ifdef HAVE_LIBSSL
-	"AUTH=CRAM-MD5",
 	"STARTTLS",
 #endif
 	"UIDPLUS",
@@ -983,11 +982,20 @@ parse_capability( imap_store_t *ctx, char *cmd )
 	char *arg;
 	unsigned i;
 
+	free_string_list( ctx->auth_mechs );
+	ctx->auth_mechs = 0;
 	ctx->caps = 0x80000000;
-	while ((arg = next_arg( &cmd )))
-		for (i = 0; i < as(cap_list); i++)
-			if (!strcmp( cap_list[i], arg ))
-				ctx->caps |= 1 << i;
+	while ((arg = next_arg( &cmd ))) {
+		if (!memcmp( "AUTH=", arg, 5 )) {
+			add_string_list( &ctx->auth_mechs, arg + 5 );
+		} else {
+			for (i = 0; i < as(cap_list); i++)
+				if (!strcmp( cap_list[i], arg ))
+					ctx->caps |= 1 << i;
+		}
+	}
+	if (!CAP(NOLOGIN))
+		add_string_list( &ctx->auth_mechs, "LOGIN" );
 }
 
 static int
@@ -1354,6 +1362,7 @@ imap_cancel_store( store_t *gctx )
 	free_list( ctx->ns_personal );
 	free_list( ctx->ns_other );
 	free_list( ctx->ns_shared );
+	free_string_list( ctx->auth_mechs );
 	free( ctx->delimiter );
 	imap_deref( ctx );
 }
@@ -1644,7 +1653,12 @@ imap_open_store_authenticate2( imap_store_t *ctx )
 {
 	imap_store_conf_t *cfg = (imap_store_conf_t *)ctx->gen.conf;
 	imap_server_conf_t *srvc = cfg->server;
+	string_list_t *mech, *cmech;
 	char *arg;
+#ifdef HAVE_LIBSSL
+	int auth_cram = 0;
+#endif
+	int auth_login = 0;
 
 	info ("Logging in...\n");
 	if (!srvc->user) {
@@ -1697,31 +1711,47 @@ imap_open_store_authenticate2( imap_store_t *ctx )
 		 */
 		srvc->pass = nfstrdup( arg );
 	}
+	for (mech = srvc->auth_mechs; mech; mech = mech->next) {
+		int any = !strcmp( mech->string, "*" );
+		for (cmech = ctx->auth_mechs; cmech; cmech = cmech->next) {
+			if (any || !strcasecmp( mech->string, cmech->string )) {
+				if (!strcasecmp( cmech->string, "LOGIN" )) {
 #ifdef HAVE_LIBSSL
-	if (CAP(CRAM)) {
+					if (ctx->conn.ssl || !any)
+#endif
+						auth_login = 1;
+#ifdef HAVE_LIBSSL
+				} else if (!strcasecmp( cmech->string, "CRAM-MD5" )) {
+					auth_cram = 1;
+#endif
+				} else {
+					error( "IMAP error: authentication mechanism %s is not supported\n", cmech->string );
+					goto bail;
+				}
+			}
+		}
+	}
+#ifdef HAVE_LIBSSL
+	if (auth_cram) {
 		struct imap_cmd *cmd = new_imap_cmd( sizeof(*cmd) );
 
-		info( "Authenticating with CRAM-MD5\n" );
+		info( "Authenticating with CRAM-MD5...\n" );
 		cmd->param.cont = do_cram_auth;
 		imap_exec( ctx, cmd, imap_open_store_authenticate2_p2, "AUTHENTICATE CRAM-MD5" );
 		return;
 	}
-	if (srvc->require_cram) {
-		error( "IMAP error: CRAM-MD5 authentication is not supported by server\n" );
-		goto bail;
-	}
 #endif
-	if (CAP(NOLOGIN)) {
-		error( "Skipping account %s, server forbids LOGIN\n", srvc->name );
-		goto bail;
-	}
+	if (auth_login) {
+		info( "Logging in...\n" );
 #ifdef HAVE_LIBSSL
-	if (!ctx->conn.ssl)
+		if (!ctx->conn.ssl)
 #endif
-		warn( "*** IMAP Warning *** Password is being sent in the clear\n" );
-	imap_exec( ctx, 0, imap_open_store_authenticate2_p2,
-	           "LOGIN \"%\\s\" \"%\\s\"", srvc->user, srvc->pass );
-	return;
+			warn( "*** IMAP Warning *** Password is being sent in the clear\n" );
+		imap_exec( ctx, 0, imap_open_store_authenticate2_p2,
+		           "LOGIN \"%\\s\" \"%\\s\"", srvc->user, srvc->pass );
+		return;
+	}
+	error( "IMAP error: server supports no acceptable authentication mechanism\n" );
 
   bail:
 	imap_open_store_bail( ctx );
@@ -2240,6 +2270,7 @@ imap_parse_store( conffile_t *cfg, store_conf_t **storep )
 	/* Legacy SSL options */
 	int require_ssl = -1, use_imaps = -1;
 	int use_sslv2 = -1, use_sslv3 = -1, use_tlsv1 = -1, use_tlsv11 = -1, use_tlsv12 = -1;
+	int require_cram = -1;
 #endif
 
 	if (!strcasecmp( "IMAPAccount", cfg->cmd )) {
@@ -2356,8 +2387,14 @@ imap_parse_store( conffile_t *cfg, store_conf_t **storep )
 			use_tlsv11 = parse_bool( cfg );
 		else if (!strcasecmp( "UseTLSv1.2", cfg->cmd ))
 			use_tlsv12 = parse_bool( cfg );
-		else if (!strcasecmp( "RequireCRAM", cfg->cmd ))
-			server->require_cram = parse_bool( cfg );
+		else if (!strcasecmp( "AuthMech", cfg->cmd ) ||
+		         !strcasecmp( "AuthMechs", cfg->cmd )) {
+			arg = cfg->val;
+			do
+				add_string_list( &server->auth_mechs, arg );
+			while ((arg = get_arg( cfg, ARG_OPTIONAL, 0 )));
+		} else if (!strcasecmp( "RequireCRAM", cfg->cmd ))
+			require_cram = parse_bool( cfg );
 #endif
 		else if (!strcasecmp( "Tunnel", cfg->cmd ))
 			server->sconf.tunnel = nfstrdup( cfg->val );
@@ -2438,6 +2475,20 @@ imap_parse_store( conffile_t *cfg, store_conf_t **storep )
 				server->ssl_type = server->sconf.tunnel ? SSL_None : SSL_STARTTLS;
 		}
 #endif
+#ifdef HAVE_LIBSSL
+		if (require_cram >= 0) {
+			if (server->auth_mechs) {
+				error( "%s '%s': The deprecated RequireCRAM option is mutually exlusive with AuthMech.\n", type, name );
+				cfg->err = 1;
+				return 1;
+			}
+			warn( "Notice: %s '%s': RequireCRAM is deprecated. Use AuthMech instead.\n", type, name );
+			if (require_cram)
+				add_string_list(&server->auth_mechs, "CRAM-MD5");
+		}
+#endif
+		if (!server->auth_mechs)
+			add_string_list( &server->auth_mechs, "*" );
 		if (!server->sconf.port)
 			server->sconf.port =
 #ifdef HAVE_LIBSSL

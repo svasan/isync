@@ -274,9 +274,16 @@ socket.  This allows you to run an IMAP session over an SSH tunnel, for
 example.
 ..
 .TP
-\fBRequireCRAM\fR \fIyes\fR|\fIno\fR
-If set to \fIyes\fR, \fBmbsync\fR will abort the connection if no CRAM-MD5
-authentication is possible.  (Default: \fIno\fR)
+\fBAuthMechs\fR \fItype\fR ...
+The list of acceptable authentication mechanisms.
+In addition to the mechanisms listed in the SASL registry (link below),
+the legacy IMAP \fBLOGIN\fR mechanism is known.
+The wildcard \fB*\fR represents all mechanisms that are deemed secure
+enough for the current \fBSSLType\fR setting.
+The actually used mechanism is the most secure choice from the intersection
+of this list, the list supplied by the server, and the mechanisms actually
+supported by \fBmbsync\fR (currently only \fBCRAM-MD5\fR and \fBLOGIN\fR).
+(Default: \fB*\fR)
 ..
 .TP
 \fBSSLType\fR {\fINone\fR|\fISTARTTLS\fR|\fIIMAPS\fR}
@@ -594,6 +601,9 @@ Directory containing synchronization state files
 mdconvert(1), isync(1), mutt(1), maildir(5)
 .P
 Up to date information on \fBmbsync\fR can be found at http://isync.sf.net/
+.P
+SASL mechanisms are listed at
+http://www.iana.org/assignments/sasl-mechanisms/sasl-mechanisms.xhtml
 ..
 .SH AUTHORS
 Originally written by Michael R. Elkins,
