@@ -25,8 +25,18 @@
 
 #include "common.h"
 
+#ifdef HAVE_LIBSSL
 typedef struct ssl_st SSL;
 typedef struct ssl_ctx_st SSL_CTX;
+
+enum {
+	SSLv2 = 1,
+	SSLv3 = 2,
+	TLSv1 = 4,
+	TLSv1_1 = 8,
+	TLSv1_2 = 16
+};
+#endif
 
 typedef struct server_conf {
 	char *tunnel;
@@ -34,7 +44,7 @@ typedef struct server_conf {
 	int port;
 #ifdef HAVE_LIBSSL
 	char *cert_file;
-	char use_sslv2, use_sslv3, use_tlsv1, use_tlsv11, use_tlsv12;
+	char ssl_versions;
 
 	/* these are actually variables and are leaked at the end */
 	char ssl_ctx_valid;

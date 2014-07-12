@@ -36,6 +36,10 @@
 #include <time.h>
 #include <sys/wait.h>
 
+#ifdef HAVE_LIBSSL
+enum { SSL_None, SSL_STARTTLS, SSL_IMAPS };
+#endif
+
 typedef struct imap_server_conf {
 	struct imap_server_conf *next;
 	char *name;
@@ -45,9 +49,7 @@ typedef struct imap_server_conf {
 	char *pass_cmd;
 	int max_in_progress;
 #ifdef HAVE_LIBSSL
-	char use_ssl;
-	char use_imaps;
-	char require_ssl;
+	char ssl_type;
 	char require_cram;
 #endif
 } imap_server_conf_t;
@@ -1532,7 +1534,7 @@ imap_open_store_connected( int ok, void *aux )
 	if (!ok)
 		imap_open_store_bail( ctx );
 #ifdef HAVE_LIBSSL
-	else if (srvc->use_imaps)
+	else if (srvc->ssl_type == SSL_IMAPS)
 		socket_start_tls( &ctx->conn, imap_open_store_tlsstarted1 );
 #endif
 }
@@ -1582,26 +1584,21 @@ imap_open_store_authenticate( imap_store_t *ctx )
 
 	if (ctx->greeting != GreetingPreauth) {
 #ifdef HAVE_LIBSSL
-		if (!srvc->use_imaps && srvc->use_ssl) {
-			/* always try to select SSL support if available */
+		if (srvc->ssl_type == SSL_STARTTLS) {
 			if (CAP(STARTTLS)) {
 				imap_exec( ctx, 0, imap_open_store_authenticate_p2, "STARTTLS" );
 				return;
 			} else {
-				if (srvc->require_ssl) {
-					error( "IMAP error: SSL support not available\n" );
-					imap_open_store_bail( ctx );
-					return;
-				} else {
-					warn( "IMAP warning: SSL support not available\n" );
-				}
+				error( "IMAP error: SSL support not available\n" );
+				imap_open_store_bail( ctx );
+				return;
 			}
 		}
 #endif
 		imap_open_store_authenticate2( ctx );
 	} else {
 #ifdef HAVE_LIBSSL
-		if (!srvc->use_imaps && srvc->require_ssl) {
+		if (srvc->ssl_type == SSL_STARTTLS) {
 			error( "IMAP error: SSL support not available\n" );
 			imap_open_store_bail( ctx );
 			return;
@@ -2237,8 +2234,13 @@ imap_parse_store( conffile_t *cfg, store_conf_t **storep )
 {
 	imap_store_conf_t *store;
 	imap_server_conf_t *server, *srv, sserver;
-	const char *type, *name;
+	const char *type, *name, *arg;
 	int acc_opt = 0;
+#ifdef HAVE_LIBSSL
+	/* Legacy SSL options */
+	int require_ssl = -1, use_imaps = -1;
+	int use_sslv2 = -1, use_sslv3 = -1, use_tlsv1 = -1, use_tlsv11 = -1, use_tlsv12 = -1;
+#endif
 
 	if (!strcasecmp( "IMAPAccount", cfg->cmd )) {
 		server = nfcalloc( sizeof(*server) );
@@ -2259,32 +2261,30 @@ imap_parse_store( conffile_t *cfg, store_conf_t **storep )
 		return 0;
 
 #ifdef HAVE_LIBSSL
-	/* this will probably annoy people, but its the best default just in
-	 * case people forget to turn it on
-	 */
-	server->require_ssl = 1;
-	server->sconf.use_tlsv1 = 1;
+	server->ssl_type = -1;
+	server->sconf.ssl_versions = -1;
 #endif
 	server->max_in_progress = INT_MAX;
 
 	while (getcline( cfg ) && cfg->cmd) {
 		if (!strcasecmp( "Host", cfg->cmd )) {
 			/* The imap[s]: syntax is just a backwards compat hack. */
+			arg = cfg->val;
 #ifdef HAVE_LIBSSL
-			if (starts_with( cfg->val, -1, "imaps:", 6 )) {
-				cfg->val += 6;
-				server->use_imaps = 1;
-				server->sconf.use_sslv2 = 1;
-				server->sconf.use_sslv3 = 1;
+			if (starts_with( arg, -1, "imaps:", 6 )) {
+				arg += 6;
+				server->ssl_type = SSL_IMAPS;
+				if (server->sconf.ssl_versions == -1)
+					server->sconf.ssl_versions = SSLv2 | SSLv3 | TLSv1;
 			} else
 #endif
-			{
-				if (starts_with( cfg->val, -1, "imap:", 5 ))
-					cfg->val += 5;
-			}
-			if (starts_with( cfg->val, -1, "//", 2 ))
-				cfg->val += 2;
-			server->sconf.host = nfstrdup( cfg->val );
+			if (starts_with( arg, -1, "imap:", 5 ))
+				arg += 5;
+			if (!memcmp( "//", arg, 2 ))
+				arg += 2;
+			if (arg != cfg->val)
+				warn( "%s:%d: Notice: URL notation is deprecated; use a plain host name and possibly 'SSLType IMAPS' instead\n", cfg->file, cfg->line );
+			server->sconf.host = nfstrdup( arg );
 		}
 		else if (!strcasecmp( "User", cfg->cmd ))
 			server->user = nfstrdup( cfg->val );
@@ -2308,20 +2308,51 @@ imap_parse_store( conffile_t *cfg, store_conf_t **storep )
 				           cfg->file, cfg->line, server->sconf.cert_file );
 				cfg->err = 1;
 			}
+		} else if (!strcasecmp( "SSLType", cfg->cmd )) {
+			if (!strcasecmp( "None", cfg->val )) {
+				server->ssl_type = SSL_None;
+			} else if (!strcasecmp( "STARTTLS", cfg->val )) {
+				server->ssl_type = SSL_STARTTLS;
+			} else if (!strcasecmp( "IMAPS", cfg->val )) {
+				server->ssl_type = SSL_IMAPS;
+			} else {
+				error( "%s:%d: Invalid SSL type\n", cfg->file, cfg->line );
+				cfg->err = 1;
+			}
+		} else if (!strcasecmp( "SSLVersion", cfg->cmd ) ||
+		           !strcasecmp( "SSLVersions", cfg->cmd )) {
+			server->sconf.ssl_versions = 0;
+			arg = cfg->val;
+			do {
+				if (!strcasecmp( "SSLv2", arg )) {
+					server->sconf.ssl_versions |= SSLv2;
+				} else if (!strcasecmp( "SSLv3", arg )) {
+					server->sconf.ssl_versions |= SSLv3;
+				} else if (!strcasecmp( "TLSv1", arg )) {
+					server->sconf.ssl_versions |= TLSv1;
+				} else if (!strcasecmp( "TLSv1.1", arg )) {
+					server->sconf.ssl_versions |= TLSv1_1;
+				} else if (!strcasecmp( "TLSv1.2", arg )) {
+					server->sconf.ssl_versions |= TLSv1_2;
+				} else {
+					error( "%s:%d: Unrecognized SSL version\n", cfg->file, cfg->line );
+					cfg->err = 1;
+				}
+			} while ((arg = get_arg( cfg, ARG_OPTIONAL, 0 )));
 		} else if (!strcasecmp( "RequireSSL", cfg->cmd ))
-			server->require_ssl = parse_bool( cfg );
+			require_ssl = parse_bool( cfg );
 		else if (!strcasecmp( "UseIMAPS", cfg->cmd ))
-			server->use_imaps = parse_bool( cfg );
+			use_imaps = parse_bool( cfg );
 		else if (!strcasecmp( "UseSSLv2", cfg->cmd ))
-			server->sconf.use_sslv2 = parse_bool( cfg );
+			use_sslv2 = parse_bool( cfg );
 		else if (!strcasecmp( "UseSSLv3", cfg->cmd ))
-			server->sconf.use_sslv3 = parse_bool( cfg );
+			use_sslv3 = parse_bool( cfg );
 		else if (!strcasecmp( "UseTLSv1", cfg->cmd ))
-			server->sconf.use_tlsv1 = parse_bool( cfg );
+			use_tlsv1 = parse_bool( cfg );
 		else if (!strcasecmp( "UseTLSv1.1", cfg->cmd ))
-			server->sconf.use_tlsv11 = parse_bool( cfg );
+			use_tlsv11 = parse_bool( cfg );
 		else if (!strcasecmp( "UseTLSv1.2", cfg->cmd ))
-			server->sconf.use_tlsv12 = parse_bool( cfg );
+			use_tlsv12 = parse_bool( cfg );
 		else if (!strcasecmp( "RequireCRAM", cfg->cmd ))
 			server->require_cram = parse_bool( cfg );
 #endif
@@ -2369,19 +2400,45 @@ imap_parse_store( conffile_t *cfg, store_conf_t **storep )
 			return 1;
 		}
 #ifdef HAVE_LIBSSL
-		server->use_ssl =
-		        server->sconf.use_sslv2 | server->sconf.use_sslv3 |
-		        server->sconf.use_tlsv1 | server->sconf.use_tlsv11 | server->sconf.use_tlsv12;
-		if (server->require_ssl && !server->use_ssl) {
-			error( "%s '%s' requires SSL but no SSL versions enabled\n", type, name );
-			cfg->err = 1;
-			return 1;
+		if ((use_sslv2 & use_sslv3 & use_tlsv1 & use_tlsv11 & use_tlsv12) != -1 || use_imaps >= 0 || require_ssl >= 0) {
+			if (server->ssl_type >= 0 || server->sconf.ssl_versions >= 0) {
+				error( "%s '%s': The deprecated UseSSL*, UseTLS*, UseIMAPS, and RequireSSL options are mutually exlusive with SSLType and SSLVersions.\n", type, name );
+				cfg->err = 1;
+				return 1;
+			}
+			warn( "Notice: %s '%s': UseSSL*, UseTLS*, UseIMAPS, and RequireSSL are deprecated. Use SSLType and SSLVersions instead.\n", type, name );
+			server->sconf.ssl_versions =
+					(use_sslv2 != 1 ? 0 : SSLv2) |
+					(use_sslv3 != 1 ? 0 : SSLv3) |
+					(use_tlsv1 == 0 ? 0 : TLSv1) |
+					(use_tlsv11 != 1 ? 0 : TLSv1_1) |
+					(use_tlsv12 != 1 ? 0 : TLSv1_2);
+			if (use_imaps == 1) {
+				server->ssl_type = SSL_IMAPS;
+			} else if (require_ssl) {
+				server->ssl_type = SSL_STARTTLS;
+			} else if (!server->sconf.ssl_versions) {
+				server->ssl_type = SSL_None;
+			} else {
+				warn( "Notice: %s '%s': 'RequireSSL no' is being ignored\n", type, name );
+				server->ssl_type = SSL_STARTTLS;
+			}
+			if (server->ssl_type != SSL_None && !server->sconf.ssl_versions) {
+				error( "%s '%s' requires SSL but no SSL versions enabled\n", type, name );
+				cfg->err = 1;
+				return 1;
+			}
+		} else {
+			if (server->sconf.ssl_versions < 0)
+				server->sconf.ssl_versions = TLSv1; /* Most compatible and still reasonably secure. */
+			if (server->ssl_type < 0)
+				server->ssl_type = server->sconf.tunnel ? SSL_None : SSL_STARTTLS;
 		}
 #endif
 		if (!server->sconf.port)
 			server->sconf.port =
 #ifdef HAVE_LIBSSL
-				server->use_imaps ? 993 :
+				server->ssl_type == SSL_IMAPS ? 993 :
 #endif
 				143;
 	}

@@ -36,10 +36,7 @@
 
 store_conf_t *stores;
 
-#define ARG_OPTIONAL 0
-#define ARG_REQUIRED 1
-
-static char *
+char *
 get_arg( conffile_t *cfile, int required, int *comment )
 {
 	char *ret, *p, *t;

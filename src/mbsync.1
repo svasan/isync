@@ -271,11 +271,6 @@ optional.
 Specify a command to run to establish a connection rather than opening a TCP
 socket.  This allows you to run an IMAP session over an SSH tunnel, for
 example.
-.br
-If \fBUseIMAPS\fR is disabled and the tunnel opens a preauthenticated
-connection, \fBRequireSSL\fR also needs to be disabled.
-If the connection is not preauthenticated, but the tunnel is secure,
-disabling \fBRequireSSL\fR and \fBUseTLSv1\fR is recommended.
 ..
 .TP
 \fBRequireCRAM\fR \fIyes\fR|\fIno\fR
@@ -283,18 +278,26 @@ If set to \fIyes\fR, \fBmbsync\fR will abort the connection if no CRAM-MD5
 authentication is possible.  (Default: \fIno\fR)
 ..
 .TP
-\fBUseIMAPS\fR \fIyes\fR|\fIno\fR
-If set to \fIyes\fR, the default for \fBPort\fR is changed to 993 and
-\fBmbsync\fR will start SSL negotiation immediately after establishing
-the connection to the server.
+\fBSSLType\fR {\fINone\fR|\fISTARTTLS\fR|\fIIMAPS\fR}
+Select the connection security/encryption method:
 .br
-Note that modern servers support SSL on the regular IMAP port 143 via the
-STARTTLS extension, which will be used automatically by default.
+\fINone\fR - no security.
+This is the default when \fBTunnel\fR is set, as tunnels are usually secure.
+.br
+\fISTARTTLS\fR - security is established via the STARTTLS extension
+after connecting the regular IMAP port 143. Most servers support this,
+so it is the default (unless a tunnel is used).
+.br
+\fIIMAPS\fR - security is established by starting SSL/TLS negotiation
+right after connecting the secure IMAP port 993.
 ..
 .TP
-\fBRequireSSL\fR \fIyes\fR|\fIno\fR
-\fBmbsync\fR will abort the connection if a TLS/SSL session cannot be
-established with the IMAP server.  (Default: \fIyes\fR)
+\fBSSLVersions\fR [\fISSLv2\fR] [\fISSLv3\fR] [\fITLSv1\fR] [\fITLSv1.1\fR] [\fITLSv1.2\fR]
+Select the acceptable SSL/TLS versions.
+Use of SSLv2 is strongly discouraged for security reasons, but might be the
+only option on some very old servers.
+Generally, the newest TLS version is recommended, but as this confuses some
+servers, \fBTLSv1\fR is the default.
 ..
 .TP
 \fBCertificateFile\fR \fIpath\fR
@@ -304,33 +307,6 @@ regardless of validity.
 .br
 Note that the system's default certificate store is always used and should
 not be specified here.
-..
-.TP
-\fBUseSSLv2\fR \fIyes\fR|\fIno\fR
-Use SSLv2 for communication with the IMAP server over SSL?
-.br
-Note that this option is deprecated for security reasons.
-(Default: \fIno\fR)
-..
-.TP
-\fBUseSSLv3\fR \fIyes\fR|\fIno\fR
-Use SSLv3 for communication with the IMAP server over SSL?
-(Default: \fIno\fR)
-..
-.TP
-\fBUseTLSv1\fR \fIyes\fR|\fIno\fR
-Use TLSv1 for communication with the IMAP server over SSL?
-(Default: \fIyes\fR)
-..
-.TP
-\fBUseTLSv1.1\fR \fIyes\fR|\fIno\fR
-Use TLSv1.1 for communication with the IMAP server over SSL?
-(Default: \fIno\fR)
-..
-.TP
-\fBUseTLSv1.2\fR \fIyes\fR|\fIno\fR
-Use TLSv1.2 for communication with the IMAP server over SSL?
-(Default: \fIno\fR)
 ..
 .TP
 \fBPipelineDepth\fR \fIdepth\fR

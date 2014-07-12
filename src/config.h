@@ -35,6 +35,11 @@ typedef struct conffile {
 	char *cmd, *val, *rest;
 } conffile_t;
 
+#define ARG_OPTIONAL 0
+#define ARG_REQUIRED 1
+
+char *get_arg( conffile_t *cfile, int required, int *comment );
+
 int parse_bool( conffile_t *cfile );
 int parse_int( conffile_t *cfile );
 int parse_size( conffile_t *cfile );

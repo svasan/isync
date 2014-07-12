@@ -205,18 +205,18 @@ init_ssl_ctx( const server_conf_t *conf )
 
 	mconf->SSLContext = SSL_CTX_new( SSLv23_client_method() );
 
-	if (!conf->use_sslv2)
+	if (!(conf->ssl_versions & SSLv2))
 		options |= SSL_OP_NO_SSLv2;
-	if (!conf->use_sslv3)
+	if (!(conf->ssl_versions & SSLv3))
 		options |= SSL_OP_NO_SSLv3;
-	if (!conf->use_tlsv1)
+	if (!(conf->ssl_versions & TLSv1))
 		options |= SSL_OP_NO_TLSv1;
 #ifdef SSL_OP_NO_TLSv1_1
-	if (!conf->use_tlsv11)
+	if (!(conf->ssl_versions & TLSv1_1))
 		options |= SSL_OP_NO_TLSv1_1;
 #endif
 #ifdef SSL_OP_NO_TLSv1_2
-	if (!conf->use_tlsv12)
+	if (!(conf->ssl_versions & TLSv1_2))
 		options |= SSL_OP_NO_TLSv1_2;
 #endif
 
