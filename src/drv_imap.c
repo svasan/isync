@@ -2263,6 +2263,7 @@ imap_parse_store( conffile_t *cfg, store_conf_t **storep )
 #ifdef HAVE_LIBSSL
 	server->ssl_type = -1;
 	server->sconf.ssl_versions = -1;
+	server->sconf.system_certs = 1;
 #endif
 	server->max_in_progress = INT_MAX;
 
@@ -2308,6 +2309,8 @@ imap_parse_store( conffile_t *cfg, store_conf_t **storep )
 				           cfg->file, cfg->line, server->sconf.cert_file );
 				cfg->err = 1;
 			}
+		} else if (!strcasecmp( "SystemCertificates", cfg->cmd )) {
+			server->sconf.system_certs = parse_bool( cfg );
 		} else if (!strcasecmp( "SSLType", cfg->cmd )) {
 			if (!strcasecmp( "None", cfg->val )) {
 				server->ssl_type = SSL_None;

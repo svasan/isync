@@ -219,7 +219,7 @@ init_ssl_ctx( const server_conf_t *conf )
 		return 0;
 	}
 	mconf->num_trusted = sk_X509_OBJECT_num( SSL_CTX_get_cert_store( mconf->SSLContext )->objs );
-	if (!SSL_CTX_set_default_verify_paths( mconf->SSLContext ))
+	if (mconf->system_certs && !SSL_CTX_set_default_verify_paths( mconf->SSLContext ))
 		warn( "Warning: Unable to load default certificate files: %s\n",
 		      ERR_error_string( ERR_get_error(), 0 ) );
 

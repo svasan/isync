@@ -301,13 +301,19 @@ Generally, the newest TLS version is recommended, but as this confuses some
 servers, \fBTLSv1\fR is the default.
 ..
 .TP
+\fBSystemCertificates\fR \fIyes\fR|\fIno\fR
+Whether the system's default root cerificate store should be loaded.
+(Default: \fIyes\fR)
+..
+.TP
 \fBCertificateFile\fR \fIpath\fR
 File containing additional X.509 certificates used to verify server
 identities. Directly matched peer certificates are always trusted,
 regardless of validity.
 .br
-Note that the system's default certificate store is always used and should
-not be specified here.
+Note that the system's default certificate store is always used
+(unless \fBSystemCertificates\fR is disabled)
+and should not be specified here.
 ..
 .TP
 \fBPipelineDepth\fR \fIdepth\fR
