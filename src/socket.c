@@ -58,8 +58,6 @@ socket_fail( conn_t *conn )
 }
 
 #ifdef HAVE_LIBSSL
-static int ssl_data_idx;
-
 static int
 ssl_return( const char *func, conn_t *conn, int ret )
 {
@@ -156,10 +154,10 @@ verify_hostname( X509 *cert, const char *hostname )
 static int
 verify_cert_host( const server_conf_t *conf, conn_t *sock )
 {
+	unsigned i;
+	long err;
 	X509 *cert;
-
-	if (!conf->host || sock->force_trusted > 0)
-		return 0;
+	STACK_OF(X509_OBJECT) *trusted;
 
 	cert = SSL_get_peer_certificate( sock->ssl );
 	if (!cert) {
@@ -167,31 +165,22 @@ verify_cert_host( const server_conf_t *conf, conn_t *sock )
 		return -1;
 	}
 
-	return verify_hostname( cert, conf->host );
-}
-
-static int
-ssl_verify_callback( int ok, X509_STORE_CTX *ctx )
-{
-	SSL *ssl = X509_STORE_CTX_get_ex_data( ctx, SSL_get_ex_data_X509_STORE_CTX_idx() );
-	conn_t *conn = SSL_get_ex_data( ssl, ssl_data_idx );
-
-	if (!conn->force_trusted) {
-		X509 *cert = sk_X509_value( ctx->chain, 0 );
-		STACK_OF(X509_OBJECT) *trusted = ctx->ctx->objs;
-		unsigned i;
-
-		conn->force_trusted = -1;
-		for (i = 0; i < conn->conf->num_trusted; i++) {
-			if (!X509_cmp( cert, sk_X509_OBJECT_value( trusted, i )->data.x509 )) {
-				conn->force_trusted = 1;
-				break;
-			}
-		}
+	trusted = SSL_CTX_get_cert_store( conf->SSLContext )->objs;
+	for (i = 0; i < conf->num_trusted; i++) {
+		if (!X509_cmp( cert, sk_X509_OBJECT_value( trusted, i )->data.x509 ))
+			return 0;
 	}
-	if (conn->force_trusted > 0)
-		ok = 1;
-	return ok;
+
+	err = SSL_get_verify_result( sock->ssl );
+	if (err != X509_V_OK) {
+		error( "SSL error connecting %s: %s\n", sock->name, ERR_error_string( err, NULL ) );
+		return -1;
+	}
+
+	if (!conf->host)
+		return 0; /* SSL on top of a tunnel, no host specified. */
+
+	return verify_hostname( cert, conf->host );
 }
 
 static int
@@ -232,7 +221,7 @@ init_ssl_ctx( const server_conf_t *conf )
 		warn( "Warning: Unable to load default certificate files: %s\n",
 		      ERR_error_string( ERR_get_error(), 0 ) );
 
-	SSL_CTX_set_verify( mconf->SSLContext, SSL_VERIFY_PEER, ssl_verify_callback );
+	SSL_CTX_set_verify( mconf->SSLContext, SSL_VERIFY_NONE, NULL );
 
 	mconf->ssl_ctx_valid = 1;
 	return 1;
@@ -251,7 +240,6 @@ socket_start_tls( conn_t *conn, void (*cb)( int ok, void *aux ) )
 	if (!ssl_inited) {
 		SSL_library_init();
 		SSL_load_error_strings();
-		ssl_data_idx = SSL_get_ex_new_index( 0, NULL, NULL, NULL, NULL );
 		ssl_inited = 1;
 	}
 
@@ -263,7 +251,6 @@ socket_start_tls( conn_t *conn, void (*cb)( int ok, void *aux ) )
 	conn->ssl = SSL_new( ((server_conf_t *)conn->conf)->SSLContext );
 	SSL_set_fd( conn->ssl, conn->fd );
 	SSL_set_mode( conn->ssl, SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER );
-	SSL_set_ex_data( conn->ssl, ssl_data_idx, conn );
 	conn->state = SCK_STARTTLS;
 	start_tls_p2( conn );
 }
@@ -272,7 +259,6 @@ static void
 start_tls_p2( conn_t *conn )
 {
 	if (ssl_return( "connect to", conn, SSL_connect( conn->ssl ) ) > 0) {
-		/* verify whether the server hostname matches the certificate */
 		if (verify_cert_host( conn->conf, conn )) {
 			start_tls_p3( conn, 0 );
 		} else {
