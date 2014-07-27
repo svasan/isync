@@ -1648,23 +1648,19 @@ imap_open_store_authenticate_p3( imap_store_t *ctx, struct imap_cmd *cmd ATTR_UN
 }
 #endif
 
-static void
-imap_open_store_authenticate2( imap_store_t *ctx )
+static const char *
+ensure_user( imap_server_conf_t *srvc )
 {
-	imap_store_conf_t *cfg = (imap_store_conf_t *)ctx->gen.conf;
-	imap_server_conf_t *srvc = cfg->server;
-	string_list_t *mech, *cmech;
-	char *arg;
-#ifdef HAVE_LIBSSL
-	int auth_cram = 0;
-#endif
-	int auth_login = 0;
-
-	info ("Logging in...\n");
 	if (!srvc->user) {
 		error( "Skipping account %s, no user\n", srvc->name );
-		goto bail;
+		return 0;
 	}
+	return srvc->user;
+}
+
+static const char *
+ensure_password( imap_server_conf_t *srvc )
+{
 	if (srvc->pass_cmd) {
 		FILE *fp;
 		int ret;
@@ -1673,7 +1669,7 @@ imap_open_store_authenticate2( imap_store_t *ctx )
 		if (!(fp = popen( srvc->pass_cmd, "r" ))) {
 		  pipeerr:
 			sys_error( "Skipping account %s, password command failed", srvc->name );
-			goto bail;
+			return 0;
 		}
 		if (!fgets( buffer, sizeof(buffer), fp ))
 			buffer[0] = 0;
@@ -1684,33 +1680,46 @@ imap_open_store_authenticate2( imap_store_t *ctx )
 				error( "Skipping account %s, password command crashed\n", srvc->name );
 			else
 				error( "Skipping account %s, password command exited with status %d\n", srvc->name, WEXITSTATUS( ret ) );
-			goto bail;
+			return 0;
 		}
 		if (!buffer[0]) {
 			error( "Skipping account %s, password command produced no output\n", srvc->name );
-			goto bail;
+			return 0;
 		}
 		buffer[strcspn( buffer, "\n" )] = 0; /* Strip trailing newline */
 		free( srvc->pass ); /* From previous runs */
 		srvc->pass = nfstrdup( buffer );
 	} else if (!srvc->pass) {
-		char prompt[80];
+		char *pass, prompt[80];
+
 		sprintf( prompt, "Password (%s): ", srvc->name );
-		arg = getpass( prompt );
-		if (!arg) {
+		pass = getpass( prompt );
+		if (!pass) {
 			perror( "getpass" );
 			exit( 1 );
 		}
-		if (!*arg) {
+		if (!*pass) {
 			error( "Skipping account %s, no password\n", srvc->name );
-			goto bail;
+			return 0;
 		}
-		/*
-		 * getpass() returns a pointer to a static buffer.  make a copy
-		 * for long term storage.
-		 */
-		srvc->pass = nfstrdup( arg );
+		/* getpass() returns a pointer to a static buffer. Make a copy for long term storage. */
+		srvc->pass = nfstrdup( pass );
 	}
+	return srvc->pass;
+}
+
+static void
+imap_open_store_authenticate2( imap_store_t *ctx )
+{
+	imap_store_conf_t *cfg = (imap_store_conf_t *)ctx->gen.conf;
+	imap_server_conf_t *srvc = cfg->server;
+	string_list_t *mech, *cmech;
+#ifdef HAVE_LIBSSL
+	int auth_cram = 0;
+#endif
+	int auth_login = 0;
+
+	info( "Logging in...\n" );
 	for (mech = srvc->auth_mechs; mech; mech = mech->next) {
 		int any = !strcmp( mech->string, "*" );
 		for (cmech = ctx->auth_mechs; cmech; cmech = cmech->next) {
@@ -1735,6 +1744,8 @@ imap_open_store_authenticate2( imap_store_t *ctx )
 	if (auth_cram) {
 		struct imap_cmd *cmd = new_imap_cmd( sizeof(*cmd) );
 
+		if (!ensure_user( srvc ) || !ensure_password( srvc ))
+			goto bail;
 		info( "Authenticating with CRAM-MD5...\n" );
 		cmd->param.cont = do_cram_auth;
 		imap_exec( ctx, cmd, imap_open_store_authenticate2_p2, "AUTHENTICATE CRAM-MD5" );
@@ -1742,6 +1753,8 @@ imap_open_store_authenticate2( imap_store_t *ctx )
 	}
 #endif
 	if (auth_login) {
+		if (!ensure_user( srvc ) || !ensure_password( srvc ))
+			goto bail;
 		info( "Logging in...\n" );
 #ifdef HAVE_LIBSSL
 		if (!ctx->conn.ssl)
