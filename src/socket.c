@@ -177,8 +177,10 @@ verify_cert_host( const server_conf_t *conf, conn_t *sock )
 		return -1;
 	}
 
-	if (!conf->host)
-		return 0; /* SSL on top of a tunnel, no host specified. */
+	if (!conf->host) {
+		error( "SSL error connecting %s: Neither host nor matching certificate specified\n", sock->name );
+		return -1;
+	}
 
 	return verify_hostname( cert, conf->host );
 }

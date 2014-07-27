@@ -238,8 +238,9 @@ Define the IMAP4 Account \fIname\fR, opening a section for its parameters.
 \fBHost\fR \fIhost\fR
 Specify the DNS name or IP address of the IMAP server.
 .br
-If \fBTunnel\fR is used, this setting is used only for SSL host certificate
-verification, if provided.
+If \fBTunnel\fR is used, this setting is needed only if \fBSSLType\fR is
+not \fINone\fR and \fBCertificateFile\fR is not used,
+in which case the host name is used for certificate subject verification.
 ..
 .TP
 \fBPort\fR \fIport\fR
