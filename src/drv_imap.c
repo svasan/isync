@@ -1454,28 +1454,6 @@ imap_cleanup_p2( imap_store_t *ctx,
 
 /******************* imap_open_store *******************/
 
-#ifdef HAVE_LIBSSL
-static int
-do_cram_auth( imap_store_t *ctx, struct imap_cmd *cmdp, const char *prompt )
-{
-	imap_server_conf_t *srvc = ((imap_store_conf_t *)ctx->gen.conf)->server;
-	char *resp;
-	int l;
-
-	cmdp->param.cont = 0;
-
-	cram( prompt, srvc->user, srvc->pass, &resp, &l );
-
-	if (DFlags & VERBOSE) {
-		printf( "%s>+> %s\n", ctx->label, resp );
-		fflush( stdout );
-	}
-	if (socket_write( &ctx->conn, resp, l, GiveOwn ) < 0)
-		return -1;
-	return socket_write( &ctx->conn, "\r\n", 2, KeepOwn );
-}
-#endif
-
 static void imap_open_store_connected( int, void * );
 #ifdef HAVE_LIBSSL
 static void imap_open_store_tlsstarted1( int, void * );
@@ -1888,9 +1866,6 @@ imap_open_store_authenticate2( imap_store_t *ctx )
 	imap_store_conf_t *cfg = (imap_store_conf_t *)ctx->gen.conf;
 	imap_server_conf_t *srvc = cfg->server;
 	string_list_t *mech, *cmech;
-#ifdef HAVE_LIBSSL
-	int auth_cram = 0;
-#endif
 	int auth_login = 0;
 #ifdef HAVE_LIBSASL
 	char saslmechs[1024], *saslend = saslmechs;
@@ -1906,10 +1881,6 @@ imap_open_store_authenticate2( imap_store_t *ctx )
 					if (ctx->conn.ssl || !any)
 #endif
 						auth_login = 1;
-#ifdef HAVE_LIBSSL
-				} else if (!strcasecmp( cmech->string, "CRAM-MD5" )) {
-					auth_cram = 1;
-#endif
 				} else {
 #ifdef HAVE_LIBSASL
 					int len = strlen( cmech->string );
@@ -1972,18 +1943,6 @@ imap_open_store_authenticate2( imap_store_t *ctx )
 		cmd->param.cont = do_sasl_auth;
 		imap_exec( ctx, cmd, done_sasl_auth, enc ? "AUTHENTICATE %s %s" : "AUTHENTICATE %s", gotmech, enc );
 		free( enc );
-		return;
-	}
-#endif
-#ifdef HAVE_LIBSSL
-	if (auth_cram) {
-		struct imap_cmd *cmd = new_imap_cmd( sizeof(*cmd) );
-
-		if (!ensure_user( srvc ) || !ensure_password( srvc ))
-			goto bail;
-		info( "Authenticating with CRAM-MD5...\n" );
-		cmd->param.cont = do_cram_auth;
-		imap_exec( ctx, cmd, imap_open_store_authenticate2_p2, "AUTHENTICATE CRAM-MD5" );
 		return;
 	}
 #endif
