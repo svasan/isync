@@ -36,6 +36,11 @@
 #include <time.h>
 #include <sys/wait.h>
 
+#ifdef HAVE_LIBSASL
+# include <sasl/sasl.h>
+# include <sasl/saslutil.h>
+#endif
+
 #ifdef HAVE_LIBSSL
 enum { SSL_None, SSL_STARTTLS, SSL_IMAPS };
 #endif
@@ -115,6 +120,10 @@ typedef struct imap_store {
 		void (*imap_cancel)( void *aux );
 	} callbacks;
 	void *callback_aux;
+#ifdef HAVE_LIBSASL
+	sasl_conn_t *sasl;
+	int sasl_cont;
+#endif
 
 	conn_t conn; /* this is BIG, so put it last */
 } imap_store_t;
@@ -173,6 +182,9 @@ struct imap_cmd_refcounted {
 
 enum CAPABILITY {
 	NOLOGIN = 0,
+#ifdef HAVE_LIBSASL
+	SASLIR,
+#endif
 #ifdef HAVE_LIBSSL
 	STARTTLS,
 #endif
@@ -184,6 +196,9 @@ enum CAPABILITY {
 
 static const char *cap_list[] = {
 	"LOGINDISABLED",
+#ifdef HAVE_LIBSASL
+	"SASL-IR",
+#endif
 #ifdef HAVE_LIBSSL
 	"STARTTLS",
 #endif
@@ -1354,6 +1369,9 @@ imap_cancel_store( store_t *gctx )
 {
 	imap_store_t *ctx = (imap_store_t *)gctx;
 
+#ifdef HAVE_LIBSASL
+	sasl_dispose( &ctx->sasl );
+#endif
 	socket_close( &ctx->conn );
 	cancel_submitted_imap_cmds( ctx );
 	cancel_pending_imap_cmds( ctx );
@@ -1708,6 +1726,162 @@ ensure_password( imap_server_conf_t *srvc )
 	return srvc->pass;
 }
 
+#ifdef HAVE_LIBSASL
+
+static sasl_callback_t sasl_callbacks[] = {
+	{ SASL_CB_USER,     NULL, NULL },
+	{ SASL_CB_PASS,     NULL, NULL },
+	{ SASL_CB_LIST_END, NULL, NULL }
+};
+
+static int
+process_sasl_interact( sasl_interact_t *interact, imap_server_conf_t *srvc )
+{
+	const char *val;
+
+	for (;; ++interact) {
+		switch (interact->id) {
+		case SASL_CB_LIST_END:
+			return 0;
+		case SASL_CB_USER:
+			val = ensure_user( srvc );
+			break;
+		case SASL_CB_PASS:
+			val = ensure_password( srvc );
+			break;
+		default:
+			error( "Error: Unknown SASL interaction ID\n" );
+			return -1;
+		}
+		if (!val)
+			return -1;
+		interact->result = val;
+		interact->len = strlen( val );
+	}
+}
+
+static int
+process_sasl_step( imap_store_t *ctx, int rc, const char *in, unsigned in_len,
+                   sasl_interact_t *interact, const char **out, unsigned *out_len )
+{
+	imap_server_conf_t *srvc = ((imap_store_conf_t *)ctx->gen.conf)->server;
+
+	while (rc == SASL_INTERACT) {
+		if (process_sasl_interact( interact, srvc ) < 0)
+			return -1;
+		rc = sasl_client_step( ctx->sasl, in, in_len, &interact, out, out_len );
+	}
+	if (rc == SASL_CONTINUE) {
+		ctx->sasl_cont = 1;
+	} else if (rc == SASL_OK) {
+		ctx->sasl_cont = 0;
+	} else {
+		error( "Error: %s\n", sasl_errdetail( ctx->sasl ) );
+		return -1;
+	}
+	return 0;
+}
+
+static int
+decode_sasl_data( const char *prompt, char **in, unsigned *in_len )
+{
+	if (prompt) {
+		int rc;
+		unsigned prompt_len = strlen( prompt );
+		/* We're decoding, the output will be shorter than prompt_len. */
+		*in = nfmalloc( prompt_len );
+		rc = sasl_decode64( prompt, prompt_len, *in, prompt_len, in_len );
+		if (rc != SASL_OK) {
+			free( *in );
+			error( "Error: SASL(%d): %s\n", rc, sasl_errstring( rc, NULL, NULL ) );
+			return -1;
+		}
+	} else {
+		*in = NULL;
+		*in_len = 0;
+	}
+	return 0;
+}
+
+static int
+encode_sasl_data( const char *out, unsigned out_len, char **enc, unsigned *enc_len )
+{
+	int rc;
+	unsigned enc_len_max = ((out_len + 2) / 3) * 4 + 1;
+	*enc = nfmalloc( enc_len_max );
+	rc = sasl_encode64( out, out_len, *enc, enc_len_max, enc_len );
+	if (rc != SASL_OK) {
+		free( *enc );
+		error( "Error: SASL(%d): %s\n", rc, sasl_errstring( rc, NULL, NULL ) );
+		return -1;
+	}
+	return 0;
+}
+
+static int
+do_sasl_auth( imap_store_t *ctx, struct imap_cmd *cmdp ATTR_UNUSED, const char *prompt )
+{
+	int rc, ret;
+	unsigned in_len, out_len, enc_len;
+	const char *out;
+	char *in, *enc;
+	sasl_interact_t *interact = NULL;
+
+	if (!ctx->sasl_cont) {
+		error( "Error: IMAP wants more steps despite successful SASL authentication.\n" );
+		goto bail;
+	}
+	if (decode_sasl_data( prompt, &in, &in_len ) < 0)
+		goto bail;
+	rc = sasl_client_step( ctx->sasl, in, in_len, &interact, &out, &out_len );
+	ret = process_sasl_step( ctx, rc, in, in_len, interact, &out, &out_len );
+	free( in );
+	if (ret < 0)
+		goto bail;
+
+	if (out) {
+		if (encode_sasl_data( out, out_len, &enc, &enc_len ) < 0)
+			goto bail;
+
+		if (DFlags & VERBOSE) {
+			printf( "%s>+> %s\n", ctx->label, enc );
+			fflush( stdout );
+		}
+
+		if (socket_write( &ctx->conn, enc, enc_len, GiveOwn ) < 0)
+			return -1;
+	} else {
+		if (DFlags & VERBOSE) {
+			printf( "%s>+>\n", ctx->label );
+			fflush( stdout );
+		}
+	}
+	return socket_write( &ctx->conn, "\r\n", 2, KeepOwn );
+
+  bail:
+	imap_open_store_bail( ctx );
+	return -1;
+}
+
+static void
+done_sasl_auth( imap_store_t *ctx, struct imap_cmd *cmd ATTR_UNUSED, int response )
+{
+	if (response == RESP_OK && ctx->sasl_cont) {
+		sasl_interact_t *interact = NULL;
+		const char *out;
+		unsigned out_len;
+		int rc = sasl_client_step( ctx->sasl, NULL, 0, &interact, &out, &out_len );
+		if (process_sasl_step( ctx, rc, NULL, 0, interact, &out, &out_len ) < 0)
+			warn( "Warning: SASL reported failure despite successful IMAP authentication. Ignoring...\n" );
+		else if (out)
+			warn( "Warning: SASL wants more steps despite successful IMAP authentication. Ignoring...\n" );
+	}
+
+	imap_open_store_authenticate2_p2( ctx, NULL, response );
+}
+
+#endif
+
 static void
 imap_open_store_authenticate2( imap_store_t *ctx )
 {
@@ -1718,6 +1892,9 @@ imap_open_store_authenticate2( imap_store_t *ctx )
 	int auth_cram = 0;
 #endif
 	int auth_login = 0;
+#ifdef HAVE_LIBSASL
+	char saslmechs[1024], *saslend = saslmechs;
+#endif
 
 	info( "Logging in...\n" );
 	for (mech = srvc->auth_mechs; mech; mech = mech->next) {
@@ -1734,12 +1911,70 @@ imap_open_store_authenticate2( imap_store_t *ctx )
 					auth_cram = 1;
 #endif
 				} else {
+#ifdef HAVE_LIBSASL
+					int len = strlen( cmech->string );
+					if (saslend + len + 2 > saslmechs + sizeof(saslmechs))
+						oob();
+					*saslend++ = ' ';
+					memcpy( saslend, cmech->string, len + 1 );
+					saslend += len;
+#else
 					error( "IMAP error: authentication mechanism %s is not supported\n", cmech->string );
 					goto bail;
+#endif
 				}
 			}
 		}
 	}
+#ifdef HAVE_LIBSASL
+	if (saslend != saslmechs) {
+		int rc;
+		unsigned out_len = 0;
+		char *enc = NULL;
+		const char *gotmech = NULL, *out = NULL;
+		sasl_interact_t *interact = NULL;
+		struct imap_cmd *cmd;
+		static int sasl_inited;
+
+		if (!sasl_inited) {
+			rc = sasl_client_init( sasl_callbacks );
+			if (rc != SASL_OK) {
+			  saslbail:
+				error( "Error: SASL(%d): %s\n", rc, sasl_errstring( rc, NULL, NULL ) );
+				goto bail;
+			}
+			sasl_inited = 1;
+		}
+
+		rc = sasl_client_new( "imap", srvc->sconf.host, NULL, NULL, NULL, 0, &ctx->sasl );
+		if (rc != SASL_OK) {
+			if (!ctx->sasl)
+				goto saslbail;
+			error( "Error: %s\n", sasl_errdetail( ctx->sasl ) );
+			goto bail;
+		}
+
+		rc = sasl_client_start( ctx->sasl, saslmechs + 1, &interact, CAP(SASLIR) ? &out : NULL, &out_len, &gotmech );
+		if (gotmech)
+			info( "Authenticating with SASL mechanism %s...\n", gotmech );
+		/* Technically, we are supposed to loop over sasl_client_start(),
+		 * but it just calls sasl_client_step() anyway. */
+		if (process_sasl_step( ctx, rc, NULL, 0, interact, CAP(SASLIR) ? &out : NULL, &out_len ) < 0)
+			goto bail;
+		if (out) {
+			if (!out_len)
+				enc = nfstrdup( "=" ); /* A zero-length initial response is encoded as padding. */
+			else if (encode_sasl_data( out, out_len, &enc, NULL ) < 0)
+				goto bail;
+		}
+
+		cmd = new_imap_cmd( sizeof(*cmd) );
+		cmd->param.cont = do_sasl_auth;
+		imap_exec( ctx, cmd, done_sasl_auth, enc ? "AUTHENTICATE %s %s" : "AUTHENTICATE %s", gotmech, enc );
+		free( enc );
+		return;
+	}
+#endif
 #ifdef HAVE_LIBSSL
 	if (auth_cram) {
 		struct imap_cmd *cmd = new_imap_cmd( sizeof(*cmd) );

@@ -281,8 +281,7 @@ the legacy IMAP \fBLOGIN\fR mechanism is known.
 The wildcard \fB*\fR represents all mechanisms that are deemed secure
 enough for the current \fBSSLType\fR setting.
 The actually used mechanism is the most secure choice from the intersection
-of this list, the list supplied by the server, and the mechanisms actually
-supported by \fBmbsync\fR (currently only \fBCRAM-MD5\fR and \fBLOGIN\fR).
+of this list, the list supplied by the server, and the installed SASL modules.
 (Default: \fB*\fR)
 ..
 .TP

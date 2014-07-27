@@ -6,10 +6,6 @@ real transactions would be certainly not particularly useful ...
 make sync_chans() aware of servers, so a bad server (e.g., wrong password)
 won't cause the same error message for every attached store.
 
-add support for more authentication methods: oauth, ntlm, ... use SASL?
-possibly by calling an external command. that might be overkill, and
-wouldn't be very user-friendly, though.
-
 make SSL (connect) timeouts produce a bit more than "Unidentified socket error".
 
 network timeout handling in general would be a good idea.
