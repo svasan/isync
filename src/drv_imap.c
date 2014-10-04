@@ -1742,7 +1742,7 @@ imap_open_store_namespace( imap_store_t *ctx )
 
 	ctx->prefix = cfg->gen.path;
 	ctx->delimiter = cfg->delimiter ? nfstrdup( cfg->delimiter ) : 0;
-	if (((!*ctx->prefix && cfg->use_namespace) || !cfg->delimiter) && CAP(NAMESPACE)) {
+	if (((!ctx->prefix && cfg->use_namespace) || !cfg->delimiter) && CAP(NAMESPACE)) {
 		/* get NAMESPACE info */
 		if (!ctx->got_namespace)
 			imap_exec( ctx, 0, imap_open_store_namespace_p2, "NAMESPACE" );
@@ -1776,7 +1776,7 @@ imap_open_store_namespace2( imap_store_t *ctx )
 	    is_atom( (nsp_1st_ns = nsp_1st->child) ) &&
 	    is_atom( (nsp_1st_dl = nsp_1st_ns->next) ))
 	{
-		if (!*ctx->prefix && cfg->use_namespace)
+		if (!ctx->prefix && cfg->use_namespace)
 			ctx->prefix = nsp_1st_ns->val;
 		if (!ctx->delimiter)
 			ctx->delimiter = nfstrdup( nsp_1st_dl->val );
@@ -1790,6 +1790,8 @@ static void
 imap_open_store_finalize( imap_store_t *ctx )
 {
 	set_bad_callback( &ctx->gen, 0, 0 );
+	if (!ctx->prefix)
+		ctx->prefix = "";
 	ctx->trashnc = TrashUnknown;
 	ctx->callbacks.imap_open( &ctx->gen, ctx->callback_aux );
 }
@@ -2381,8 +2383,6 @@ imap_parse_store( conffile_t *cfg, store_conf_t **storep )
 			error( "%s '%s' has both Account and account-specific options\n", type, name );
 			cfg->err = 1;
 		}
-		if (!store->gen.path)
-			store->gen.path = "";
 	}
 	return 1;
 }
