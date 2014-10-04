@@ -924,7 +924,7 @@ maildir_app_msg( maildir_store_t *ctx, message_t ***msgapp, msg_t *entry )
 }
 
 static void
-maildir_select( store_t *gctx, int create,
+maildir_select( store_t *gctx, const char *name, int create,
                 void (*cb)( int sts, void *aux ), void *aux )
 {
 	maildir_store_t *ctx = (maildir_store_t *)gctx;
@@ -941,15 +941,15 @@ maildir_select( store_t *gctx, int create,
 #ifdef USE_DB
 	ctx->db = 0;
 #endif /* USE_DB */
-	if (starts_with( gctx->name, -1, "INBOX", 5 ) && (!gctx->name[5] || gctx->name[5] == '/')) {
-		gctx->path = maildir_join_path( ((maildir_store_conf_t *)gctx->conf)->inbox, gctx->name + 5 );
+	if (starts_with( name, -1, "INBOX", 5 ) && (!name[5] || name[5] == '/')) {
+		gctx->path = maildir_join_path( ((maildir_store_conf_t *)gctx->conf)->inbox, name + 5 );
 	} else {
 		if (maildir_validate_path( gctx->conf ) < 0) {
 			maildir_invoke_bad_callback( gctx );
 			cb( DRV_CANCELED, aux );
 			return;
 		}
-		gctx->path = maildir_join_path( gctx->conf->path, gctx->name );
+		gctx->path = maildir_join_path( gctx->conf->path, name );
 	}
 
 	if ((ret = maildir_validate( gctx->path, create, ctx )) != DRV_OK) {

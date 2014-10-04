@@ -88,6 +88,7 @@ typedef struct imap_store {
 	store_t gen;
 	const char *label; /* foreign */
 	const char *prefix;
+	const char *name;
 	int ref_count;
 	/* trash folder's existence is not confirmed yet */
 	enum { TrashUnknown, TrashChecking, TrashKnown } trashnc;
@@ -1136,7 +1137,7 @@ prepare_name( char **buf, const imap_store_t *ctx, const char *prefix, const cha
 static int
 prepare_box( char **buf, const imap_store_t *ctx )
 {
-	const char *name = ctx->gen.name;
+	const char *name = ctx->name;
 
 	return prepare_name( buf, ctx,
 	    (starts_with( name, -1, "INBOX", 5 ) && (!name[5] || name[5] == '/')) ? "" : ctx->prefix, name );
@@ -1828,7 +1829,7 @@ imap_prepare_opts( store_t *gctx, int opts )
 /******************* imap_select *******************/
 
 static void
-imap_select( store_t *gctx, int create,
+imap_select( store_t *gctx, const char *name, int create,
              void (*cb)( int sts, void *aux ), void *aux )
 {
 	imap_store_t *ctx = (imap_store_t *)gctx;
@@ -1839,6 +1840,7 @@ imap_select( store_t *gctx, int create,
 	gctx->msgs = 0;
 	ctx->msgapp = &gctx->msgs;
 
+	ctx->name = name;
 	if (prepare_box( &buf, ctx ) < 0) {
 		cb( DRV_BOX_BAD, aux );
 		return;
