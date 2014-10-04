@@ -1781,8 +1781,10 @@ imap_open_store_namespace2( imap_store_t *ctx )
 			ctx->prefix = nsp_1st_ns->val;
 		if (!ctx->delimiter)
 			ctx->delimiter = nfstrdup( nsp_1st_dl->val );
+		imap_open_store_finalize( ctx );
+	} else {
+		imap_open_store_bail( ctx );
 	}
-	imap_open_store_finalize( ctx );
 }
 
 static void
