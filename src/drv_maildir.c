@@ -233,7 +233,7 @@ maildir_list_recurse( store_t *gctx, int isBox, int *flags, const char *inbox,
 			} else {
 				if (isBox)
 					continue;
-				if (!memcmp( ent, "INBOX", 6 )) {
+				if (!nameLen && !memcmp( ent, "INBOX", 6 )) {
 					path[pathLen] = 0;
 					warn( "Maildir warning: ignoring INBOX in %s\n", path );
 					continue;
