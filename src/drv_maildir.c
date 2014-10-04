@@ -121,23 +121,39 @@ maildir_join_path( const char *prefix, const char *box )
 	return out;
 }
 
+static int
+maildir_validate_path( const store_conf_t *conf )
+{
+	struct stat st;
+
+	if (!conf->path) {
+		error( "Maildir error: store '%s' has no Path\n", conf->name );
+		return -1;
+	}
+	if (stat( conf->path, &st ) || !S_ISDIR(st.st_mode)) {
+		error( "Maildir error: cannot open store '%s'\n", conf->path );
+		return -1;
+	}
+	return 0;
+}
+
 static void
 maildir_open_store( store_conf_t *conf, const char *label ATTR_UNUSED,
                     void (*cb)( store_t *ctx, void *aux ), void *aux )
 {
 	maildir_store_t *ctx;
-	struct stat st;
 
-	if (stat( conf->path, &st ) || !S_ISDIR(st.st_mode)) {
-		error( "Maildir error: cannot open store '%s'\n", conf->path );
-		cb( 0, aux );
-		return;
-	}
 	ctx = nfcalloc( sizeof(*ctx) );
 	ctx->gen.conf = conf;
 	ctx->uvfd = -1;
-	if (conf->trash)
+	if (conf->trash) {
+		if (maildir_validate_path( conf ) < 0) {
+			free( ctx );
+			cb( 0, aux );
+			return;
+		}
 		ctx->trash = maildir_join_path( conf->path, conf->trash );
+	}
 	cb( &ctx->gen, aux );
 }
 
@@ -267,6 +283,8 @@ maildir_list_path( store_t *gctx, int *flags )
 {
 	char path[_POSIX_PATH_MAX], name[_POSIX_PATH_MAX];
 
+	if (maildir_validate_path( gctx->conf ) < 0)
+		return -1;
 	return maildir_list_recurse(
 	        gctx, 0, flags, ((maildir_store_conf_t *)gctx->conf)->inbox,
 	        path, nfsnprintf( path, _POSIX_PATH_MAX, "%s", gctx->conf->path ),
@@ -922,10 +940,16 @@ maildir_select( store_t *gctx, int create,
 #ifdef USE_DB
 	ctx->db = 0;
 #endif /* USE_DB */
-	gctx->path =
-		(!memcmp( gctx->name, "INBOX", 5 ) && (!gctx->name[5] || gctx->name[5] == '/')) ?
-			maildir_join_path( ((maildir_store_conf_t *)gctx->conf)->inbox, gctx->name + 5 ) :
-			maildir_join_path( gctx->conf->path, gctx->name );
+	if (!memcmp( gctx->name, "INBOX", 5 ) && (!gctx->name[5] || gctx->name[5] == '/')) {
+		gctx->path = maildir_join_path( ((maildir_store_conf_t *)gctx->conf)->inbox, gctx->name + 5 );
+	} else {
+		if (maildir_validate_path( gctx->conf ) < 0) {
+			maildir_invoke_bad_callback( gctx );
+			cb( DRV_CANCELED, aux );
+			return;
+		}
+		gctx->path = maildir_join_path( gctx->conf->path, gctx->name );
+	}
 
 	if ((ret = maildir_validate( gctx->path, create, ctx )) != DRV_OK) {
 		cb( ret, aux );

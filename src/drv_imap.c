@@ -2382,6 +2382,8 @@ imap_parse_store( conffile_t *cfg, store_conf_t **storep )
 			error( "%s '%s' has both Account and account-specific options\n", type, name );
 			cfg->err = 1;
 		}
+		if (!store->gen.path)
+			store->gen.path = "";
 	}
 	return 1;
 }

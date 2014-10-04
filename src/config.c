@@ -354,8 +354,6 @@ load_config( const char *where, int pseudo )
 		for (i = 0; i < N_DRIVERS; i++)
 			if (drivers[i]->parse_store( &cfile, &store )) {
 				if (store) {
-					if (!store->path)
-						store->path = "";
 					if (!store->max_size)
 						store->max_size = INT_MAX;
 					*storeapp = store;
