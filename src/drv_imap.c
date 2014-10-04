@@ -1090,8 +1090,7 @@ parse_list_rsp_p2( imap_store_t *ctx, list_t *list, char *cmd ATTR_UNUSED )
 		return LIST_BAD;
 	}
 	arg = list->val;
-	if (!is_inbox( ctx, arg )) {
-		l = strlen( ctx->prefix );
+	if (!is_inbox( ctx, arg ) && (l = strlen( ctx->prefix ))) {
 		if (memcmp( arg, ctx->prefix, l ))
 			goto skip;
 		arg += l;
