@@ -1091,13 +1091,13 @@ parse_list_rsp_p2( imap_store_t *ctx, list_t *list, char *cmd ATTR_UNUSED )
 	}
 	arg = list->val;
 	if (!is_inbox( ctx, arg )) {
-		l = strlen( ctx->gen.conf->path );
-		if (memcmp( arg, ctx->gen.conf->path, l ))
+		l = strlen( ctx->prefix );
+		if (memcmp( arg, ctx->prefix, l ))
 			goto skip;
 		arg += l;
 		if (is_inbox( ctx, arg )) {
 			if (!arg[5])
-				warn( "IMAP warning: ignoring INBOX in %s\n", ctx->gen.conf->path );
+				warn( "IMAP warning: ignoring INBOX in %s\n", ctx->prefix );
 			goto skip;
 		}
 	}
