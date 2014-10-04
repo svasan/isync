@@ -208,7 +208,7 @@ maildir_invoke_bad_callback( store_t *ctx )
 static int maildir_list_inbox( store_t *gctx, int *flags );
 
 static int
-maildir_list_recurse( store_t *gctx, int isBox, int *flags, const char *inbox,
+maildir_list_recurse( store_t *gctx, int isBox, int *flags, const char *inbox, int inboxLen,
                       char *path, int pathLen, char *name, int nameLen )
 {
 	DIR *dir;
@@ -234,7 +234,7 @@ maildir_list_recurse( store_t *gctx, int isBox, int *flags, const char *inbox,
 	while ((de = readdir( dir ))) {
 		const char *ent = de->d_name;
 		pl = pathLen + nfsnprintf( path + pathLen, _POSIX_PATH_MAX - pathLen, "%s", ent );
-		if (inbox && !memcmp( path, inbox, pl ) && !inbox[pl]) {
+		if (inbox && equals( path, pl, inbox, inboxLen )) {
 			if (maildir_list_inbox( gctx, flags ) < 0) {
 				closedir( dir );
 				return -1;
@@ -249,14 +249,14 @@ maildir_list_recurse( store_t *gctx, int isBox, int *flags, const char *inbox,
 			} else {
 				if (isBox)
 					continue;
-				if (!nameLen && !memcmp( ent, "INBOX", 6 )) {
+				if (!nameLen && equals( ent, -1, "INBOX", 5 )) {
 					path[pathLen] = 0;
 					warn( "Maildir warning: ignoring INBOX in %s\n", path );
 					continue;
 				}
 			}
 			nl = nameLen + nfsnprintf( name + nameLen, _POSIX_PATH_MAX - nameLen, "%s", ent );
-			if (maildir_list_recurse( gctx, 1, flags, inbox, path, pl, name, nl ) < 0) {
+			if (maildir_list_recurse( gctx, 1, flags, inbox, inboxLen, path, pl, name, nl ) < 0) {
 				closedir( dir );
 				return -1;
 			}
@@ -273,7 +273,7 @@ maildir_list_inbox( store_t *gctx, int *flags )
 
 	*flags &= ~LIST_INBOX;
 	return maildir_list_recurse(
-	        gctx, 2, flags, 0,
+	        gctx, 2, flags, 0, 0,
 	        path, nfsnprintf( path, _POSIX_PATH_MAX, "%s", ((maildir_store_conf_t *)gctx->conf)->inbox ),
 	        name, nfsnprintf( name, _POSIX_PATH_MAX, "INBOX" ) );
 }
@@ -281,12 +281,13 @@ maildir_list_inbox( store_t *gctx, int *flags )
 static int
 maildir_list_path( store_t *gctx, int *flags )
 {
+	const char *inbox = ((maildir_store_conf_t *)gctx->conf)->inbox;
 	char path[_POSIX_PATH_MAX], name[_POSIX_PATH_MAX];
 
 	if (maildir_validate_path( gctx->conf ) < 0)
 		return -1;
 	return maildir_list_recurse(
-	        gctx, 0, flags, ((maildir_store_conf_t *)gctx->conf)->inbox,
+	        gctx, 0, flags, inbox, strlen( inbox ),
 	        path, nfsnprintf( path, _POSIX_PATH_MAX, "%s", gctx->conf->path ),
 	        name, 0 );
 }
@@ -767,7 +768,7 @@ maildir_scan( maildir_store_t *ctx, msglist_t *msglist )
 							ctx->db->err( ctx->db, ret, "Maildir error: db->c_get()" );
 						break;
 					}
-					if ((key.size != 11 || memcmp( key.data, "UIDVALIDITY", 11 )) &&
+					if (!equals( key.data, key.size, "UIDVALIDITY", 11 ) &&
 					    (ret = tdb->get( tdb, 0, &key, &value, 0 ))) {
 						if (ret != DB_NOTFOUND) {
 							tdb->err( tdb, ret, "Maildir error: tdb->get()" );
@@ -876,7 +877,7 @@ maildir_scan( maildir_store_t *ctx, msglist_t *msglist )
 				while (fgets( nbuf, sizeof(nbuf), f )) {
 					if (!nbuf[0] || nbuf[0] == '\n')
 						break;
-					if (!memcmp( nbuf, "X-TUID: ", 8 ) && nbuf[8 + TUIDL] == '\n') {
+					if (starts_with( nbuf, -1, "X-TUID: ", 8 ) && nbuf[8 + TUIDL] == '\n') {
 						memcpy( entry->tuid, nbuf + 8, TUIDL );
 						break;
 					}
@@ -940,7 +941,7 @@ maildir_select( store_t *gctx, int create,
 #ifdef USE_DB
 	ctx->db = 0;
 #endif /* USE_DB */
-	if (!memcmp( gctx->name, "INBOX", 5 ) && (!gctx->name[5] || gctx->name[5] == '/')) {
+	if (starts_with( gctx->name, -1, "INBOX", 5 ) && (!gctx->name[5] || gctx->name[5] == '/')) {
 		gctx->path = maildir_join_path( ((maildir_store_conf_t *)gctx->conf)->inbox, gctx->name + 5 );
 	} else {
 		if (maildir_validate_path( gctx->conf ) < 0) {

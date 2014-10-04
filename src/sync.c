@@ -315,7 +315,7 @@ msg_fetched( int sts, void *aux )
 					if (c == '\r')
 						lcrs++;
 					else if (c == '\n') {
-						if (!memcmp( fmap + start, "X-TUID: ", 8 )) {
+						if (starts_with( fmap + start, len - start, "X-TUID: ", 8 )) {
 							extra = (sbreak = start) - (ebreak = i);
 							goto oke;
 						}
@@ -803,7 +803,7 @@ box_selected( int sts, void *aux )
 				error( "Error: incomplete journal header in %s\n", svars->jname );
 				goto jbail;
 			}
-			if (memcmp( buf, JOURNAL_VERSION "\n", strlen(JOURNAL_VERSION) + 1 )) {
+			if (!equals( buf, t, JOURNAL_VERSION "\n", strlen(JOURNAL_VERSION) + 1 )) {
 				error( "Error: incompatible journal version "
 				                 "(got %.*s, expected " JOURNAL_VERSION ")\n", t - 1, buf );
 				goto jbail;

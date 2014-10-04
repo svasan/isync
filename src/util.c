@@ -203,6 +203,35 @@ memrchr( const void *s, int c, size_t n )
 }
 #endif
 
+#ifndef HAVE_STRNLEN
+int
+strnlen( const char *str, size_t maxlen )
+{
+	size_t len;
+
+	/* It's tempting to use memchr(), but it's allowed to read past the end of the actual string. */
+	for (len = 0; len < maxlen && str[len]; len++) {}
+	return len;
+}
+
+#endif
+
+int
+starts_with( const char *str, int strl, const char *cmp, int cmpl )
+{
+	if (strl < 0)
+		strl = strnlen( str, cmpl + 1 );
+	return (strl >= cmpl) && !memcmp( str, cmp, cmpl );
+}
+
+int
+equals( const char *str, int strl, const char *cmp, int cmpl )
+{
+	if (strl < 0)
+		strl = strnlen( str, cmpl + 1 );
+	return (strl == cmpl) && !memcmp( str, cmp, cmpl );
+}
+
 #ifndef HAVE_TIMEGM
 /*
    Converts struct tm to time_t, assuming the data in tm is UTC rather

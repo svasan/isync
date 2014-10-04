@@ -106,3 +106,6 @@ void ATTR_NORETURN oob( void );
 #ifndef HAVE_MEMRCHR
 void *memrchr( const void *s, int c, size_t n );
 #endif
+
+int starts_with( const char *str, int strl, const char *cmp, int cmpl );
+int equals( const char *str, int strl, const char *cmp, int cmpl );

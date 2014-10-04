@@ -155,7 +155,7 @@ filter_boxes( string_list_t *boxes, const char *prefix, string_list_t *patterns 
 
 	pfxl = prefix ? strlen( prefix ) : 0;
 	for (; boxes; boxes = boxes->next) {
-		if (memcmp( boxes->string, prefix, pfxl ))
+		if (!starts_with( boxes->string, -1, prefix, pfxl ))
 			continue;
 		fnot = 1;
 		for (cpat = patterns; cpat; cpat = cpat->next) {
@@ -256,7 +256,7 @@ main( int argc, char **argv )
 						return 1;
 					}
 					config = argv[mvars->oind++];
-				} else if (!memcmp( opt, "config=", 7 ))
+				} else if (starts_with( opt, -1, "config=", 7 ))
 					config = opt + 7;
 				else if (!strcmp( opt, "all" ))
 					mvars->all = 1;
@@ -282,7 +282,7 @@ main( int argc, char **argv )
 					cops |= XOP_PULL, mvars->ops[M] |= XOP_HAVE_TYPE;
 				else if (!strcmp( opt, "push" ))
 					cops |= XOP_PUSH, mvars->ops[M] |= XOP_HAVE_TYPE;
-				else if (!memcmp( opt, "create", 6 )) {
+				else if (starts_with( opt, -1, "create", 6 )) {
 					opt += 6;
 					op = OP_CREATE|XOP_HAVE_CREATE;
 				  lcop:
@@ -295,7 +295,7 @@ main( int argc, char **argv )
 					else
 						goto badopt;
 					mvars->ops[M] |= op & (XOP_HAVE_CREATE|XOP_HAVE_EXPUNGE);
-				} else if (!memcmp( opt, "expunge", 7 )) {
+				} else if (starts_with( opt, -1, "expunge", 7 )) {
 					opt += 7;
 					op = OP_EXPUNGE|XOP_HAVE_EXPUNGE;
 					goto lcop;
@@ -307,7 +307,7 @@ main( int argc, char **argv )
 					mvars->ops[M] |= XOP_HAVE_TYPE|XOP_PULL|XOP_PUSH;
 				else if (!strcmp( opt, "noop" ))
 					mvars->ops[M] |= XOP_HAVE_TYPE;
-				else if (!memcmp( opt, "pull", 4 )) {
+				else if (starts_with( opt, -1, "pull", 4 )) {
 					op = XOP_PULL;
 				  lcac:
 					opt += 4;
@@ -318,7 +318,7 @@ main( int argc, char **argv )
 						goto rlcac;
 					} else
 						goto badopt;
-				} else if (!memcmp( opt, "push", 4 )) {
+				} else if (starts_with( opt, -1, "push", 4 )) {
 					op = XOP_PUSH;
 					goto lcac;
 				} else {
@@ -719,10 +719,10 @@ store_opened( store_t *ctx, void *aux )
 			const char *pat = cpat->string;
 			if (*pat != '!') {
 				char buf[8];
-				snprintf( buf, sizeof(buf), "%s%s", mvars->chan->boxes[t], pat );
+				int bufl = snprintf( buf, sizeof(buf), "%s%s", mvars->chan->boxes[t], pat );
 				/* Partial matches like "INB*" or even "*" are not considered,
 				 * except implicity when the INBOX lives under Path. */
-				if (!memcmp( buf, "INBOX", 5 )) {
+				if (starts_with( buf, bufl, "INBOX", 5 )) {
 					char c = buf[5];
 					if (!c) {
 						/* User really wants the INBOX. */

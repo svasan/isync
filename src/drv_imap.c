@@ -257,7 +257,7 @@ send_imap_cmd( imap_store_t *ctx, struct imap_cmd *cmd )
 	if (DFlags & VERBOSE) {
 		if (ctx->num_in_progress)
 			printf( "(%d in progress) ", ctx->num_in_progress );
-		if (memcmp( cmd->cmd, "LOGIN", 5 ))
+		if (!starts_with( cmd->cmd, -1, "LOGIN", 5 ))
 			printf( "%s>>> %s", ctx->label, buf );
 		else
 			printf( "%s>>> %d LOGIN <user> <pass>\n", ctx->label, cmd->tag );
@@ -732,7 +732,7 @@ parse_imap_list( imap_store_t *ctx, char **sp, parse_list_state_t *sts )
 				if (sts->level && *s == ')')
 					break;
 			cur->len = s - p;
-			if (cur->len == 3 && !memcmp ("NIL", p, 3))
+			if (equals( p, cur->len, "NIL", 3 ))
 				cur->val = NIL;
 			else {
 				cur->val = nfmalloc( cur->len + 1 );
@@ -926,7 +926,7 @@ parse_fetch_rsp( imap_store_t *ctx, list_t *list, char *s ATTR_UNUSED )
 					tmp = tmp->next;
 					if (!is_atom( tmp ))
 						goto bfail;
-					if (!memcmp( tmp->val, "X-TUID: ", 8 ))
+					if (starts_with( tmp->val, tmp->len, "X-TUID: ", 8 ))
 						tuid = tmp->val + 8;
 				} else {
 				  bfail:
@@ -1063,12 +1063,12 @@ parse_list_rsp( imap_store_t *ctx, list_t *list, char *cmd )
 }
 
 static int
-is_inbox( imap_store_t *ctx, const char *arg )
+is_inbox( imap_store_t *ctx, const char *arg, int argl )
 {
 	int i;
 	char c;
 
-	if (memcmp( arg, "INBOX", 5 ))
+	if (!starts_with( arg, argl, "INBOX", 5 ))
 		return 0;
 	if (arg[5])
 		for (i = 0; (c = ctx->delimiter[i]); i++)
@@ -1082,7 +1082,7 @@ parse_list_rsp_p2( imap_store_t *ctx, list_t *list, char *cmd ATTR_UNUSED )
 {
 	string_list_t *narg;
 	char *arg;
-	int l;
+	int argl, l;
 
 	if (!is_atom( list )) {
 		error( "IMAP error: malformed LIST response\n" );
@@ -1090,17 +1090,19 @@ parse_list_rsp_p2( imap_store_t *ctx, list_t *list, char *cmd ATTR_UNUSED )
 		return LIST_BAD;
 	}
 	arg = list->val;
-	if (!is_inbox( ctx, arg ) && (l = strlen( ctx->prefix ))) {
-		if (memcmp( arg, ctx->prefix, l ))
+	argl = list->len;
+	if (!is_inbox( ctx, arg, argl ) && (l = strlen( ctx->prefix ))) {
+		if (!starts_with( arg, argl, ctx->prefix, l ))
 			goto skip;
 		arg += l;
-		if (is_inbox( ctx, arg )) {
+		argl -= l;
+		if (is_inbox( ctx, arg, argl )) {
 			if (!arg[5])
 				warn( "IMAP warning: ignoring INBOX in %s\n", ctx->prefix );
 			goto skip;
 		}
 	}
-	if ((l = strlen( arg )) >= 5 && !memcmp( arg + l - 5, ".lock", 5 )) /* workaround broken servers */
+	if (argl >= 5 && !memcmp( arg + argl - 5, ".lock", 5 )) /* workaround broken servers */
 		goto skip;
 	if (map_name( arg, (char **)&narg, offsetof(string_list_t, string), ctx->delimiter, "/") < 0) {
 		warn( "IMAP warning: ignoring mailbox %s (reserved character '/' in name)\n", arg );
@@ -1137,7 +1139,7 @@ prepare_box( char **buf, const imap_store_t *ctx )
 	const char *name = ctx->gen.name;
 
 	return prepare_name( buf, ctx,
-	    (!memcmp( name, "INBOX", 5 ) && (!name[5] || name[5] == '/')) ? "" : ctx->prefix, name );
+	    (starts_with( name, -1, "INBOX", 5 ) && (!name[5] || name[5] == '/')) ? "" : ctx->prefix, name );
 }
 
 static int
@@ -1276,7 +1278,7 @@ imap_socket_read( void *aux )
 				if (!strcmp( "NO", arg )) {
 					if (cmdp->param.create &&
 					    (cmdp->param.trycreate ||
-					     (cmd && !memcmp( cmd, "[TRYCREATE]", 11 ))))
+					     (cmd && starts_with( cmd, -1, "[TRYCREATE]", 11 ))))
 					{ /* SELECT, APPEND or UID COPY */
 						struct imap_cmd_trycreate *cmd2 =
 							(struct imap_cmd_trycreate *)new_imap_cmd( sizeof(*cmd2) );
@@ -1292,7 +1294,7 @@ imap_socket_read( void *aux )
 				} else /*if (!strcmp( "BAD", arg ))*/
 					resp = RESP_CANCEL;
 				error( "IMAP command '%s' returned an error: %s %s\n",
-				       memcmp( cmdp->cmd, "LOGIN", 5 ) ? cmdp->cmd : "LOGIN <user> <pass>",
+				       !starts_with( cmdp->cmd, -1, "LOGIN", 5 ) ? cmdp->cmd : "LOGIN <user> <pass>",
 				       arg, cmd ? cmd : "" );
 			}
 			if ((resp2 = parse_response_code( ctx, cmdp, cmd )) > resp)
@@ -2266,7 +2268,7 @@ imap_parse_store( conffile_t *cfg, store_conf_t **storep )
 		if (!strcasecmp( "Host", cfg->cmd )) {
 			/* The imap[s]: syntax is just a backwards compat hack. */
 #ifdef HAVE_LIBSSL
-			if (!memcmp( "imaps:", cfg->val, 6 )) {
+			if (starts_with( cfg->val, -1, "imaps:", 6 )) {
 				cfg->val += 6;
 				server->sconf.use_imaps = 1;
 				server->sconf.use_sslv2 = 1;
@@ -2274,10 +2276,10 @@ imap_parse_store( conffile_t *cfg, store_conf_t **storep )
 			} else
 #endif
 			{
-				if (!memcmp( "imap:", cfg->val, 5 ))
+				if (starts_with( cfg->val, -1, "imap:", 5 ))
 					cfg->val += 5;
 			}
-			if (!memcmp( "//", cfg->val, 2 ))
+			if (starts_with( cfg->val, -1, "//", 2 ))
 				cfg->val += 2;
 			server->sconf.host = nfstrdup( cfg->val );
 		}

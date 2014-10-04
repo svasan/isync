@@ -94,6 +94,9 @@ void free_string_list( string_list_t *list );
 void *memrchr( const void *s, int c, size_t n );
 #endif
 
+int starts_with( const char *str, int strl, const char *cmp, int cmpl );
+int equals( const char *str, int strl, const char *cmp, int cmpl );
+
 #ifndef HAVE_TIMEGM
 # include <time.h>
 time_t timegm( struct tm *tm );

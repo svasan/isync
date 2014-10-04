@@ -144,7 +144,7 @@ load_config( const char *path, config_t ***stor )
 				goto forbid;
 			inbox = nfstrdup( val );
 		} else if (!strcasecmp( "Host", cmd )) {
-			if (!memcmp( "imaps:", val, 6 )) {
+			if (starts_with( val, -1, "imaps:", 6 )) {
 				val += 6;
 				cfg->use_imaps = 1;
 				cfg->port = 993;
@@ -268,7 +268,7 @@ write_imap_server( FILE *fp, config_t *cfg )
 		}
 		if (boxes) /* !o2o */
 			for (pbox = boxes; pbox != cfg; pbox = pbox->next)
-				if (!memcmp( pbox->old_server_name, buf, hl + 1 )) {
+				if (equals( pbox->old_server_name, -1, buf, hl )) {
 					nfasprintf( (char **)&cfg->old_server_name, "%s-%d", buf, ++pbox->old_servers );
 					goto gotsrv;
 				}
@@ -293,7 +293,7 @@ write_imap_server( FILE *fp, config_t *cfg )
 	}
 	if (boxes) /* !o2o */
 		for (pbox = boxes; pbox != cfg; pbox = pbox->next)
-			if (!memcmp( pbox->server_name, buf, hl + 1 )) {
+			if (equals( pbox->server_name, -1, buf, hl )) {
 				nfasprintf( (char **)&cfg->server_name, "%s-%d", buf, ++pbox->servers );
 				goto ngotsrv;
 			}
@@ -444,13 +444,13 @@ write_config( int fd )
 		  gotall:
 
 			path = expand_strdup( box->path );
-			if (!memcmp( path, Home, HomeLen ) && path[HomeLen] == '/')
+			if (starts_with( path, -1, Home, HomeLen ) && path[HomeLen] == '/')
 				nfasprintf( &path, "~%s", path + HomeLen );
 			local_store = local_box = strrchr( path, '/' ) + 1;
 			pl = local_store - path;
 			/* try to re-use existing store */
 			for (pbox = boxes; pbox != box; pbox = pbox->next)
-				if (pbox->local_store_path && !memcmp( pbox->local_store_path, path, pl ) && !pbox->local_store_path[pl])
+				if (pbox->local_store_path && equals( pbox->local_store_path, -1, path, pl ))
 					goto gotstor;
 			box->local_store_path = my_strndup( path, pl );
 			/* derive a suitable name */
@@ -535,7 +535,7 @@ find_box( const char *s )
 	config_t *p;
 	char *t;
 
-	if (!memcmp( s, Home, HomeLen ) && s[HomeLen] == '/')
+	if (starts_with( s, -1, Home, HomeLen ) && s[HomeLen] == '/')
 		s += HomeLen + 1;
 	for (p = boxes; p; p = p->next) {
 		if (!strcmp( s, p->path ) || (p->alias && !strcmp( s, p->alias )))
