@@ -33,6 +33,11 @@
 
 int DFlags;
 int UseFSync = 1;
+#if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__NT__) || defined(__CYGWIN__)
+char FieldDelimiter = ';';
+#else
+char FieldDelimiter = ':';
+#endif
 
 int Pid;		/* for maildir and imap */
 char Hostname[256];	/* for maildir */

@@ -467,6 +467,19 @@ load_config( const char *where, int pseudo )
 		{
 			UseFSync = parse_bool( &cfile );
 		}
+		else if (!strcasecmp( "FieldDelimiter", cfile.cmd ))
+		{
+			if (strlen( cfile.val ) != 1) {
+				error( "%s:%d: Field delimiter must be exactly one character long\n", cfile.file, cfile.line );
+				cfile.err = 1;
+			} else {
+				FieldDelimiter = cfile.val[0];
+				if (!ispunct( FieldDelimiter )) {
+					error( "%s:%d: Field delimiter must be a punctuation character\n", cfile.file, cfile.line );
+					cfile.err = 1;
+				}
+			}
+		}
 		else if (!getopt_helper( &cfile, &gcops, &global_conf ))
 		{
 			error( "%s:%d: unknown section keyword '%s'\n",

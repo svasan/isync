@@ -669,9 +669,10 @@ box_selected( int sts, void *aux )
 		if (chan->sync_state)
 			nfasprintf( &svars->dname, "%s%s", chan->sync_state, csname );
 		else {
+			char c = FieldDelimiter;
 			cmname = clean_strdup( svars->box_name[M] );
-			nfasprintf( &svars->dname, "%s:%s:%s_:%s:%s", global_conf.sync_state,
-			            chan->stores[M]->name, cmname, chan->stores[S]->name, csname );
+			nfasprintf( &svars->dname, "%s%c%s%c%s_%c%s%c%s", global_conf.sync_state,
+			            c, chan->stores[M]->name, c, cmname, c, chan->stores[S]->name, c, csname );
 			free( cmname );
 		}
 		free( csname );

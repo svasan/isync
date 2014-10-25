@@ -65,6 +65,7 @@
 
 extern int DFlags;
 extern int UseFSync;
+extern char FieldDelimiter;
 
 extern int Pid;
 extern char Hostname[256];

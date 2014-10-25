@@ -229,6 +229,13 @@ The location of the \fBINBOX\fR. This is \fInot\fR relative to \fBPath\fR,
 but it is allowed to place the \fBINBOX\fR inside the \fBPath\fR.
 (Default: \fI~/Maildir\fR)
 ..
+.TP
+\fBInfoDelimiter\fR \fIdelim\fR
+The character used to delimit the info field from a message's basename.
+The Maildir standard defines this to be the colon, but this is incompatible
+with DOS/Windows file systems.
+(Default: the value of \fBFieldDelimiter\fR)
+..
 .SS IMAP4 Accounts
 .TP
 \fBIMAPAccount\fR \fIname\fR
@@ -513,7 +520,8 @@ mailbox name to make up a complete path.
 .br
 This option can be used outside any section for a global effect. In this case
 the appended string is made up according to the pattern
-\fB:\fImaster\fB:\fImaster-box\fB_:\fIslave\fB:\fIslave-box\fR.
+\fB:\fImaster\fB:\fImaster-box\fB_:\fIslave\fB:\fIslave-box\fR
+(see also \fBFieldDelimiter\fR below).
 .br
 (Global default: \fI~/.mbsync/\fR).
 ..
@@ -548,6 +556,16 @@ Enabling it is a wise choice for file systems mounted with data=writeback,
 in particular modern systems like ext4, btrfs and xfs. The performance impact
 on older file systems may be disproportionate.
 (Default: \fIyes\fR)
+..
+.TP
+\fBFieldDelimiter\fR \fIdelim\fR
+The character to use to delimit fields in the string appended to a global
+\fBSyncState\fR.
+\fBmbsync\fR prefers to use the colon, but this is incompatible with
+DOS/Windows file systems.
+This option is meaningless for \fBSyncState\fR if the latter is \fB*\fR,
+obviously. However, it also determines the default of \fBInfoDelimiter\fR.
+(Global default: \fI;\fR on Windows, \fI:\fR everywhere else)
 ..
 .SH RECOMMENDATIONS
 Make sure your IMAP server does not auto-expunge deleted messages - it is

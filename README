@@ -59,9 +59,6 @@ isync executable still exists; it is a compatibility wrapper around mbsync.
     At some point, ``isync'' has successfully run on:
     Linux, Solaris 2.7, OpenBSD 2.8, FreeBSD 4.3.
 
-    Note that Cygwin cannot be reasonably supported due to restrictions
-    of the Windows file system.
-
 * Requirements
 
     Berkley DB 4.2+
