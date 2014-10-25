@@ -153,6 +153,7 @@ typedef struct {
 	channel_conf_t *chan;
 	store_t *ctx[2];
 	driver_t *drv[2];
+	const char *orig_name[2];
 	int state[2], ref_count, nsrecs, ret, lfd;
 	int new_total[2], new_done[2];
 	int flags_total[2], flags_done[2];
@@ -599,13 +600,13 @@ sync_boxes( store_t *ctx[], const char *names[], channel_conf_t *chan,
 	svars->srecadd = &svars->srecs;
 
 	for (t = 0; t < 2; t++) {
-		ctx[t]->orig_name =
+		svars->orig_name[t] =
 			(!names[t] || (ctx[t]->conf->map_inbox && !strcmp( ctx[t]->conf->map_inbox, names[t] ))) ?
 				"INBOX" : names[t];
 		if (!ctx[t]->conf->flat_delim) {
-			svars->box_name[t] = nfstrdup( ctx[t]->orig_name );
-		} else if (map_name( ctx[t]->orig_name, &svars->box_name[t], 0, "/", ctx[t]->conf->flat_delim ) < 0) {
-			error( "Error: canonical mailbox name '%s' contains flattened hierarchy delimiter\n", ctx[t]->orig_name );
+			svars->box_name[t] = nfstrdup( svars->orig_name[t] );
+		} else if (map_name( svars->orig_name[t], &svars->box_name[t], 0, "/", ctx[t]->conf->flat_delim ) < 0) {
+			error( "Error: canonical mailbox name '%s' contains flattened hierarchy delimiter\n", svars->orig_name[t] );
 			svars->ret = SYNC_FAIL;
 			sync_bail3( svars );
 			return;
@@ -618,7 +619,7 @@ sync_boxes( store_t *ctx[], const char *names[], channel_conf_t *chan,
 	 * don't run into uninitialized variables. */
 	sync_ref( svars );
 	for (t = 0; t < 2; t++) {
-		info( "Selecting %s %s...\n", str_ms[t], ctx[t]->orig_name );
+		info( "Selecting %s %s...\n", str_ms[t], svars->orig_name[t] );
 		svars->drv[t]->select( ctx[t], svars->box_name[t], (chan->ops[t] & OP_CREATE) != 0, box_selected, AUX );
 		if (check_cancel( svars ))
 			break;
@@ -703,7 +704,7 @@ box_selected( int sts, void *aux )
 	}
 	if (fcntl( svars->lfd, F_SETLK, &lck )) {
 		error( "Error: channel :%s:%s-:%s:%s is locked\n",
-		         chan->stores[M]->name, ctx[M]->orig_name, chan->stores[S]->name, ctx[S]->orig_name );
+		         chan->stores[M]->name, svars->orig_name[M], chan->stores[S]->name, svars->orig_name[S] );
 		svars->ret = SYNC_FAIL;
 		sync_bail1( svars );
 		return;
@@ -1403,7 +1404,7 @@ box_loaded( int sts, void *aux )
 		if (svars->chan->expire_unread < 0 && (unsigned)alive * 2 > svars->chan->max_messages) {
 			error( "%s: %d unread messages in excess of MaxMessages (%d).\n"
 			       "Please set ExpireUnread to decide outcome. Skipping mailbox.\n",
-			       svars->ctx[S]->orig_name, alive, svars->chan->max_messages );
+			       svars->orig_name[S], alive, svars->chan->max_messages );
 			svars->ret |= SYNC_FAIL;
 			cancel_sync( svars );
 			return;

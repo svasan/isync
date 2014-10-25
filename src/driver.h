@@ -86,7 +86,6 @@ typedef struct store {
 	void *bad_callback_aux;
 
 	/* currently open mailbox */
-	const char *orig_name; /* foreign! maybe preset? */
 	char *path; /* own */
 	message_t *msgs; /* own */
 	int uidvalidity;
