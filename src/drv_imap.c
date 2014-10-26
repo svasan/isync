@@ -1270,7 +1270,8 @@ imap_socket_read( void *aux )
 					ctx->trashnc = TrashKnown; /* Can't get NO [TRYCREATE] any more. */
 				p = cmdp->param.data;
 				cmdp->param.data = 0;
-				if (socket_write( &ctx->conn, p, cmdp->param.data_len, GiveOwn ) < 0)
+				if (socket_write( &ctx->conn, p, cmdp->param.data_len, GiveOwn ) < 0 ||
+				    socket_write( &ctx->conn, "\r\n", 2, KeepOwn ) < 0)
 					return;
 			} else if (cmdp->param.cont) {
 				if (cmdp->param.cont( ctx, cmdp, cmd ))
@@ -1279,8 +1280,6 @@ imap_socket_read( void *aux )
 				error( "IMAP error: unexpected command continuation request\n" );
 				break;
 			}
-			if (socket_write( &ctx->conn, "\r\n", 2, KeepOwn ) < 0)
-				return;
 		} else {
 			tag = atoi( arg );
 			for (pcmdp = &ctx->in_progress; (cmdp = *pcmdp); pcmdp = &cmdp->next)
