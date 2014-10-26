@@ -260,8 +260,9 @@ done_imap_cmd( imap_store_t *ctx, struct imap_cmd *cmd, int response )
 static int
 send_imap_cmd( imap_store_t *ctx, struct imap_cmd *cmd )
 {
-	int bufl, litplus;
+	int bufl, litplus, iovcnt = 1;
 	const char *buffmt;
+	conn_iovec_t iov[3];
 	char buf[1024];
 
 	cmd->tag = ++ctx->nexttag;
@@ -286,15 +287,21 @@ send_imap_cmd( imap_store_t *ctx, struct imap_cmd *cmd )
 			printf( "%s>>> %d LOGIN <user> <pass>\n", ctx->label, cmd->tag );
 		fflush( stdout );
 	}
-	if (socket_write( &ctx->conn, buf, bufl, KeepOwn ) < 0)
-		goto bail;
+	iov[0].buf = buf;
+	iov[0].len = bufl;
+	iov[0].takeOwn = KeepOwn;
 	if (litplus) {
-		char *p = cmd->param.data;
+		iov[1].buf = cmd->param.data;
+		iov[1].len = cmd->param.data_len;
+		iov[1].takeOwn = GiveOwn;
 		cmd->param.data = 0;
-		if (socket_write( &ctx->conn, p, cmd->param.data_len, GiveOwn ) < 0 ||
-		    socket_write( &ctx->conn, "\r\n", 2, KeepOwn ) < 0)
-			goto bail;
+		iov[2].buf = "\r\n";
+		iov[2].len = 2;
+		iov[2].takeOwn = KeepOwn;
+		iovcnt = 3;
 	}
+	if (socket_write( &ctx->conn, iov, iovcnt ) < 0)
+		goto bail;
 	if (cmd->param.to_trash && ctx->trashnc == TrashUnknown)
 		ctx->trashnc = TrashChecking;
 	cmd->next = 0;
@@ -1195,6 +1202,7 @@ imap_socket_read( void *aux )
 	struct imap_cmd *cmdp, **pcmdp;
 	char *cmd, *arg, *arg1, *p;
 	int resp, resp2, tag, greeted;
+	conn_iovec_t iov[2];
 
 	greeted = ctx->greeting;
 	for (;;) {
@@ -1273,10 +1281,14 @@ imap_socket_read( void *aux )
 			if (cmdp->param.data) {
 				if (cmdp->param.to_trash)
 					ctx->trashnc = TrashKnown; /* Can't get NO [TRYCREATE] any more. */
-				p = cmdp->param.data;
+				iov[0].buf = cmdp->param.data;
+				iov[0].len = cmdp->param.data_len;
+				iov[0].takeOwn = GiveOwn;
 				cmdp->param.data = 0;
-				if (socket_write( &ctx->conn, p, cmdp->param.data_len, GiveOwn ) < 0 ||
-				    socket_write( &ctx->conn, "\r\n", 2, KeepOwn ) < 0)
+				iov[1].buf = "\r\n";
+				iov[1].len = 2;
+				iov[1].takeOwn = KeepOwn;
+				if (socket_write( &ctx->conn, iov, 2 ) < 0)
 					return;
 			} else if (cmdp->param.cont) {
 				if (cmdp->param.cont( ctx, cmdp, cmd ))
@@ -1803,11 +1815,12 @@ encode_sasl_data( const char *out, uint out_len, char **enc, uint *enc_len )
 static int
 do_sasl_auth( imap_store_t *ctx, struct imap_cmd *cmdp ATTR_UNUSED, const char *prompt )
 {
-	int rc, ret;
+	int rc, ret, iovcnt = 0;
 	uint in_len, out_len, enc_len;
 	const char *out;
 	char *in, *enc;
 	sasl_interact_t *interact = NULL;
+	conn_iovec_t iov[2];
 
 	if (!ctx->sasl_cont) {
 		error( "Error: IMAP wants more steps despite successful SASL authentication.\n" );
@@ -1825,20 +1838,26 @@ do_sasl_auth( imap_store_t *ctx, struct imap_cmd *cmdp ATTR_UNUSED, const char *
 		if (encode_sasl_data( out, out_len, &enc, &enc_len ) < 0)
 			goto bail;
 
+		iov[0].buf = enc;
+		iov[0].len = enc_len;
+		iov[0].takeOwn = GiveOwn;
+		iovcnt = 1;
+
 		if (DFlags & VERBOSE) {
 			printf( "%s>+> %s\n", ctx->label, enc );
 			fflush( stdout );
 		}
-
-		if (socket_write( &ctx->conn, enc, enc_len, GiveOwn ) < 0)
-			return -1;
 	} else {
 		if (DFlags & VERBOSE) {
 			printf( "%s>+>\n", ctx->label );
 			fflush( stdout );
 		}
 	}
-	return socket_write( &ctx->conn, "\r\n", 2, KeepOwn );
+	iov[iovcnt].buf = "\r\n";
+	iov[iovcnt].len = 2;
+	iov[iovcnt].takeOwn = KeepOwn;
+	iovcnt++;
+	return socket_write( &ctx->conn, iov, iovcnt );
 
   bail:
 	imap_open_store_bail( ctx );

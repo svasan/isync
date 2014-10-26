@@ -123,6 +123,11 @@ void socket_close( conn_t *sock );
 int socket_read( conn_t *sock, char *buf, int len ); /* never waits */
 char *socket_read_line( conn_t *sock ); /* don't free return value; never waits */
 typedef enum { KeepOwn = 0, GiveOwn } ownership_t;
-int socket_write( conn_t *sock, char *buf, int len, ownership_t takeOwn );
+typedef struct conn_iovec {
+	char *buf;
+	int len;
+	ownership_t takeOwn;
+} conn_iovec_t;
+int socket_write( conn_t *sock, conn_iovec_t *iov, int iovcnt );
 
 #endif

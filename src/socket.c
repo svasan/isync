@@ -660,21 +660,30 @@ do_append( conn_t *conn, char *buf, int len, ownership_t takeOwn )
 }
 
 int
-socket_write( conn_t *conn, char *buf, int len, ownership_t takeOwn )
+socket_write( conn_t *conn, conn_iovec_t *iov, int iovcnt )
 {
-	if (conn->write_buf) {
-		do_append( conn, buf, len, takeOwn );
-		return len;
-	} else {
-		int n = do_write( conn, buf, len );
-		if (n != len && n >= 0) {
-			conn->write_offset = n;
-			do_append( conn, buf, len, takeOwn );
-		} else if (takeOwn) {
-			free( buf );
+	for (; iovcnt; iovcnt--, iov++) {
+		if (conn->write_buf) {
+			do_append( conn, iov->buf, iov->len, iov->takeOwn );
+		} else {
+			int n = do_write( conn, iov->buf, iov->len );
+			if (n < 0) {
+				do {
+					if (iov->takeOwn == GiveOwn)
+						free( iov->buf );
+					iovcnt--, iov++;
+				} while (iovcnt);
+				return -1;
+			}
+			if (n != iov->len) {
+				conn->write_offset = n;
+				do_append( conn, iov->buf, iov->len, iov->takeOwn );
+			} else if (iov->takeOwn == GiveOwn) {
+				free( iov->buf );
+			}
 		}
-		return n;
 	}
+	return 0;
 }
 
 static void
