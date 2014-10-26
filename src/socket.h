@@ -121,7 +121,4 @@ char *socket_read_line( conn_t *sock ); /* don't free return value; never waits 
 typedef enum { KeepOwn = 0, GiveOwn } ownership_t;
 int socket_write( conn_t *sock, char *buf, int len, ownership_t takeOwn );
 
-void cram( const char *challenge, const char *user, const char *pass,
-           char **_final, int *_finallen );
-
 #endif
