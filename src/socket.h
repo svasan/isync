@@ -57,9 +57,8 @@ typedef struct server_conf {
 
 typedef struct buff_chunk {
 	struct buff_chunk *next;
-	char *data;
 	int len;
-	char buf[1];
+	char data[1];
 } buff_chunk_t;
 
 typedef struct {
@@ -88,8 +87,10 @@ typedef struct {
 	void *callback_aux;
 
 	notifier_t notify;
+	wakeup_t fd_fake;
 
 	/* writing */
+	buff_chunk_t *append_buf; /* accumulating buffer */
 	buff_chunk_t *write_buf, **write_buf_append; /* buffer head & tail */
 	int write_offset; /* offset into buffer head */
 
