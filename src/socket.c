@@ -178,11 +178,11 @@ ssl_verify_callback( int ok, X509_STORE_CTX *ctx )
 
 	if (!conn->force_trusted) {
 		X509 *cert = sk_X509_value( ctx->chain, 0 );
-		STACK_OF(X509_OBJECT) *trusted = ctx->ctx->objs;
-		unsigned i;
+		STACK_OF(X509_OBJECT) *trusted = (STACK_OF(X509_OBJECT) *)conn->conf->trusted_certs;
+		int i;
 
 		conn->force_trusted = -1;
-		for (i = 0; i < conn->conf->num_trusted; i++) {
+		for (i = 0; i < sk_X509_OBJECT_num( trusted ); i++) {
 			if (!X509_cmp( cert, sk_X509_OBJECT_value( trusted, i )->data.x509 )) {
 				conn->force_trusted = 1;
 				break;
@@ -227,7 +227,7 @@ init_ssl_ctx( const server_conf_t *conf )
 		       conf->cert_file, ERR_error_string( ERR_get_error(), 0 ) );
 		return 0;
 	}
-	mconf->num_trusted = sk_X509_OBJECT_num( SSL_CTX_get_cert_store( mconf->SSLContext )->objs );
+	mconf->trusted_certs = (_STACK *)sk_X509_OBJECT_dup( SSL_CTX_get_cert_store( mconf->SSLContext )->objs );
 	if (!SSL_CTX_set_default_verify_paths( mconf->SSLContext ))
 		warn( "Warning: Unable to load default certificate files: %s\n",
 		      ERR_error_string( ERR_get_error(), 0 ) );
