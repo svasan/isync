@@ -584,84 +584,73 @@ bucketsForSize( int size )
 	}
 }
 
+static notifier_t *notifiers;
+static int changed;  /* Iterator may be invalid now. */
 #ifdef HAVE_SYS_POLL_H
 static struct pollfd *pollfds;
+static int npolls, rpolls;
 #else
 # ifdef HAVE_SYS_SELECT_H
 #  include <sys/select.h>
 # endif
-# define pollfds fdparms
 #endif
-static struct {
-	void (*cb)( int what, void *aux );
-	void *aux;
-#ifndef HAVE_SYS_POLL_H
-	int fd, events;
-#endif
-	int faked;
-} *fdparms;
-static int npolls, rpolls, changed;
-
-static int
-find_fd( int fd )
-{
-	int n;
-
-	for (n = 0; n < npolls; n++)
-		if (pollfds[n].fd == fd)
-			return n;
-	return -1;
-}
 
 void
-add_fd( int fd, void (*cb)( int events, void *aux ), void *aux )
+init_notifier( notifier_t *sn, int fd, void (*cb)( int, void * ), void *aux )
 {
-	int n;
-
-	assert( find_fd( fd ) < 0 );
-	n = npolls++;
+#ifdef HAVE_SYS_POLL_H
+	int idx = npolls++;
 	if (rpolls < npolls) {
 		rpolls = npolls;
-#ifdef HAVE_SYS_POLL_H
-		pollfds = nfrealloc(pollfds, npolls * sizeof(*pollfds));
-#endif
-		fdparms = nfrealloc(fdparms, npolls * sizeof(*fdparms));
+		pollfds = nfrealloc( pollfds, npolls * sizeof(*pollfds) );
 	}
-	pollfds[n].fd = fd;
-	pollfds[n].events = 0; /* POLLERR & POLLHUP implicit */
-	fdparms[n].faked = 0;
-	fdparms[n].cb = cb;
-	fdparms[n].aux = aux;
-	changed = 1;
-}
-
-void
-conf_fd( int fd, int and_events, int or_events )
-{
-	int n = find_fd( fd );
-	assert( n >= 0 );
-	pollfds[n].events = (pollfds[n].events & and_events) | or_events;
-}
-
-void
-fake_fd( int fd, int events )
-{
-	int n = find_fd( fd );
-	assert( n >= 0 );
-	fdparms[n].faked |= events;
-}
-
-void
-del_fd( int fd )
-{
-	int n = find_fd( fd );
-	assert( n >= 0 );
-	npolls--;
-#ifdef HAVE_SYS_POLL_H
-	memmove(pollfds + n, pollfds + n + 1, (npolls - n) * sizeof(*pollfds));
+	pollfds[idx].fd = fd;
+	pollfds[idx].events = 0; /* POLLERR & POLLHUP implicit */
+	sn->index = idx;
+#else
+	sn->fd = fd;
+	sn->events = 0;
 #endif
-	memmove(fdparms + n, fdparms + n + 1, (npolls - n) * sizeof(*fdparms));
+	sn->cb = cb;
+	sn->aux = aux;
+	sn->faked = 0;
+	sn->next = notifiers;
+	notifiers = sn;
+}
+
+void
+conf_notifier( notifier_t *sn, int and_events, int or_events )
+{
+#ifdef HAVE_SYS_POLL_H
+	int idx = sn->index;
+	pollfds[idx].events = (pollfds[idx].events & and_events) | or_events;
+#else
+	sn->events = (sn->events & and_events) | or_events;
+#endif
+}
+
+void
+wipe_notifier( notifier_t *sn )
+{
+	notifier_t **snp;
+#ifdef HAVE_SYS_POLL_H
+	int idx;
+#endif
+
+	for (snp = &notifiers; *snp != sn; snp = &(*snp)->next)
+		assert( *snp );
+	*snp = sn->next;
+	sn->next = 0;
 	changed = 1;
+
+#ifdef HAVE_SYS_POLL_H
+	idx = sn->index;
+	memmove( pollfds + idx, pollfds + idx + 1, (--npolls - idx) * sizeof(*pollfds) );
+	for (sn = notifiers; sn; sn = sn->next) {
+		if (sn->index > idx)
+			sn->index--;
+	}
+#endif
 }
 
 #define shifted_bit(in, from, to) \
@@ -672,12 +661,13 @@ del_fd( int fd )
 static void
 event_wait( void )
 {
-	int m, n;
+	notifier_t *sn;
+	int m;
 
 #ifdef HAVE_SYS_POLL_H
 	int timeout = -1;
-	for (n = 0; n < npolls; n++)
-		if (fdparms[n].faked) {
+	for (sn = notifiers; sn; sn = sn->next)
+		if (sn->faked) {
 			timeout = 0;
 			break;
 		}
@@ -685,16 +675,18 @@ event_wait( void )
 		perror( "poll() failed in event loop" );
 		abort();
 	}
-	for (n = 0; n < npolls; n++)
-		if ((m = pollfds[n].revents | fdparms[n].faked)) {
+	for (sn = notifiers; sn; sn = sn->next) {
+		int n = sn->index;
+		if ((m = pollfds[n].revents | sn->faked)) {
 			assert( !(m & POLLNVAL) );
-			fdparms[n].faked = 0;
-			fdparms[n].cb( m | shifted_bit( m, POLLHUP, POLLIN ), fdparms[n].aux );
+			sn->faked = 0;
+			sn->cb( m | shifted_bit( m, POLLHUP, POLLIN ), sn->aux );
 			if (changed) {
 				changed = 0;
 				break;
 			}
 		}
+	}
 #else
 	struct timeval *timeout = 0;
 	static struct timeval null_tv;
@@ -705,13 +697,13 @@ event_wait( void )
 	FD_ZERO( &wfds );
 	FD_ZERO( &efds );
 	m = -1;
-	for (n = 0; n < npolls; n++) {
-		if (fdparms[n].faked)
+	for (sn = notifiers; sn; sn = sn->next) {
+		if (sn->faked)
 			timeout = &null_tv;
-		fd = fdparms[n].fd;
-		if (fdparms[n].events & POLLIN)
+		fd = sn->fd;
+		if (sn->events & POLLIN)
 			FD_SET( fd, &rfds );
-		if (fdparms[n].events & POLLOUT)
+		if (sn->events & POLLOUT)
 			FD_SET( fd, &wfds );
 		FD_SET( fd, &efds );
 		if (fd > m)
@@ -721,9 +713,9 @@ event_wait( void )
 		perror( "select() failed in event loop" );
 		abort();
 	}
-	for (n = 0; n < npolls; n++) {
-		fd = fdparms[n].fd;
-		m = fdparms[n].faked;
+	for (sn = notifiers; sn; sn = sn->next) {
+		fd = sn->fd;
+		m = sn->faked;
 		if (FD_ISSET( fd, &rfds ))
 			m |= POLLIN;
 		if (FD_ISSET( fd, &wfds ))
@@ -731,8 +723,8 @@ event_wait( void )
 		if (FD_ISSET( fd, &efds ))
 			m |= POLLERR;
 		if (m) {
-			fdparms[n].faked = 0;
-			fdparms[n].cb( m, fdparms[n].aux );
+			sn->faked = 0;
+			sn->cb( m, sn->aux );
 			if (changed) {
 				changed = 0;
 				break;
@@ -745,6 +737,6 @@ event_wait( void )
 void
 main_loop( void )
 {
-	while (npolls)
+	while (notifiers)
 		event_wait();
 }

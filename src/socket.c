@@ -67,7 +67,7 @@ ssl_return( const char *func, conn_t *conn, int ret )
 	case SSL_ERROR_NONE:
 		return ret;
 	case SSL_ERROR_WANT_WRITE:
-		conf_fd( conn->fd, POLLIN, POLLOUT );
+		conf_notifier( &conn->notify, POLLIN, POLLOUT );
 		/* fallthrough */
 	case SSL_ERROR_WANT_READ:
 		return 0;
@@ -290,13 +290,13 @@ socket_open_internal( conn_t *sock, int fd )
 {
 	sock->fd = fd;
 	fcntl( fd, F_SETFL, O_NONBLOCK );
-	add_fd( fd, socket_fd_cb, sock );
+	init_notifier( &sock->notify, fd, socket_fd_cb, sock );
 }
 
 static void
 socket_close_internal( conn_t *sock )
 {
-	del_fd( sock->fd );
+	wipe_notifier( &sock->notify );
 	close( sock->fd );
 	sock->fd = -1;
 }
@@ -434,7 +434,7 @@ socket_connect_one( conn_t *sock )
 			socket_connect_failed( sock );
 			return;
 		}
-		conf_fd( s, 0, POLLOUT );
+		conf_notifier( &sock->notify, 0, POLLOUT );
 		sock->state = SCK_CONNECTING;
 		info( "\v\n" );
 		return;
@@ -464,7 +464,7 @@ socket_connected( conn_t *conn )
 #ifdef HAVE_IPV6
 	freeaddrinfo( conn->addrs );
 #endif
-	conf_fd( conn->fd, 0, POLLIN );
+	conf_notifier( &conn->notify, 0, POLLIN );
 	conn->state = SCK_READY;
 	conn->callbacks.connect( 1, conn->callback_aux );
 }
@@ -517,7 +517,7 @@ socket_fill( conn_t *sock )
 		if ((n = ssl_return( "read from", sock, SSL_read( sock->ssl, buf, len ) )) <= 0)
 			return;
 		if (n == len && SSL_pending( sock->ssl ))
-			fake_fd( sock->fd, POLLIN );
+			fake_notifier( &sock->notify, POLLIN );
 	} else
 #endif
 	{
@@ -592,10 +592,10 @@ do_write( conn_t *sock, char *buf, int len )
 			socket_fail( sock );
 		} else {
 			n = 0;
-			conf_fd( sock->fd, POLLIN, POLLOUT );
+			conf_notifier( &sock->notify, POLLIN, POLLOUT );
 		}
 	} else if (n != len) {
-		conf_fd( sock->fd, POLLIN, POLLOUT );
+		conf_notifier( &sock->notify, POLLIN, POLLOUT );
 	}
 	return n;
 }
@@ -632,7 +632,7 @@ do_queued_write( conn_t *conn )
 	}
 #ifdef HAVE_LIBSSL
 	if (conn->ssl && SSL_pending( conn->ssl ))
-		fake_fd( conn->fd, POLLIN );
+		fake_notifier( &conn->notify, POLLIN );
 #endif
 	return conn->write_callback( conn->callback_aux );
 }
@@ -700,7 +700,7 @@ socket_fd_cb( int events, void *aux )
 	}
 
 	if (events & POLLOUT)
-		conf_fd( conn->fd, POLLIN, 0 );
+		conf_notifier( &conn->notify, POLLIN, 0 );
 
 #ifdef HAVE_LIBSSL
 	if (conn->state == SCK_STARTTLS) {

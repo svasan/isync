@@ -127,6 +127,18 @@ uchar arc4_getbyte( void );
 
 int bucketsForSize( int size );
 
+typedef struct notifier {
+	struct notifier *next;
+	void (*cb)( int what, void *aux );
+	void *aux;
+#ifdef HAVE_SYS_POLL_H
+	int index;
+#else
+	int fd, events;
+#endif
+	int faked;
+} notifier_t;
+
 #ifdef HAVE_SYS_POLL_H
 # include <sys/poll.h>
 #else
@@ -135,10 +147,11 @@ int bucketsForSize( int size );
 # define POLLERR 8
 #endif
 
-void add_fd( int fd, void (*cb)( int events, void *aux ), void *aux );
-void conf_fd( int fd, int and_events, int or_events );
-void fake_fd( int fd, int events );
-void del_fd( int fd );
+void init_notifier( notifier_t *sn, int fd, void (*cb)( int, void * ), void *aux );
+void conf_notifier( notifier_t *sn, int and_events, int or_events );
+static INLINE void fake_notifier( notifier_t *sn, int events ) { sn->faked |= events; }
+void wipe_notifier( notifier_t *sn );
+
 void main_loop( void );
 
 #endif

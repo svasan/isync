@@ -86,6 +86,8 @@ typedef struct {
 	} callbacks;
 	void *callback_aux;
 
+	notifier_t notify;
+
 	/* writing */
 	buff_chunk_t *write_buf, **write_buf_append; /* buffer head & tail */
 	int write_offset; /* offset into buffer head */
