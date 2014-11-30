@@ -231,6 +231,7 @@ init_ssl_ctx( const server_conf_t *conf )
 
 static void start_tls_p2( conn_t * );
 static void start_tls_p3( conn_t *, int );
+static void ssl_fake_cb( void * );
 
 void
 socket_start_tls( conn_t *conn, void (*cb)( int ok, void *aux ) )
@@ -250,6 +251,7 @@ socket_start_tls( conn_t *conn, void (*cb)( int ok, void *aux ) )
 		return;
 	}
 
+	init_wakeup( &conn->ssl_fake, ssl_fake_cb, conn );
 	conn->ssl = SSL_new( ((server_conf_t *)conn->conf)->SSLContext );
 	SSL_set_fd( conn->ssl, conn->fd );
 	SSL_set_mode( conn->ssl, SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER );
@@ -493,6 +495,7 @@ socket_close( conn_t *sock )
 	if (sock->ssl) {
 		SSL_free( sock->ssl );
 		sock->ssl = 0;
+		wipe_wakeup( &sock->ssl_fake );
 	}
 #endif
 	while (sock->write_buf)
@@ -517,7 +520,7 @@ socket_fill( conn_t *sock )
 		if ((n = ssl_return( "read from", sock, SSL_read( sock->ssl, buf, len ) )) <= 0)
 			return;
 		if (n == len && SSL_pending( sock->ssl ))
-			fake_notifier( &sock->notify, POLLIN );
+			conf_wakeup( &sock->ssl_fake, 0 );
 	} else
 #endif
 	{
@@ -632,7 +635,7 @@ do_queued_write( conn_t *conn )
 	}
 #ifdef HAVE_LIBSSL
 	if (conn->ssl && SSL_pending( conn->ssl ))
-		fake_notifier( &conn->notify, POLLIN );
+		conf_wakeup( &conn->ssl_fake, 0 );
 #endif
 	return conn->write_callback( conn->callback_aux );
 }
@@ -720,3 +723,13 @@ socket_fd_cb( int events, void *aux )
 	if (events & POLLIN)
 		socket_fill( conn );
 }
+
+#ifdef HAVE_LIBSSL
+static void
+ssl_fake_cb( void *aux )
+{
+	conn_t *conn = (conn_t *)aux;
+
+	socket_fill( conn );
+}
+#endif

@@ -75,6 +75,7 @@ typedef struct {
 	char *name;
 #ifdef HAVE_LIBSSL
 	SSL *ssl;
+	wakeup_t ssl_fake;
 #endif
 
 	void (*bad_callback)( void *aux ); /* async fail while sending or listening */
