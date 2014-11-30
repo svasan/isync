@@ -636,7 +636,6 @@ init_notifier( notifier_t *sn, int fd, void (*cb)( int, void * ), void *aux )
 #endif
 	sn->cb = cb;
 	sn->aux = aux;
-	sn->faked = 0;
 	sn->next = notifiers;
 	notifiers = sn;
 }
@@ -762,20 +761,19 @@ event_wait( void )
 		}
 		timeout = delta * 1000;
 	}
-	for (sn = notifiers; sn; sn = sn->next)
-		if (sn->faked) {
-			timeout = 0;
-			break;
-		}
-	if (poll( pollfds, npolls, timeout ) < 0) {
+	switch (poll( pollfds, npolls, timeout )) {
+	case 0:
+		return;
+	case -1:
 		perror( "poll() failed in event loop" );
 		abort();
+	default:
+		break;
 	}
 	for (sn = notifiers; sn; sn = sn->next) {
 		int n = sn->index;
-		if ((m = pollfds[n].revents | sn->faked)) {
+		if ((m = pollfds[n].revents)) {
 			assert( !(m & POLLNVAL) );
-			sn->faked = 0;
 			sn->cb( m | shifted_bit( m, POLLHUP, POLLIN ), sn->aux );
 			if (changed) {
 				changed = 0;
@@ -786,7 +784,6 @@ event_wait( void )
 #else
 	struct timeval *timeout = 0;
 	struct timeval to_tv;
-	static struct timeval null_tv;
 	fd_set rfds, wfds, efds;
 	int fd;
 
@@ -808,8 +805,6 @@ event_wait( void )
 	FD_ZERO( &efds );
 	m = -1;
 	for (sn = notifiers; sn; sn = sn->next) {
-		if (sn->faked)
-			timeout = &null_tv;
 		fd = sn->fd;
 		if (sn->events & POLLIN)
 			FD_SET( fd, &rfds );
@@ -819,13 +814,18 @@ event_wait( void )
 		if (fd > m)
 			m = fd;
 	}
-	if (select( m + 1, &rfds, &wfds, &efds, timeout ) < 0) {
+	switch (select( m + 1, &rfds, &wfds, &efds, timeout )) {
+	case 0:
+		return;
+	case -1:
 		perror( "select() failed in event loop" );
 		abort();
+	default:
+		break;
 	}
 	for (sn = notifiers; sn; sn = sn->next) {
 		fd = sn->fd;
-		m = sn->faked;
+		m = 0;
 		if (FD_ISSET( fd, &rfds ))
 			m |= POLLIN;
 		if (FD_ISSET( fd, &wfds ))
@@ -833,7 +833,6 @@ event_wait( void )
 		if (FD_ISSET( fd, &efds ))
 			m |= POLLERR;
 		if (m) {
-			sn->faked = 0;
 			sn->cb( m, sn->aux );
 			if (changed) {
 				changed = 0;

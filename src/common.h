@@ -140,7 +140,6 @@ typedef struct notifier {
 #else
 	int fd, events;
 #endif
-	int faked;
 } notifier_t;
 
 #ifdef HAVE_SYS_POLL_H
@@ -153,7 +152,6 @@ typedef struct notifier {
 
 void init_notifier( notifier_t *sn, int fd, void (*cb)( int, void * ), void *aux );
 void conf_notifier( notifier_t *sn, int and_events, int or_events );
-static INLINE void fake_notifier( notifier_t *sn, int events ) { sn->faked |= events; }
 void wipe_notifier( notifier_t *sn );
 
 typedef struct {
