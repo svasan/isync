@@ -584,6 +584,29 @@ bucketsForSize( int size )
 	}
 }
 
+static void
+list_prepend( list_head_t *head, list_head_t *to )
+{
+	assert( !head->next );
+	assert( to->next );
+	assert( to->prev->next == to );
+	head->next = to;
+	head->prev = to->prev;
+	head->prev->next = head;
+	to->prev = head;
+}
+
+static void
+list_unlink( list_head_t *head )
+{
+	assert( head->next );
+	assert( head->next->prev == head);
+	assert( head->prev->next == head);
+	head->next->prev = head->prev;
+	head->prev->next = head->next;
+	head->next = head->prev = 0;
+}
+
 static notifier_t *notifiers;
 static int changed;  /* Iterator may be invalid now. */
 #ifdef HAVE_SYS_POLL_H
@@ -653,6 +676,67 @@ wipe_notifier( notifier_t *sn )
 #endif
 }
 
+static int nowvalid;
+static time_t now;
+
+static time_t
+get_now( void )
+{
+	if (!nowvalid) {
+		nowvalid = 1;
+		return time( &now );
+	}
+	return now;
+}
+
+static list_head_t timers = { &timers, &timers };
+
+void
+init_wakeup( wakeup_t *tmr, void (*cb)( void * ), void *aux )
+{
+	tmr->cb = cb;
+	tmr->aux = aux;
+	tmr->links.next = tmr->links.prev = 0;
+}
+
+void
+wipe_wakeup( wakeup_t *tmr )
+{
+	if (tmr->links.next)
+		list_unlink( &tmr->links );
+}
+
+void
+conf_wakeup( wakeup_t *tmr, int to )
+{
+	list_head_t *head, *succ;
+
+	if (to < 0) {
+		if (tmr->links.next)
+			list_unlink( &tmr->links );
+	} else {
+		time_t timeout = get_now() + to;
+		tmr->timeout = timeout;
+		if (!to) {
+			/* We always prepend null timers, to cluster related events. */
+			succ = timers.next;
+		} else {
+			/* We start at the end in the expectation that the newest timer is likely to fire last
+			 * (which will be true only if all timeouts are equal, but it's an as good guess as any). */
+			for (succ = &timers; (head = succ->prev) != &timers; succ = head) {
+				if (head != &tmr->links && timeout > ((wakeup_t *)head)->timeout)
+					break;
+			}
+			assert( head != &tmr->links );
+		}
+		if (succ != &tmr->links) {
+			if (tmr->links.next)
+				list_unlink( &tmr->links );
+			list_prepend( &tmr->links, succ );
+		}
+	}
+}
+
 #define shifted_bit(in, from, to) \
 	(((uint)(in) & from) \
 		/ (from > to ? from / to : 1) \
@@ -661,11 +745,23 @@ wipe_notifier( notifier_t *sn )
 static void
 event_wait( void )
 {
+	list_head_t *head;
 	notifier_t *sn;
 	int m;
 
 #ifdef HAVE_SYS_POLL_H
 	int timeout = -1;
+	nowvalid = 0;
+	if ((head = timers.next) != &timers) {
+		wakeup_t *tmr = (wakeup_t *)head;
+		int delta = tmr->timeout - get_now();
+		if (delta <= 0) {
+			list_unlink( head );
+			tmr->cb( tmr->aux );
+			return;
+		}
+		timeout = delta * 1000;
+	}
 	for (sn = notifiers; sn; sn = sn->next)
 		if (sn->faked) {
 			timeout = 0;
@@ -689,10 +785,24 @@ event_wait( void )
 	}
 #else
 	struct timeval *timeout = 0;
+	struct timeval to_tv;
 	static struct timeval null_tv;
 	fd_set rfds, wfds, efds;
 	int fd;
 
+	nowvalid = 0;
+	if ((head = timers.next) != &timers) {
+		wakeup_t *tmr = (wakeup_t *)head;
+		int delta = tmr->timeout - get_now();
+		if (delta <= 0) {
+			list_unlink( head );
+			tmr->cb( tmr->aux );
+			return;
+		}
+		to_tv.tv_sec = delta;
+		to_tv.tv_usec = 0;
+		timeout = &to_tv;
+	}
 	FD_ZERO( &rfds );
 	FD_ZERO( &wfds );
 	FD_ZERO( &efds );
@@ -737,6 +847,6 @@ event_wait( void )
 void
 main_loop( void )
 {
-	while (notifiers)
+	while (notifiers || timers.next != &timers)
 		event_wait();
 }

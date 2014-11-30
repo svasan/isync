@@ -12,6 +12,10 @@ noinst_HEADERS = common.h config.h driver.h sync.h socket.h
 mdconvert_SOURCES = mdconvert.c
 mdconvert_LDADD = -ldb
 
+EXTRA_PROGRAMS = tst_timers
+
+tst_timers_SOURCES = tst_timers.c util.c
+
 man_MANS = mbsync.1 mdconvert.1
 
 exampledir = $(docdir)/examples

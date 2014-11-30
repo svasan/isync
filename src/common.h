@@ -28,6 +28,7 @@
 #include <sys/types.h>
 #include <stdarg.h>
 #include <stdio.h>
+#include <time.h>
 
 typedef unsigned char uchar;
 typedef unsigned short ushort;
@@ -103,7 +104,6 @@ int starts_with( const char *str, int strl, const char *cmp, int cmpl );
 int equals( const char *str, int strl, const char *cmp, int cmpl );
 
 #ifndef HAVE_TIMEGM
-# include <time.h>
 time_t timegm( struct tm *tm );
 #endif
 
@@ -126,6 +126,10 @@ void arc4_init( void );
 uchar arc4_getbyte( void );
 
 int bucketsForSize( int size );
+
+typedef struct list_head {
+	struct list_head *next, *prev;
+} list_head_t;
 
 typedef struct notifier {
 	struct notifier *next;
@@ -151,6 +155,17 @@ void init_notifier( notifier_t *sn, int fd, void (*cb)( int, void * ), void *aux
 void conf_notifier( notifier_t *sn, int and_events, int or_events );
 static INLINE void fake_notifier( notifier_t *sn, int events ) { sn->faked |= events; }
 void wipe_notifier( notifier_t *sn );
+
+typedef struct {
+	list_head_t links;
+	void (*cb)( void *aux );
+	void *aux;
+	time_t timeout;
+} wakeup_t;
+
+void init_wakeup( wakeup_t *tmr, void (*cb)( void * ), void *aux );
+void conf_wakeup( wakeup_t *tmr, int timeout );
+void wipe_wakeup( wakeup_t *tmr );
 
 void main_loop( void );
 
