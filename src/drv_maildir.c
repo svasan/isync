@@ -85,12 +85,12 @@ static int MaildirCount;
 
 static const char Flags[] = { 'D', 'F', 'R', 'S', 'T' };
 
-static unsigned char
+static uchar
 maildir_parse_flags( const char *info_prefix, const char *base )
 {
 	const char *s;
-	unsigned i;
-	unsigned char flags;
+	uint i;
+	uchar flags;
 
 	flags = 0;
 	if ((s = strstr( base, info_prefix )))
@@ -312,7 +312,7 @@ static const char *subdirs[] = { "cur", "new", "tmp" };
 typedef struct {
 	char *base;
 	int size;
-	unsigned uid:31, recent:1;
+	uint uid:31, recent:1;
 	char tuid[TUIDL];
 } msg_t;
 
@@ -835,7 +835,7 @@ maildir_scan( maildir_store_t *ctx, msglist_t *msglist )
 				}
 				entry->uid = uid;
 				if ((u = strstr( entry->base, ",U=" )))
-					for (ru = u + 3; isdigit( (unsigned char)*ru ); ru++);
+					for (ru = u + 3; isdigit( (uchar)*ru ); ru++);
 				else
 					u = ru = strchr( entry->base, conf->info_delimiter );
 				fnl = (u ?
@@ -1187,7 +1187,7 @@ maildir_fetch_msg( store_t *gctx, message_t *gmsg, msg_data_t *data,
 static int
 maildir_make_flags( char info_delimiter, int flags, char *buf )
 {
-	unsigned i, d;
+	uint i, d;
 
 	buf[0] = info_delimiter;
 	buf[1] = '2';
@@ -1309,7 +1309,7 @@ maildir_set_flags( store_t *gctx, message_t *gmsg, int uid ATTR_UNUSED, int add,
 	maildir_store_t *ctx = (maildir_store_t *)gctx;
 	maildir_message_t *msg = (maildir_message_t *)gmsg;
 	char *s, *p;
-	unsigned i;
+	uint i;
 	int j, ret, ol, fl, bbl, bl, tl;
 	char buf[_POSIX_PATH_MAX], nbuf[_POSIX_PATH_MAX];
 

@@ -100,11 +100,11 @@ typedef struct imap_store {
 	int ref_count;
 	/* trash folder's existence is not confirmed yet */
 	enum { TrashUnknown, TrashChecking, TrashKnown } trashnc;
-	unsigned got_namespace:1;
+	uint got_namespace:1;
 	char *delimiter; /* hierarchy delimiter */
 	list_t *ns_personal, *ns_other, *ns_shared; /* NAMESPACE info */
 	message_t **msgapp; /* FETCH results */
-	unsigned caps; /* CAPABILITY results */
+	uint caps; /* CAPABILITY results */
 	string_list_t *auth_mechs;
 	parse_list_state_t parse_list_sts;
 	/* command queue */
@@ -591,7 +591,7 @@ next_arg( char **ps )
 	s = *ps;
 	if (!s)
 		return 0;
-	while (isspace( (unsigned char)*s ))
+	while (isspace( (uchar)*s ))
 		s++;
 	if (!*s) {
 		*ps = 0;
@@ -613,7 +613,7 @@ next_arg( char **ps )
 	} else {
 		ret = s;
 		while ((c = *s)) {
-			if (isspace( (unsigned char)c )) {
+			if (isspace( (uchar)c )) {
 				*s++ = 0;
 				break;
 			}
@@ -684,7 +684,7 @@ parse_imap_list( imap_store_t *ctx, char **sp, parse_list_state_t *sts )
 	if (!s)
 		return LIST_BAD;
 	for (;;) {
-		while (isspace( (unsigned char)*s ))
+		while (isspace( (uchar)*s ))
 			s++;
 		if (sts->level && *s == ')') {
 			s++;
@@ -751,7 +751,7 @@ parse_imap_list( imap_store_t *ctx, char **sp, parse_list_state_t *sts )
 		} else {
 			/* atom */
 			p = s;
-			for (; *s && !isspace( (unsigned char)*s ); s++)
+			for (; *s && !isspace( (uchar)*s ); s++)
 				if (sts->level && *s == ')')
 					break;
 			cur->len = s - p;
@@ -876,7 +876,7 @@ parse_fetch_rsp( imap_store_t *ctx, list_t *list, char *s ATTR_UNUSED )
 	msg_data_t *msgdata;
 	struct imap_cmd *cmdp;
 	int uid = 0, mask = 0, status = 0, size = 0;
-	unsigned i;
+	uint i;
 	time_t date = 0;
 
 	if (!is_list( list )) {
@@ -1000,7 +1000,7 @@ static void
 parse_capability( imap_store_t *ctx, char *cmd )
 {
 	char *arg;
-	unsigned i;
+	uint i;
 
 	free_string_list( ctx->auth_mechs );
 	ctx->auth_mechs = 0;
@@ -1052,7 +1052,7 @@ parse_response_code( imap_store_t *ctx, struct imap_cmd *cmd, char *s )
 		/* RFC2060 says that these messages MUST be displayed
 		 * to the user
 		 */
-		for (; isspace( (unsigned char)*p ); p++);
+		for (; isspace( (uchar)*p ); p++);
 		error( "*** IMAP ALERT *** %s\n", p );
 	} else if (cmd && !strcmp( "APPENDUID", arg )) {
 		if (!(arg = next_arg( &s )) ||
@@ -1743,8 +1743,8 @@ process_sasl_interact( sasl_interact_t *interact, imap_server_conf_t *srvc )
 }
 
 static int
-process_sasl_step( imap_store_t *ctx, int rc, const char *in, unsigned in_len,
-                   sasl_interact_t *interact, const char **out, unsigned *out_len )
+process_sasl_step( imap_store_t *ctx, int rc, const char *in, uint in_len,
+                   sasl_interact_t *interact, const char **out, uint *out_len )
 {
 	imap_server_conf_t *srvc = ((imap_store_conf_t *)ctx->gen.conf)->server;
 
@@ -1765,11 +1765,11 @@ process_sasl_step( imap_store_t *ctx, int rc, const char *in, unsigned in_len,
 }
 
 static int
-decode_sasl_data( const char *prompt, char **in, unsigned *in_len )
+decode_sasl_data( const char *prompt, char **in, uint *in_len )
 {
 	if (prompt) {
 		int rc;
-		unsigned prompt_len = strlen( prompt );
+		uint prompt_len = strlen( prompt );
 		/* We're decoding, the output will be shorter than prompt_len. */
 		*in = nfmalloc( prompt_len );
 		rc = sasl_decode64( prompt, prompt_len, *in, prompt_len, in_len );
@@ -1786,10 +1786,10 @@ decode_sasl_data( const char *prompt, char **in, unsigned *in_len )
 }
 
 static int
-encode_sasl_data( const char *out, unsigned out_len, char **enc, unsigned *enc_len )
+encode_sasl_data( const char *out, uint out_len, char **enc, uint *enc_len )
 {
 	int rc;
-	unsigned enc_len_max = ((out_len + 2) / 3) * 4 + 1;
+	uint enc_len_max = ((out_len + 2) / 3) * 4 + 1;
 	*enc = nfmalloc( enc_len_max );
 	rc = sasl_encode64( out, out_len, *enc, enc_len_max, enc_len );
 	if (rc != SASL_OK) {
@@ -1804,7 +1804,7 @@ static int
 do_sasl_auth( imap_store_t *ctx, struct imap_cmd *cmdp ATTR_UNUSED, const char *prompt )
 {
 	int rc, ret;
-	unsigned in_len, out_len, enc_len;
+	uint in_len, out_len, enc_len;
 	const char *out;
 	char *in, *enc;
 	sasl_interact_t *interact = NULL;
@@ -1851,7 +1851,7 @@ done_sasl_auth( imap_store_t *ctx, struct imap_cmd *cmd ATTR_UNUSED, int respons
 	if (response == RESP_OK && ctx->sasl_cont) {
 		sasl_interact_t *interact = NULL;
 		const char *out;
-		unsigned out_len;
+		uint out_len;
 		int rc = sasl_client_step( ctx->sasl, NULL, 0, &interact, &out, &out_len );
 		if (process_sasl_step( ctx, rc, NULL, 0, interact, &out, &out_len ) < 0)
 			warn( "Warning: SASL reported failure despite successful IMAP authentication. Ignoring...\n" );
@@ -1904,7 +1904,7 @@ imap_open_store_authenticate2( imap_store_t *ctx )
 #ifdef HAVE_LIBSASL
 	if (saslend != saslmechs) {
 		int rc;
-		unsigned out_len = 0;
+		uint out_len = 0;
 		char *enc = NULL;
 		const char *gotmech = NULL, *out = NULL;
 		sasl_interact_t *interact = NULL;
@@ -2198,7 +2198,7 @@ static int
 imap_make_flags( int flags, char *buf )
 {
 	const char *s;
-	unsigned i, d;
+	uint i, d;
 
 	for (i = d = 0; i < as(Flags); i++)
 		if (flags & (1 << i)) {

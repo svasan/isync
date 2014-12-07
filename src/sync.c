@@ -75,7 +75,7 @@ static const char Flags[] = { 'D', 'F', 'R', 'S', 'T' };
 static int
 parse_flags( const char *buf )
 {
-	unsigned flags, i, d;
+	uint flags, i, d;
 
 	for (flags = i = d = 0; i < as(Flags); i++)
 		if (buf[d] == Flags[i]) {
@@ -88,7 +88,7 @@ parse_flags( const char *buf )
 static int
 make_flags( int flags, char *buf )
 {
-	unsigned i, d;
+	uint i, d;
 
 	for (i = d = 0; i < as(Flags); i++)
 		if (flags & (1 << i))
@@ -105,14 +105,14 @@ make_flags( int flags, char *buf )
 #define S_NEXPIRE      (1<<6)  /* temporary: new expiration state */
 #define S_DELETE       (1<<7)  /* ephemeral: flags propagation is a deletion */
 
-#define mvBit(in,ib,ob) ((unsigned char)(((unsigned)in) * (ob) / (ib)))
+#define mvBit(in,ib,ob) ((uchar)(((uint)in) * (ob) / (ib)))
 
 typedef struct sync_rec {
 	struct sync_rec *next;
 	/* string_list_t *keywords; */
 	int uid[2]; /* -2 = pending (use tuid), -1 = skipped (too big), 0 = expired */
 	message_t *msg[2];
-	unsigned char status, flags, aflags[2], dflags[2];
+	uchar status, flags, aflags[2], dflags[2];
 	char tuid[TUIDL];
 } sync_rec_t;
 
@@ -1126,7 +1126,7 @@ box_loaded( int sts, void *aux )
 	flag_vars_t *fv;
 	int uid, no[2], del[2], alive, todel, t1, t2;
 	int sflags, nflags, aflags, dflags, nex;
-	unsigned hashsz, idx;
+	uint hashsz, idx;
 	char fbuf[16]; /* enlarge when support for keywords is added */
 
 	if (check_ret( sts, aux ))
@@ -1147,7 +1147,7 @@ box_loaded( int sts, void *aux )
 		if (srec->status & S_DEAD)
 			continue;
 		uid = srec->uid[t];
-		idx = (unsigned)((unsigned)uid * 1103515245U) % hashsz;
+		idx = (uint)((uint)uid * 1103515245U) % hashsz;
 		while (srecmap[idx].uid)
 			if (++idx == hashsz)
 				idx = 0;
@@ -1162,7 +1162,7 @@ box_loaded( int sts, void *aux )
 			make_flags( tmsg->flags, fbuf );
 			printf( svars->ctx[t]->opts & OPEN_SIZE ? "  message %5d, %-4s, %6lu: " : "  message %5d, %-4s: ", uid, fbuf, tmsg->size );
 		}
-		idx = (unsigned)((unsigned)uid * 1103515245U) % hashsz;
+		idx = (uint)((uint)uid * 1103515245U) % hashsz;
 		while (srecmap[idx].uid) {
 			if (srecmap[idx].uid == uid) {
 				srec = srecmap[idx].srec;
@@ -1403,7 +1403,7 @@ box_loaded( int sts, void *aux )
 			}
 		}
 		debug( "%d excess messages remain\n", todel );
-		if (svars->chan->expire_unread < 0 && (unsigned)alive * 2 > svars->chan->max_messages) {
+		if (svars->chan->expire_unread < 0 && (uint)alive * 2 > svars->chan->max_messages) {
 			error( "%s: %d unread messages in excess of MaxMessages (%d).\n"
 			       "Please set ExpireUnread to decide outcome. Skipping mailbox.\n",
 			       svars->orig_name[S], alive, svars->chan->max_messages );

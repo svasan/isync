@@ -138,7 +138,7 @@ sys_error( const char *msg, ... )
 
 	flushn();
 	va_start( va, msg );
-	if ((unsigned)vsnprintf( buf, sizeof(buf), msg, va ) >= sizeof(buf))
+	if ((uint)vsnprintf( buf, sizeof(buf), msg, va ) >= sizeof(buf))
 		oob();
 	va_end( va );
 	perror( buf );
@@ -311,7 +311,7 @@ nfsnprintf( char *buf, int blen, const char *fmt, ... )
 	va_list va;
 
 	va_start( va, fmt );
-	if (blen <= 0 || (unsigned)(ret = vsnprintf( buf, blen, fmt, va )) >= (unsigned)blen)
+	if (blen <= 0 || (uint)(ret = vsnprintf( buf, blen, fmt, va )) >= (uint)blen)
 		oob();
 	va_end( va );
 	return ret;
@@ -518,14 +518,14 @@ sort_ints( int *arr, int len )
 
 
 static struct {
-	unsigned char i, j, s[256];
+	uchar i, j, s[256];
 } rs;
 
 void
 arc4_init( void )
 {
 	int i, fd;
-	unsigned char j, si, dat[128];
+	uchar j, si, dat[128];
 
 	if ((fd = open( "/dev/urandom", O_RDONLY )) < 0 && (fd = open( "/dev/random", O_RDONLY )) < 0) {
 		error( "Fatal: no random number source available.\n" );
@@ -551,10 +551,10 @@ arc4_init( void )
 		arc4_getbyte();
 }
 
-unsigned char
+uchar
 arc4_getbyte( void )
 {
-	unsigned char si, sj;
+	uchar si, sj;
 
 	rs.i++;
 	si = rs.s[rs.i];
@@ -565,7 +565,7 @@ arc4_getbyte( void )
 	return rs.s[(si + sj) & 0xff];
 }
 
-static const unsigned char prime_deltas[] = {
+static const uchar prime_deltas[] = {
     0,  0,  1,  3,  1,  5,  3,  3,  1,  9,  7,  5,  3, 17, 27,  3,
     1, 29,  3, 21,  7, 17, 15,  9, 43, 35, 15,  0,  0,  0,  0,  0
 };
@@ -665,7 +665,7 @@ del_fd( int fd )
 }
 
 #define shifted_bit(in, from, to) \
-	(((unsigned)(in) & from) \
+	(((uint)(in) & from) \
 		/ (from > to ? from / to : 1) \
 		* (to > from ? to / from : 1))
 

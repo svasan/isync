@@ -29,6 +29,10 @@
 #include <stdarg.h>
 #include <stdio.h>
 
+typedef unsigned char uchar;
+typedef unsigned short ushort;
+typedef unsigned int uint;
+
 #define as(ar) (sizeof(ar)/sizeof(ar[0]))
 
 #define __stringify(x) #x
@@ -119,7 +123,7 @@ int map_name( const char *arg, char **result, int reserve, const char *in, const
 void sort_ints( int *arr, int len );
 
 void arc4_init( void );
-unsigned char arc4_getbyte( void );
+uchar arc4_getbyte( void );
 
 int bucketsForSize( int size );
 

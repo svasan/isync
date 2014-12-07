@@ -35,7 +35,7 @@ typedef struct store_conf {
 	const char *flat_delim;
 	const char *map_inbox;
 	const char *trash;
-	unsigned max_size; /* off_t is overkill */
+	uint max_size; /* off_t is overkill */
 	char trash_remote_new, trash_only_new;
 } store_conf_t;
 
@@ -62,7 +62,7 @@ typedef struct message {
 	/* string_list_t *keywords; */
 	size_t size; /* zero implies "not fetched" */
 	int uid;
-	unsigned char flags, status;
+	uchar flags, status;
 	char tuid[TUIDL];
 } message_t;
 
@@ -90,7 +90,7 @@ typedef struct store {
 	message_t *msgs; /* own */
 	int uidvalidity;
 	int uidnext; /* from SELECT responses */
-	unsigned opts; /* maybe preset? */
+	uint opts; /* maybe preset? */
 	/* note that the following do _not_ reflect stats from msgs, but mailbox totals */
 	int count; /* # of messages */
 	int recent; /* # of recent messages - don't trust this beyond the initial read */
@@ -109,7 +109,7 @@ typedef struct {
 	char *data;
 	int len;
 	time_t date;
-	unsigned char flags;
+	uchar flags;
 } msg_data_t;
 
 #define DRV_OK          0

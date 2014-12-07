@@ -45,7 +45,7 @@ get_arg( conffile_t *cfile, int required, int *comment )
 
 	p = cfile->rest;
 	assert( p );
-	while ((c = *p) && isspace( (unsigned char) c ))
+	while ((c = *p) && isspace( (uchar)c ))
 		p++;
 	if (!c || c == '#') {
 		if (comment)
@@ -65,7 +65,7 @@ get_arg( conffile_t *cfile, int required, int *comment )
 				escaped = 1;
 			else if (c == '"')
 				quoted ^= 1;
-			else if (!quoted && isspace( (unsigned char) c ))
+			else if (!quoted && isspace( (uchar)c ))
 				break;
 			else
 				*t++ = c;
