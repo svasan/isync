@@ -286,6 +286,14 @@ static void socket_connected( conn_t * );
 static void socket_connect_bail( conn_t * );
 
 static void
+socket_open_internal( conn_t *sock, int fd )
+{
+	sock->fd = fd;
+	fcntl( fd, F_SETFL, O_NONBLOCK );
+	add_fd( fd, socket_fd_cb, sock );
+}
+
+static void
 socket_close_internal( conn_t *sock )
 {
 	del_fd( sock->fd );
@@ -322,10 +330,7 @@ socket_connect( conn_t *sock, void (*cb)( int ok, void *aux ) )
 		}
 
 		close( a[0] );
-		sock->fd = a[1];
-
-		fcntl( a[1], F_SETFL, O_NONBLOCK );
-		add_fd( a[1], socket_fd_cb, sock );
+		socket_open_internal( sock, a[1] );
 
 		info( "\vok\n" );
 		socket_connected( sock );
@@ -417,9 +422,7 @@ socket_connect_one( conn_t *sock )
 		perror( "socket" );
 		exit( 1 );
 	}
-	sock->fd = s;
-	fcntl( s, F_SETFL, O_NONBLOCK );
-	add_fd( s, socket_fd_cb, sock );
+	socket_open_internal( sock, s );
 
 	infon( "Connecting to %s... ", sock->name );
 #ifdef HAVE_IPV6
