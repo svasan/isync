@@ -271,7 +271,7 @@ send_imap_cmd( imap_store_t *ctx, struct imap_cmd *cmd )
 	if (!cmd->param.data) {
 		buffmt = "%d %s\r\n";
 		litplus = 0;
-	} else if ((cmd->param.to_trash && ctx->trashnc == TrashUnknown) || !CAP(LITERALPLUS)) {
+	} else if ((cmd->param.to_trash && ctx->trashnc == TrashUnknown) || !CAP(LITERALPLUS) || cmd->param.data_len >= 100*1024) {
 		buffmt = "%d %s{%d}\r\n";
 		litplus = 0;
 	} else {
