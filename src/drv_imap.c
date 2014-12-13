@@ -196,7 +196,8 @@ enum CAPABILITY {
 	UIDPLUS,
 	LITERALPLUS,
 	MOVE,
-	NAMESPACE
+	NAMESPACE,
+	COMPRESS_DEFLATE
 };
 
 static const char *cap_list[] = {
@@ -210,7 +211,8 @@ static const char *cap_list[] = {
 	"UIDPLUS",
 	"LITERAL+",
 	"MOVE",
-	"NAMESPACE"
+	"NAMESPACE",
+	"COMPRESS=DEFLATE"
 };
 
 #define RESP_OK       0
@@ -1486,6 +1488,9 @@ static void imap_open_store_authenticate2_p2( imap_store_t *, struct imap_cmd *,
 static void imap_open_store_namespace( imap_store_t * );
 static void imap_open_store_namespace_p2( imap_store_t *, struct imap_cmd *, int );
 static void imap_open_store_namespace2( imap_store_t * );
+#ifdef HAVE_LIBZ
+static void imap_open_store_compress_p2( imap_store_t *, struct imap_cmd *, int );
+#endif
 static void imap_open_store_finalize( imap_store_t * );
 #ifdef HAVE_LIBSSL
 static void imap_open_store_ssl_bail( imap_store_t * );
@@ -2041,11 +2046,31 @@ imap_open_store_namespace2( imap_store_t *ctx )
 			ctx->prefix = nsp_1st_ns->val;
 		if (!ctx->delimiter)
 			ctx->delimiter = nfstrdup( nsp_1st_dl->val );
+#ifdef HAVE_LIBZ
+		if (CAP(COMPRESS_DEFLATE)) { /* XXX make that configurable */
+			imap_exec( ctx, 0, imap_open_store_compress_p2, "COMPRESS DEFLATE" );
+			return;
+		}
+#endif
 		imap_open_store_finalize( ctx );
 	} else {
 		imap_open_store_bail( ctx );
 	}
 }
+
+#ifdef HAVE_LIBZ
+static void
+imap_open_store_compress_p2( imap_store_t *ctx, struct imap_cmd *cmd ATTR_UNUSED, int response )
+{
+	if (response == RESP_NO) {
+		/* We already reported an error, but it's not fatal to us. */
+		imap_open_store_finalize( ctx );
+	} else if (response == RESP_OK) {
+		socket_start_deflate( &ctx->conn );
+		imap_open_store_finalize( ctx );
+	}
+}
+#endif
 
 static void
 imap_open_store_finalize( imap_store_t *ctx )

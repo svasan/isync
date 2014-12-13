@@ -150,6 +150,15 @@ if test "x$ac_cv_berkdb4" = xno; then
   AC_MSG_ERROR([Berkley DB >= 4.2 not found.])
 fi
 
+have_zlib=
+AC_CHECK_LIB([z], [deflate],
+    [AC_CHECK_HEADER(zlib.h,
+        [have_zlib=1
+         AC_SUBST([Z_LIBS], ["-lz"])
+         AC_DEFINE([HAVE_LIBZ], 1, [if you have the zlib library])]
+     )]
+)
+
 AC_ARG_ENABLE(compat,
   AC_HELP_STRING([--disable-compat], [don't include isync compatibility wrapper [no]]),
   [ob_cv_enable_compat=$enableval])
@@ -171,5 +180,10 @@ if test -n "$have_sasl_paths"; then
     AC_MSG_RESULT([Using SASL])
 else
     AC_MSG_RESULT([Not using SASL])
+fi
+if test -n "$have_zlib"; then
+    AC_MSG_RESULT([Using zlib])
+else
+    AC_MSG_RESULT([Not using zlib])
 fi
 AC_MSG_RESULT()

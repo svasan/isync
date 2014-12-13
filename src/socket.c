@@ -280,6 +280,43 @@ static void start_tls_p3( conn_t *conn, int ok )
 
 #endif /* HAVE_LIBSSL */
 
+#ifdef HAVE_LIBZ
+
+static void z_fake_cb( void * );
+
+void
+socket_start_deflate( conn_t *conn )
+{
+	int result;
+
+	conn->in_z = nfcalloc( sizeof(*conn->in_z) );
+	result = inflateInit2(
+			conn->in_z,
+			-15 /* Use raw deflate */
+		);
+	if (result != Z_OK) {
+		error( "Fatal: Cannot initialize decompression: %s\n", conn->in_z->msg );
+		abort();
+	}
+
+	conn->out_z = nfcalloc( sizeof(*conn->out_z) );
+	result = deflateInit2(
+			conn->out_z,
+			Z_DEFAULT_COMPRESSION, /* Compression level */
+			Z_DEFLATED, /* Only valid value */
+			-15, /* Use raw deflate */
+			8, /* Default memory usage */
+			Z_DEFAULT_STRATEGY /* Don't try to do anything fancy */
+		);
+	if (result != Z_OK) {
+		error( "Fatal: Cannot initialize compression: %s\n", conn->out_z->msg );
+		abort();
+	}
+
+	init_wakeup( &conn->z_fake, z_fake_cb, conn );
+}
+#endif /* HAVE_LIBZ */
+
 static void socket_fd_cb( int, void * );
 static void socket_fake_cb( void * );
 
@@ -501,29 +538,47 @@ socket_close( conn_t *sock )
 		wipe_wakeup( &sock->ssl_fake );
 	}
 #endif
+#ifdef HAVE_LIBZ
+	if (sock->in_z) {
+		inflateEnd( sock->in_z );
+		free( sock->in_z );
+		sock->in_z = 0;
+		deflateEnd( sock->out_z );
+		free( sock->out_z );
+		sock->out_z = 0;
+		wipe_wakeup( &sock->z_fake );
+	}
+#endif
 	while (sock->write_buf)
 		dispose_chunk( sock );
 	free( sock->append_buf );
 	sock->append_buf = 0;
 }
 
-static void
-socket_fill( conn_t *sock )
+static int
+prepare_read( conn_t *sock, char **buf, int *len )
 {
-	char *buf;
 	int n = sock->offset + sock->bytes;
-	int len = sizeof(sock->buf) - n;
-	if (!len) {
+	if (!(*len = sizeof(sock->buf) - n)) {
 		error( "Socket error: receive buffer full. Probably protocol error.\n" );
 		socket_fail( sock );
-		return;
+		return -1;
 	}
+	*buf = sock->buf + n;
+	return 0;
+}
+
+static int
+do_read( conn_t *sock, char *buf, int len )
+{
+	int n;
+
 	assert( sock->fd >= 0 );
-	buf = sock->buf + n;
 #ifdef HAVE_LIBSSL
 	if (sock->ssl) {
 		if ((n = ssl_return( "read from", sock, SSL_read( sock->ssl, buf, len ) )) <= 0)
-			return;
+			return n;
+
 		if (n == len && SSL_pending( sock->ssl ))
 			conf_wakeup( &sock->ssl_fake, 0 );
 	} else
@@ -532,15 +587,71 @@ socket_fill( conn_t *sock )
 		if ((n = read( sock->fd, buf, len )) < 0) {
 			sys_error( "Socket error: read from %s", sock->name );
 			socket_fail( sock );
-			return;
 		} else if (!n) {
 			error( "Socket error: read from %s: unexpected EOF\n", sock->name );
 			socket_fail( sock );
-			return;
+			return -1;
 		}
 	}
-	sock->bytes += n;
-	sock->read_callback( sock->callback_aux );
+
+	return n;
+}
+
+#ifdef HAVE_LIBZ
+static void
+socket_fill_z( conn_t *sock )
+{
+	char *buf;
+	int len;
+
+	if (prepare_read( sock, &buf, &len ) < 0)
+		return;
+
+	sock->in_z->avail_out = len;
+	sock->in_z->next_out = (unsigned char *)buf;
+
+	if (inflate( sock->in_z, Z_SYNC_FLUSH ) != Z_OK) {
+		error( "Error decompressing data from %s: %s\n", sock->name, sock->in_z->msg );
+		socket_fail( sock );
+		return;
+	}
+
+	if (!sock->in_z->avail_out)
+		conf_wakeup( &sock->z_fake, 0 );
+
+	if ((len = (char *)sock->in_z->next_out - buf)) {
+		sock->bytes += len;
+		sock->read_callback( sock->callback_aux );
+	}
+}
+#endif
+
+static void
+socket_fill( conn_t *sock )
+{
+#ifdef HAVE_LIBZ
+	if (sock->in_z) {
+		/* The timer will preempt reads until the buffer is empty. */
+		assert( !sock->in_z->avail_in );
+		sock->in_z->next_in = (uchar *)sock->z_buf;
+		if ((sock->in_z->avail_in = do_read( sock, sock->z_buf, sizeof(sock->z_buf) )) <= 0)
+			return;
+		socket_fill_z( sock );
+	} else
+#endif
+	{
+		char *buf;
+		int len;
+
+		if (prepare_read( sock, &buf, &len ) < 0)
+			return;
+
+		if ((len = do_read( sock, buf, len )) <= 0)
+			return;
+
+		sock->bytes += len;
+		sock->read_callback( sock->callback_aux );
+	}
 }
 
 int
@@ -655,6 +766,49 @@ do_append( conn_t *conn, buff_chunk_t *bc )
  * sufficiently small to keep SSL latency low with a slow uplink. */
 #define WRITE_CHUNK_SIZE 1024
 
+static void
+do_flush( conn_t *conn )
+{
+	buff_chunk_t *bc = conn->append_buf;
+#ifdef HAVE_LIBZ
+	if (conn->out_z) {
+		int buf_avail = conn->append_avail;
+		do {
+			if (!bc) {
+				buf_avail = WRITE_CHUNK_SIZE;
+				bc = nfmalloc( offsetof(buff_chunk_t, data) + buf_avail );
+				bc->len = 0;
+			}
+			conn->out_z->next_in = Z_NULL;
+			conn->out_z->avail_in = 0;
+			conn->out_z->next_out = (uchar *)bc->data + bc->len;
+			conn->out_z->avail_out = buf_avail;
+			if (deflate( conn->out_z, Z_PARTIAL_FLUSH ) != Z_OK) {
+				error( "Fatal: Compression error: %s\n", conn->out_z->msg );
+				abort();
+			}
+			bc->len = (char *)conn->out_z->next_out - bc->data;
+			if (bc->len) {
+				do_append( conn, bc );
+				bc = 0;
+				buf_avail = 0;
+			} else {
+				buf_avail = conn->out_z->avail_out;
+			}
+		} while (!conn->out_z->avail_out);
+		conn->append_buf = bc;
+		conn->append_avail = buf_avail;
+	} else
+#endif
+	if (bc) {
+		do_append( conn, bc );
+		conn->append_buf = 0;
+#ifdef HAVE_LIBZ
+		conn->append_avail = 0;
+#endif
+	}
+}
+
 int
 socket_write( conn_t *conn, conn_iovec_t *iov, int iovcnt )
 {
@@ -663,29 +817,54 @@ socket_write( conn_t *conn, conn_iovec_t *iov, int iovcnt )
 
 	for (i = 0; i < iovcnt; i++)
 		total += iov[i].len;
-	bc = conn->append_buf;
-	if (bc && total >= WRITE_CHUNK_SIZE) {
+	if (total >= WRITE_CHUNK_SIZE) {
 		/* If the new data is too big, queue the pending buffer to avoid latency. */
-		do_append( conn, bc );
-		bc  = 0;
+		do_flush( conn );
 	}
+	bc = conn->append_buf;
+#ifdef HAVE_LIBZ
+	buf_avail = conn->append_avail;
+#endif
 	while (total) {
 		if (!bc) {
+			/* We don't do anything special when compressing, as there is no way to
+			 * predict a reasonable output buffer size anyway - deflatePending() does
+			 * not account for consumed but not yet compressed input, and adding up
+			 * the deflateBound()s would be a tad *too* pessimistic. */
 			buf_avail = total > WRITE_CHUNK_SIZE ? total : WRITE_CHUNK_SIZE;
 			bc = nfmalloc( offsetof(buff_chunk_t, data) + buf_avail );
 			bc->len = 0;
+#ifndef HAVE_LIBZ
 		} else {
 			/* A pending buffer will always be of standard size - over-sized
 			 * buffers are immediately filled and queued. */
 			buf_avail = WRITE_CHUNK_SIZE - bc->len;
+#endif
 		}
 		while (total) {
 			len = iov->len - offset;
-			if (len > buf_avail)
-				len = buf_avail;
-			memcpy( bc->data + bc->len, iov->buf + offset, len );
-			bc->len += len;
-			buf_avail -= len;
+#ifdef HAVE_LIBZ
+			if (conn->out_z) {
+				conn->out_z->next_in = (uchar *)iov->buf + offset;
+				conn->out_z->avail_in = len;
+				conn->out_z->next_out = (uchar *)bc->data + bc->len;
+				conn->out_z->avail_out = buf_avail;
+				if (deflate( conn->out_z, Z_NO_FLUSH ) != Z_OK) {
+					error( "Fatal: Compression error: %s\n", conn->out_z->msg );
+					abort();
+				}
+				bc->len = (char *)conn->out_z->next_out - bc->data;
+				buf_avail = conn->out_z->avail_out;
+				len -= conn->out_z->avail_in;
+			} else
+#endif
+			{
+				if (len > buf_avail)
+					len = buf_avail;
+				memcpy( bc->data + bc->len, iov->buf + offset, len );
+				bc->len += len;
+				buf_avail -= len;
+			}
 			offset += len;
 			total -= len;
 			if (offset == iov->len) {
@@ -702,8 +881,16 @@ socket_write( conn_t *conn, conn_iovec_t *iov, int iovcnt )
 		}
 	}
 	conn->append_buf = bc;
+#ifdef HAVE_LIBZ
+	conn->append_avail = buf_avail;
+#endif
 	/* Queue the pending write once the main loop goes idle. */
-	conf_wakeup( &conn->fd_fake, bc ? 0 : -1 );
+	conf_wakeup( &conn->fd_fake,
+#ifdef HAVE_LIBZ
+	             /* Always give zlib a chance to flush its internal buffer. */
+	             conn->out_z ||
+#endif
+	             bc ? 0 : -1 );
 	/* If no writes were queued before, ensure that flushing commences. */
 	if (!exwb)
 		return do_queued_write( conn );
@@ -763,12 +950,21 @@ socket_fake_cb( void *aux )
 	conn_t *conn = (conn_t *)aux;
 
 	buff_chunk_t *exwb = conn->write_buf;
-	do_append( conn, conn->append_buf );
-	conn->append_buf = 0;
+	do_flush( conn );
 	/* If no writes were queued before, ensure that flushing commences. */
 	if (!exwb)
 		do_queued_write( conn );
 }
+
+#ifdef HAVE_LIBZ
+static void
+z_fake_cb( void *aux )
+{
+	conn_t *conn = (conn_t *)aux;
+
+	socket_fill_z( conn );
+}
+#endif
 
 #ifdef HAVE_LIBSSL
 static void
