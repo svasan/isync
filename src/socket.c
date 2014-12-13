@@ -43,14 +43,6 @@
 # include <openssl/x509v3.h>
 #endif
 
-enum {
-	SCK_CONNECTING,
-#ifdef HAVE_LIBSSL
-	SCK_STARTTLS,
-#endif
-	SCK_READY
-};
-
 static void
 socket_fail( conn_t *conn )
 {
@@ -74,10 +66,12 @@ ssl_return( const char *func, conn_t *conn, int ret )
 	case SSL_ERROR_SYSCALL:
 	case SSL_ERROR_SSL:
 		if (!(err = ERR_get_error())) {
-			if (ret == 0)
-				error( "Socket error: secure %s %s: unexpected EOF\n", func, conn->name );
-			else
+			if (ret == 0) {
+				if (conn->state != SCK_CLOSING)
+					error( "Socket error: secure %s %s: unexpected EOF\n", func, conn->name );
+			} else {
 				sys_error( "Socket error: secure %s %s", func, conn->name );
+			}
 		} else {
 			error( "Socket error: secure %s %s: %s\n", func, conn->name, ERR_error_string( err, 0 ) );
 		}
@@ -588,7 +582,8 @@ do_read( conn_t *sock, char *buf, int len )
 			sys_error( "Socket error: read from %s", sock->name );
 			socket_fail( sock );
 		} else if (!n) {
-			error( "Socket error: read from %s: unexpected EOF\n", sock->name );
+			if (sock->state != SCK_CLOSING)
+				error( "Socket error: read from %s: unexpected EOF\n", sock->name );
 			socket_fail( sock );
 			return -1;
 		}

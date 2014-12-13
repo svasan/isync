@@ -29,6 +29,15 @@
 #include <zlib.h>
 #endif
 
+enum {
+	SCK_CONNECTING,
+#ifdef HAVE_LIBSSL
+	SCK_STARTTLS,
+#endif
+	SCK_READY,
+	SCK_CLOSING
+};
+
 #ifdef HAVE_LIBSSL
 typedef struct ssl_st SSL;
 typedef struct ssl_ctx_st SSL_CTX;

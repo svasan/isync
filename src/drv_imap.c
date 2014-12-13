@@ -1203,10 +1203,9 @@ imap_socket_read( void *aux )
 	imap_store_t *ctx = (imap_store_t *)aux;
 	struct imap_cmd *cmdp, **pcmdp;
 	char *cmd, *arg, *arg1, *p;
-	int resp, resp2, tag, greeted;
+	int resp, resp2, tag;
 	conn_iovec_t iov[2];
 
-	greeted = ctx->greeting;
 	for (;;) {
 		if (ctx->parse_list_sts.level) {
 			resp = parse_list_continue( ctx, 0 );
@@ -1236,18 +1235,30 @@ imap_socket_read( void *aux )
 				break;
 			}
 
-			if (!strcmp( "NAMESPACE", arg )) {
-				resp = parse_list( ctx, cmd, parse_namespace_rsp );
-				goto listret;
-			} else if (ctx->greeting == GreetingPending && !strcmp( "PREAUTH", arg )) {
+			if (ctx->greeting == GreetingPending && !strcmp( "PREAUTH", arg )) {
+				parse_response_code( ctx, 0, cmd );
 				ctx->greeting = GreetingPreauth;
-				parse_response_code( ctx, 0, cmd );
+			  dogreet:
+				imap_ref( ctx );
+				imap_open_store_greeted( ctx );
+				if (imap_deref( ctx ))
+					return;
 			} else if (!strcmp( "OK", arg )) {
-				ctx->greeting = GreetingOk;
 				parse_response_code( ctx, 0, cmd );
+				if (ctx->greeting == GreetingPending) {
+					ctx->greeting = GreetingOk;
+					goto dogreet;
+				}
 			} else if (!strcmp( "BYE", arg )) {
-				ctx->greeting = GreetingBad;
-				parse_response_code( ctx, 0, cmd );
+				if (ctx->conn.state != SCK_CLOSING) {
+					ctx->conn.state = SCK_CLOSING;
+					ctx->greeting = GreetingBad;
+					error( "IMAP error: unexpected BYE response: %s\n", cmd );
+				}
+				/* We just wait for the server to close the connection now. */
+			} else if (ctx->greeting == GreetingPending) {
+				error( "IMAP error: bogus greeting response %s\n", arg );
+				break;
 			} else if (!strcmp( "NO", arg )) {
 				warn( "Warning from IMAP server: %s\n", cmd );
 			} else if (!strcmp( "BAD", arg )) {
@@ -1256,6 +1267,9 @@ imap_socket_read( void *aux )
 				parse_capability( ctx, cmd );
 			} else if (!strcmp( "LIST", arg )) {
 				resp = parse_list( ctx, cmd, parse_list_rsp );
+				goto listret;
+			} else if (!strcmp( "NAMESPACE", arg )) {
+				resp = parse_list( ctx, cmd, parse_namespace_rsp );
 				goto listret;
 			} else if ((arg1 = next_arg( &cmd ))) {
 				if (!strcmp( "EXISTS", arg1 ))
@@ -1269,12 +1283,6 @@ imap_socket_read( void *aux )
 			} else {
 				error( "IMAP error: unrecognized untagged response '%s'\n", arg );
 				break; /* this may mean anything, so prefer not to spam the log */
-			}
-			if (greeted == GreetingPending) {
-				imap_ref( ctx );
-				imap_open_store_greeted( ctx );
-				if (imap_deref( ctx ))
-					return;
 			}
 			continue;
 		} else if (!ctx->in_progress) {
@@ -1462,6 +1470,7 @@ imap_cleanup( void )
 	for (ctx = unowned; ctx; ctx = nctx) {
 		nctx = ctx->next;
 		set_bad_callback( ctx, (void (*)(void *))imap_cancel_store, ctx );
+		((imap_store_t *)ctx)->conn.state = SCK_CLOSING;
 		imap_exec( (imap_store_t *)ctx, 0, imap_cleanup_p2, "LOGOUT" );
 	}
 }
@@ -1470,7 +1479,7 @@ static void
 imap_cleanup_p2( imap_store_t *ctx,
                  struct imap_cmd *cmd ATTR_UNUSED, int response )
 {
-	if (response != RESP_CANCEL)
+	if (response == RESP_NO)
 		imap_cancel_store( &ctx->gen );
 }
 
@@ -1583,12 +1592,6 @@ imap_open_store_tlsstarted1( int ok, void *aux )
 static void
 imap_open_store_greeted( imap_store_t *ctx )
 {
-	if (ctx->greeting == GreetingBad) {
-		error( "IMAP error: unknown greeting response\n" );
-		imap_open_store_bail( ctx );
-		return;
-	}
-
 	if (!ctx->caps)
 		imap_exec( ctx, 0, imap_open_store_p2, "CAPABILITY" );
 	else
