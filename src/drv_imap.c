@@ -1245,9 +1245,13 @@ imap_socket_read( void *aux )
 			} else if (!strcmp( "OK", arg )) {
 				ctx->greeting = GreetingOk;
 				parse_response_code( ctx, 0, cmd );
-			} else if (!strcmp( "BAD", arg ) || !strcmp( "NO", arg ) || !strcmp( "BYE", arg )) {
+			} else if (!strcmp( "BYE", arg )) {
 				ctx->greeting = GreetingBad;
 				parse_response_code( ctx, 0, cmd );
+			} else if (!strcmp( "NO", arg )) {
+				warn( "Warning from IMAP server: %s\n", cmd );
+			} else if (!strcmp( "BAD", arg )) {
+				error( "Error from IMAP server: %s\n", cmd );
 			} else if (!strcmp( "CAPABILITY", arg )) {
 				parse_capability( ctx, cmd );
 			} else if (!strcmp( "LIST", arg )) {
