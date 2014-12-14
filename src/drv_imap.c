@@ -2108,14 +2108,6 @@ imap_open_store_bail( imap_store_t *ctx )
 	cb( 0, aux );
 }
 
-/******************* imap_prepare_opts *******************/
-
-static void
-imap_prepare_opts( store_t *gctx, int opts )
-{
-	gctx->opts = opts;
-}
-
 /******************* imap_select *******************/
 
 static void
@@ -2147,6 +2139,12 @@ imap_select( store_t *gctx, const char *name, int create,
 }
 
 /******************* imap_load *******************/
+
+static void
+imap_prepare_load( store_t *gctx, int opts )
+{
+	gctx->opts = opts;
+}
 
 static int imap_submit_load( imap_store_t *, const char *, int, struct imap_cmd_refcounted_state * );
 
@@ -2781,8 +2779,8 @@ struct driver imap_driver = {
 	imap_disown_store,
 	imap_cancel_store,
 	imap_list,
-	imap_prepare_opts,
 	imap_select,
+	imap_prepare_load,
 	imap_load,
 	imap_fetch_msg,
 	imap_store_msg,

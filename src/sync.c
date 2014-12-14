@@ -1007,8 +1007,8 @@ box_selected( int sts, void *aux )
 					assert( !"sync record with stray TUID" );
 			}
 		}
-	svars->drv[M]->prepare_opts( ctx[M], opts[M] );
-	svars->drv[S]->prepare_opts( ctx[S], opts[S] );
+	svars->drv[M]->prepare_load( ctx[M], opts[M] );
+	svars->drv[S]->prepare_load( ctx[S], opts[S] );
 
 	mexcs = 0;
 	nmexcs = rmexcs = 0;

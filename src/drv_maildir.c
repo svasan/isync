@@ -1041,7 +1041,7 @@ maildir_select( store_t *gctx, const char *name, int create,
 }
 
 static void
-maildir_prepare_opts( store_t *gctx, int opts )
+maildir_prepare_load( store_t *gctx, int opts )
 {
 	if (opts & OPEN_SETFLAGS)
 		opts |= OPEN_OLD;
@@ -1531,8 +1531,8 @@ struct driver maildir_driver = {
 	maildir_disown_store,
 	maildir_disown_store, /* _cancel_, but it's the same */
 	maildir_list,
-	maildir_prepare_opts,
 	maildir_select,
+	maildir_prepare_load,
 	maildir_load,
 	maildir_fetch_msg,
 	maildir_store_msg,

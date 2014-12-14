@@ -161,15 +161,15 @@ struct driver {
 	void (*list)( store_t *ctx, int flags,
 	              void (*cb)( int sts, void *aux ), void *aux );
 
-	/* Invoked before select(), this informs the driver which operations (OP_*)
-	 * will be performed on the mailbox. The driver may extend the set by implicitly
-	 * needed or available operations. */
-	void (*prepare_opts)( store_t *ctx, int opts );
-
 	/* Open the mailbox name. Optionally create missing boxes.
 	 * As a side effect, this should resolve ctx->path if applicable. */
 	void (*select)( store_t *ctx, const char *name, int create,
 	               void (*cb)( int sts, void *aux ), void *aux );
+
+	/* Invoked before load(), this informs the driver which operations (OP_*)
+	 * will be performed on the mailbox. The driver may extend the set by implicitly
+	 * needed or available operations. */
+	void (*prepare_load)( store_t *ctx, int opts );
 
 	/* Load the message attributes needed to perform the requested operations.
 	 * Consider only messages with UIDs between minuid and maxuid (inclusive)
