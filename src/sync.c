@@ -154,7 +154,7 @@ typedef struct {
 	store_t *ctx[2];
 	driver_t *drv[2];
 	const char *orig_name[2];
-	int state[2], ref_count, nsrecs, ret, lfd;
+	int state[2], ref_count, nsrecs, ret, lfd, existing, replayed;
 	int new_total[2], new_done[2];
 	int flags_total[2], flags_done[2];
 	int trash_total[2], trash_done[2];
@@ -467,7 +467,6 @@ stats( sync_vars_t *svars )
 
 
 static void sync_bail( sync_vars_t *svars );
-static void sync_bail1( sync_vars_t *svars );
 static void sync_bail2( sync_vars_t *svars );
 static void sync_bail3( sync_vars_t *svars );
 static void cancel_done( void *aux );
@@ -580,91 +579,19 @@ clean_strdup( const char *s )
 
 #define JOURNAL_VERSION "2"
 
-static void box_selected( int sts, void *aux );
-
-void
-sync_boxes( store_t *ctx[], const char *names[], channel_conf_t *chan,
-            void (*cb)( int sts, void *aux ), void *aux )
+static int
+prepare_state( sync_vars_t *svars )
 {
-	sync_vars_t *svars;
-	int t;
-
-	svars = nfcalloc( sizeof(*svars) );
-	svars->t[1] = 1;
-	svars->ref_count = 1;
-	svars->cb = cb;
-	svars->aux = aux;
-	svars->ctx[0] = ctx[0];
-	svars->ctx[1] = ctx[1];
-	svars->chan = chan;
-	svars->uidval[0] = svars->uidval[1] = -1;
-	svars->srecadd = &svars->srecs;
-
-	for (t = 0; t < 2; t++) {
-		svars->orig_name[t] =
-			(!names[t] || (ctx[t]->conf->map_inbox && !strcmp( ctx[t]->conf->map_inbox, names[t] ))) ?
-				"INBOX" : names[t];
-		if (!ctx[t]->conf->flat_delim) {
-			svars->box_name[t] = nfstrdup( svars->orig_name[t] );
-		} else if (map_name( svars->orig_name[t], &svars->box_name[t], 0, "/", ctx[t]->conf->flat_delim ) < 0) {
-			error( "Error: canonical mailbox name '%s' contains flattened hierarchy delimiter\n", svars->orig_name[t] );
-			svars->ret = SYNC_FAIL;
-			sync_bail3( svars );
-			return;
-		}
-		ctx[t]->uidvalidity = -1;
-		set_bad_callback( ctx[t], store_bad, AUX );
-		svars->drv[t] = ctx[t]->conf->driver;
-	}
-	/* Both boxes must be fully set up at this point, so that error exit paths
-	 * don't run into uninitialized variables. */
-	sync_ref( svars );
-	for (t = 0; t < 2; t++) {
-		info( "Selecting %s %s...\n", str_ms[t], svars->orig_name[t] );
-		svars->drv[t]->select_box( ctx[t], svars->box_name[t], (chan->ops[t] & OP_CREATE) != 0, box_selected, AUX );
-		if (check_cancel( svars ))
-			break;
-	}
-	sync_deref( svars );
-}
-
-static void load_box( sync_vars_t *svars, int t, int minwuid, int *mexcs, int nmexcs );
-
-static void
-box_selected( int sts, void *aux )
-{
-	DECL_SVARS;
-	sync_rec_t *srec, *nsrec;
 	char *s, *cmname, *csname;
-	store_t *ctx[2];
 	channel_conf_t *chan;
-	FILE *jfp;
-	int opts[2], line, t1, t2, t3;
-	int *mexcs, nmexcs, rmexcs, minwuid;
-	struct stat st;
-	struct flock lck;
-	char fbuf[16]; /* enlarge when support for keywords is added */
-	char buf[128], buf1[64], buf2[64];
-
-	if (check_ret( sts, aux ))
-		return;
-	INIT_SVARS(aux);
-	ctx[0] = svars->ctx[0];
-	ctx[1] = svars->ctx[1];
-	svars->state[t] |= ST_SELECTED;
-	if (!(svars->state[1-t] & ST_SELECTED))
-		return;
 
 	chan = svars->chan;
 	if (!strcmp( chan->sync_state ? chan->sync_state : global_conf.sync_state, "*" )) {
-		if (!ctx[S]->path) {
+		if (!svars->ctx[S]->path) {
 			error( "Error: store '%s' does not support in-box sync state\n", chan->stores[S]->name );
-		  sbail:
-			svars->ret = SYNC_FAIL;
-			sync_bail2( svars );
-			return;
+			return 0;
 		}
-		nfasprintf( &svars->dname, "%s/." EXE "state", ctx[S]->path );
+		nfasprintf( &svars->dname, "%s/." EXE "state", svars->ctx[S]->path );
 	} else {
 		csname = clean_strdup( svars->box_name[S] );
 		if (chan->sync_state)
@@ -679,18 +606,26 @@ box_selected( int sts, void *aux )
 		free( csname );
 		if (!(s = strrchr( svars->dname, '/' ))) {
 			error( "Error: invalid SyncState location '%s'\n", svars->dname );
-			goto sbail;
+			return 0;
 		}
 		*s = 0;
 		if (mkdir( svars->dname, 0700 ) && errno != EEXIST) {
 			sys_error( "Error: cannot create SyncState directory '%s'", svars->dname );
-			goto sbail;
+			return 0;
 		}
 		*s = '/';
 	}
 	nfasprintf( &svars->jname, "%s.journal", svars->dname );
 	nfasprintf( &svars->nname, "%s.new", svars->dname );
 	nfasprintf( &svars->lname, "%s.lock", svars->dname );
+	return 1;
+}
+
+static int
+lock_state( sync_vars_t *svars )
+{
+	struct flock lck;
+
 	memset( &lck, 0, sizeof(lck) );
 #if SEEK_SET != 0
 	lck.l_whence = SEEK_SET;
@@ -700,17 +635,59 @@ box_selected( int sts, void *aux )
 #endif
 	if ((svars->lfd = open( svars->lname, O_WRONLY|O_CREAT, 0666 )) < 0) {
 		sys_error( "Error: cannot create lock file %s", svars->lname );
-		svars->ret = SYNC_FAIL;
-		sync_bail2( svars );
-		return;
+		return 0;
 	}
 	if (fcntl( svars->lfd, F_SETLK, &lck )) {
 		error( "Error: channel :%s:%s-:%s:%s is locked\n",
-		         chan->stores[M]->name, svars->orig_name[M], chan->stores[S]->name, svars->orig_name[S] );
-		svars->ret = SYNC_FAIL;
-		sync_bail1( svars );
-		return;
+		       svars->chan->stores[M]->name, svars->orig_name[M], svars->chan->stores[S]->name, svars->orig_name[S] );
+		close( svars->lfd );
+		return 0;
 	}
+	return 1;
+}
+
+static void
+save_state( sync_vars_t *svars )
+{
+	sync_rec_t *srec;
+	char fbuf[16]; /* enlarge when support for keywords is added */
+
+	Fprintf( svars->nfp,
+	         "MasterUidValidity %d\nSlaveUidValidity %d\nMaxPulledUid %d\nMaxPushedUid %d\n",
+	         svars->uidval[M], svars->uidval[S], svars->maxuid[M], svars->maxuid[S] );
+	if (svars->smaxxuid)
+		Fprintf( svars->nfp, "MaxExpiredSlaveUid %d\n", svars->smaxxuid );
+	Fprintf( svars->nfp, "\n" );
+	for (srec = svars->srecs; srec; srec = srec->next) {
+		if (srec->status & S_DEAD)
+			continue;
+		make_flags( srec->flags, fbuf );
+		Fprintf( svars->nfp, "%d %d %s%s\n", srec->uid[M], srec->uid[S],
+		         srec->status & S_EXPIRED ? "X" : "", fbuf );
+	}
+
+	Fclose( svars->nfp, 1 );
+	Fclose( svars->jfp, 0 );
+	if (!(DFlags & KEEPJOURNAL)) {
+		/* order is important! */
+		if (rename( svars->nname, svars->dname ))
+			warn( "Warning: cannot commit sync state %s\n", svars->dname );
+		else if (unlink( svars->jname ))
+			warn( "Warning: cannot delete journal %s\n", svars->jname );
+	}
+}
+
+static int
+load_state( sync_vars_t *svars )
+{
+	sync_rec_t *srec, *nsrec;
+	char *s;
+	FILE *jfp;
+	int line, t, t1, t2, t3;
+	struct stat st;
+	char fbuf[16]; /* enlarge when support for keywords is added */
+	char buf[128], buf1[64], buf2[64];
+
 	if ((jfp = fopen( svars->dname, "r" ))) {
 		debug( "reading sync state %s ...\n", svars->dname );
 		line = 0;
@@ -720,10 +697,7 @@ box_selected( int sts, void *aux )
 				error( "Error: incomplete sync state header entry at %s:%d\n", svars->dname, line );
 			  jbail:
 				fclose( jfp );
-			  bail:
-				svars->ret = SYNC_FAIL;
-				sync_bail( svars );
-				return;
+				return 0;
 			}
 			if (t == 1)
 				goto gothdr;
@@ -788,11 +762,13 @@ box_selected( int sts, void *aux )
 			svars->nsrecs++;
 		}
 		fclose( jfp );
+		svars->existing = 1;
 	} else {
 		if (errno != ENOENT) {
 			sys_error( "Error: cannot read sync state %s", svars->dname );
-			goto bail;
+			return 0;
 		}
+		svars->existing = 0;
 	}
 	svars->newmaxuid[M] = svars->maxuid[M];
 	svars->newmaxuid[S] = svars->maxuid[S];
@@ -936,19 +912,107 @@ box_selected( int sts, void *aux )
 	} else {
 		if (errno != ENOENT) {
 			sys_error( "Error: cannot read journal %s", svars->jname );
-			goto bail;
+			return 0;
 		}
 	}
+	svars->replayed = line;
+	return 1;
+}
 
-	t1 = 0;
+static void box_selected( int sts, void *aux );
+
+void
+sync_boxes( store_t *ctx[], const char *names[], channel_conf_t *chan,
+            void (*cb)( int sts, void *aux ), void *aux )
+{
+	sync_vars_t *svars;
+	int t;
+
+	svars = nfcalloc( sizeof(*svars) );
+	svars->t[1] = 1;
+	svars->ref_count = 1;
+	svars->cb = cb;
+	svars->aux = aux;
+	svars->ctx[0] = ctx[0];
+	svars->ctx[1] = ctx[1];
+	svars->chan = chan;
+	svars->uidval[0] = svars->uidval[1] = -1;
+	svars->srecadd = &svars->srecs;
+
+	for (t = 0; t < 2; t++) {
+		svars->orig_name[t] =
+			(!names[t] || (ctx[t]->conf->map_inbox && !strcmp( ctx[t]->conf->map_inbox, names[t] ))) ?
+				"INBOX" : names[t];
+		if (!ctx[t]->conf->flat_delim) {
+			svars->box_name[t] = nfstrdup( svars->orig_name[t] );
+		} else if (map_name( svars->orig_name[t], &svars->box_name[t], 0, "/", ctx[t]->conf->flat_delim ) < 0) {
+			error( "Error: canonical mailbox name '%s' contains flattened hierarchy delimiter\n", svars->orig_name[t] );
+			svars->ret = SYNC_FAIL;
+			sync_bail3( svars );
+			return;
+		}
+		ctx[t]->uidvalidity = -1;
+		set_bad_callback( ctx[t], store_bad, AUX );
+		svars->drv[t] = ctx[t]->conf->driver;
+	}
+	/* Both boxes must be fully set up at this point, so that error exit paths
+	 * don't run into uninitialized variables. */
+	sync_ref( svars );
+	for (t = 0; t < 2; t++) {
+		info( "Selecting %s %s...\n", str_ms[t], svars->orig_name[t] );
+		svars->drv[t]->select_box( ctx[t], svars->box_name[t], (chan->ops[t] & OP_CREATE) != 0, box_selected, AUX );
+		if (check_cancel( svars ))
+			break;
+	}
+	sync_deref( svars );
+}
+
+static void load_box( sync_vars_t *svars, int t, int minwuid, int *mexcs, int nmexcs );
+
+static void
+box_selected( int sts, void *aux )
+{
+	DECL_SVARS;
+	sync_rec_t *srec;
+	store_t *ctx[2];
+	channel_conf_t *chan;
+	int opts[2], fails;
+	int *mexcs, nmexcs, rmexcs, minwuid;
+
+	if (check_ret( sts, aux ))
+		return;
+	INIT_SVARS(aux);
+	ctx[0] = svars->ctx[0];
+	ctx[1] = svars->ctx[1];
+	chan = svars->chan;
+	svars->state[t] |= ST_SELECTED;
+	if (!(svars->state[1-t] & ST_SELECTED))
+		return;
+
+	if (!prepare_state( svars ) || !lock_state( svars )) {
+		svars->ret = SYNC_FAIL;
+		sync_bail2( svars );
+		return;
+	}
+	if (!load_state( svars )) {
+		svars->ret = SYNC_FAIL;
+		sync_bail( svars );
+		return;
+	}
+
+	fails = 0;
 	for (t = 0; t < 2; t++)
 		if (svars->uidval[t] >= 0 && svars->uidval[t] != ctx[t]->uidvalidity) {
 			error( "Error: UIDVALIDITY of %s changed (got %d, expected %d)\n",
 			       str_ms[t], ctx[t]->uidvalidity, svars->uidval[t] );
-			t1++;
+			fails++;
 		}
-	if (t1)
-		goto bail;
+	if (fails) {
+	  bail:
+		svars->ret = SYNC_FAIL;
+		sync_bail( svars );
+		return;
+	}
 
 	if (!(svars->nfp = fopen( svars->nname, "w" ))) {
 		sys_error( "Error: cannot create new sync state %s", svars->nname );
@@ -960,7 +1024,7 @@ box_selected( int sts, void *aux )
 		goto bail;
 	}
 	setlinebuf( svars->jfp );
-	if (!line)
+	if (!svars->replayed)
 		Fprintf( svars->jfp, JOURNAL_VERSION "\n" );
 
 	opts[M] = opts[S] = 0;
@@ -994,7 +1058,7 @@ box_selected( int sts, void *aux )
 	}
 	if ((chan->ops[S] & (OP_NEW|OP_RENEW|OP_FLAGS)) && chan->max_messages)
 		opts[S] |= OPEN_OLD|OPEN_NEW|OPEN_FLAGS;
-	if (line)
+	if (svars->replayed)
 		for (srec = svars->srecs; srec; srec = srec->next) {
 			if (srec->status & S_DEAD)
 				continue;
@@ -1816,7 +1880,6 @@ box_closed_p2( sync_vars_t *svars, int t )
 {
 	sync_rec_t *srec;
 	int minwuid;
-	char fbuf[16]; /* enlarge when support for keywords is added */
 
 	svars->state[t] |= ST_CLOSED;
 	if (!(svars->state[1-t] & ST_CLOSED))
@@ -1861,29 +1924,7 @@ box_closed_p2( sync_vars_t *svars, int t )
 		}
 	}
 
-	Fprintf( svars->nfp,
-	         "MasterUidValidity %d\nSlaveUidValidity %d\nMaxPulledUid %d\nMaxPushedUid %d\n",
-	         svars->uidval[M], svars->uidval[S], svars->maxuid[M], svars->maxuid[S] );
-	if (svars->smaxxuid)
-		Fprintf( svars->nfp, "MaxExpiredSlaveUid %d\n", svars->smaxxuid );
-	Fprintf( svars->nfp, "\n" );
-	for (srec = svars->srecs; srec; srec = srec->next) {
-		if (srec->status & S_DEAD)
-			continue;
-		make_flags( srec->flags, fbuf );
-		Fprintf( svars->nfp, "%d %d %s%s\n", srec->uid[M], srec->uid[S],
-		         srec->status & S_EXPIRED ? "X" : "", fbuf );
-	}
-
-	Fclose( svars->nfp, 1 );
-	Fclose( svars->jfp, 0 );
-	if (!(DFlags & KEEPJOURNAL)) {
-		/* order is important! */
-		if (rename( svars->nname, svars->dname ))
-			warn( "Warning: cannot commit sync state %s\n", svars->dname );
-		else if (unlink( svars->jname ))
-			warn( "Warning: cannot delete journal %s\n", svars->jname );
-	}
+	save_state( svars );
 
 	sync_bail( svars );
 }
@@ -1898,12 +1939,6 @@ sync_bail( sync_vars_t *svars )
 		free( srec );
 	}
 	unlink( svars->lname );
-	sync_bail1( svars );
-}
-
-static void
-sync_bail1( sync_vars_t *svars )
-{
 	close( svars->lfd );
 	sync_bail2( svars );
 }
