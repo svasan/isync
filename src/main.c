@@ -599,7 +599,7 @@ sync_chans( main_vars_t *mvars, int ent )
 		else
 			labels[M] = labels[S] = "";
 		for (t = 0; ; t++) {
-			info( "Opening %s %s...\n", str_ms[t], mvars->chan->stores[t]->name );
+			info( "Opening %s store %s...\n", str_ms[t], mvars->chan->stores[t]->name );
 			mvars->drv[t] = mvars->chan->stores[t]->driver;
 			mvars->drv[t]->open_store( mvars->chan->stores[t], labels[t], store_opened, AUX );
 			if (t)

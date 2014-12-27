@@ -926,16 +926,10 @@ maildir_app_msg( maildir_store_t *ctx, message_t ***msgapp, msg_t *entry )
 	maildir_init_msg( ctx, msg, entry );
 }
 
-static void
-maildir_select_box( store_t *gctx, const char *name, int create,
-                    void (*cb)( int sts, void *aux ), void *aux )
+static int
+maildir_select_box( store_t *gctx, const char *name )
 {
 	maildir_store_t *ctx = (maildir_store_t *)gctx;
-	int ret;
-#ifdef USE_DB
-	struct stat st;
-#endif /* USE_DB */
-	char uvpath[_POSIX_PATH_MAX];
 
 	maildir_cleanup( gctx );
 	gctx->msgs = 0;
@@ -948,12 +942,24 @@ maildir_select_box( store_t *gctx, const char *name, int create,
 		gctx->path = maildir_join_path( ((maildir_store_conf_t *)gctx->conf)->inbox, name + 5 );
 	} else {
 		if (maildir_validate_path( gctx->conf ) < 0) {
-			maildir_invoke_bad_callback( gctx );
-			cb( DRV_CANCELED, aux );
-			return;
+			gctx->path = 0;
+			return DRV_CANCELED;
 		}
 		gctx->path = maildir_join_path( gctx->conf->path, name );
 	}
+	return DRV_OK;
+}
+
+static void
+maildir_open_box( store_t *gctx, int create,
+                  void (*cb)( int sts, void *aux ), void *aux )
+{
+	maildir_store_t *ctx = (maildir_store_t *)gctx;
+	int ret;
+#ifdef USE_DB
+	struct stat st;
+#endif /* USE_DB */
+	char uvpath[_POSIX_PATH_MAX];
 
 	if ((ret = maildir_validate( gctx->path, create, ctx )) != DRV_OK) {
 		cb( ret, aux );
@@ -1532,6 +1538,7 @@ struct driver maildir_driver = {
 	maildir_disown_store, /* _cancel_, but it's the same */
 	maildir_list_store,
 	maildir_select_box,
+	maildir_open_box,
 	maildir_prepare_load_box,
 	maildir_load_box,
 	maildir_fetch_msg,

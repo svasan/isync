@@ -161,10 +161,13 @@ struct driver {
 	void (*list_store)( store_t *ctx, int flags,
 	                    void (*cb)( int sts, void *aux ), void *aux );
 
-	/* Open the mailbox name. Optionally create missing boxes.
+	/* Invoked before open_box(), this informs the driver which box is to be opened.
 	 * As a side effect, this should resolve ctx->path if applicable. */
-	void (*select_box)( store_t *ctx, const char *name, int create,
-	                    void (*cb)( int sts, void *aux ), void *aux );
+	int (*select_box)( store_t *ctx, const char *name );
+
+	/* Open the selected mailbox. Optionally create missing boxes. */
+	void (*open_box)( store_t *ctx, int create,
+	                  void (*cb)( int sts, void *aux ), void *aux );
 
 	/* Invoked before load_box(), this informs the driver which operations (OP_*)
 	 * will be performed on the mailbox. The driver may extend the set by implicitly

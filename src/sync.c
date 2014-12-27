@@ -919,7 +919,7 @@ load_state( sync_vars_t *svars )
 	return 1;
 }
 
-static void box_selected( int sts, void *aux );
+static void box_opened( int sts, void *aux );
 
 void
 sync_boxes( store_t *ctx[], const char *names[], channel_conf_t *chan,
@@ -957,10 +957,16 @@ sync_boxes( store_t *ctx[], const char *names[], channel_conf_t *chan,
 	}
 	/* Both boxes must be fully set up at this point, so that error exit paths
 	 * don't run into uninitialized variables. */
+	for (t = 0; t < 2; t++) {
+		if (svars->drv[t]->select_box( ctx[t], svars->box_name[t] ) == DRV_CANCELED) {
+			store_bad( AUX );
+			return;
+		}
+	}
 	sync_ref( svars );
 	for (t = 0; t < 2; t++) {
-		info( "Selecting %s %s...\n", str_ms[t], svars->orig_name[t] );
-		svars->drv[t]->select_box( ctx[t], svars->box_name[t], (chan->ops[t] & OP_CREATE) != 0, box_selected, AUX );
+		info( "Opening %s box %s...\n", str_ms[t], svars->orig_name[t] );
+		svars->drv[t]->open_box( ctx[t], (chan->ops[t] & OP_CREATE) != 0, box_opened, AUX );
 		if (check_cancel( svars ))
 			break;
 	}
@@ -970,7 +976,7 @@ sync_boxes( store_t *ctx[], const char *names[], channel_conf_t *chan,
 static void load_box( sync_vars_t *svars, int t, int minwuid, int *mexcs, int nmexcs );
 
 static void
-box_selected( int sts, void *aux )
+box_opened( int sts, void *aux )
 {
 	DECL_SVARS;
 	sync_rec_t *srec;

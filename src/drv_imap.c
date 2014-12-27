@@ -2108,21 +2108,29 @@ imap_open_store_bail( imap_store_t *ctx )
 	cb( 0, aux );
 }
 
-/******************* imap_select_box *******************/
+/******************* imap_open_box *******************/
 
-static void
-imap_select_box( store_t *gctx, const char *name, int create,
-                 void (*cb)( int sts, void *aux ), void *aux )
+static int
+imap_select_box( store_t *gctx, const char *name )
 {
 	imap_store_t *ctx = (imap_store_t *)gctx;
-	struct imap_cmd_simple *cmd;
-	char *buf;
 
 	free_generic_messages( gctx->msgs );
 	gctx->msgs = 0;
 	ctx->msgapp = &gctx->msgs;
 
 	ctx->name = name;
+	return DRV_OK;
+}
+
+static void
+imap_open_box( store_t *gctx, int create,
+               void (*cb)( int sts, void *aux ), void *aux )
+{
+	imap_store_t *ctx = (imap_store_t *)gctx;
+	struct imap_cmd_simple *cmd;
+	char *buf;
+
 	if (prepare_box( &buf, ctx ) < 0) {
 		cb( DRV_BOX_BAD, aux );
 		return;
@@ -2780,6 +2788,7 @@ struct driver imap_driver = {
 	imap_cancel_store,
 	imap_list_store,
 	imap_select_box,
+	imap_open_box,
 	imap_prepare_load_box,
 	imap_load_box,
 	imap_fetch_msg,
