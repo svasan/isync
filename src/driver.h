@@ -158,26 +158,26 @@ struct driver {
 	void (*cancel_store)( store_t *ctx );
 
 	/* List the mailboxes in this store. Flags are ORed LIST_* values. */
-	void (*list)( store_t *ctx, int flags,
-	              void (*cb)( int sts, void *aux ), void *aux );
+	void (*list_store)( store_t *ctx, int flags,
+	                    void (*cb)( int sts, void *aux ), void *aux );
 
 	/* Open the mailbox name. Optionally create missing boxes.
 	 * As a side effect, this should resolve ctx->path if applicable. */
-	void (*select)( store_t *ctx, const char *name, int create,
-	               void (*cb)( int sts, void *aux ), void *aux );
+	void (*select_box)( store_t *ctx, const char *name, int create,
+	                    void (*cb)( int sts, void *aux ), void *aux );
 
-	/* Invoked before load(), this informs the driver which operations (OP_*)
+	/* Invoked before load_box(), this informs the driver which operations (OP_*)
 	 * will be performed on the mailbox. The driver may extend the set by implicitly
 	 * needed or available operations. */
-	void (*prepare_load)( store_t *ctx, int opts );
+	void (*prepare_load_box)( store_t *ctx, int opts );
 
 	/* Load the message attributes needed to perform the requested operations.
 	 * Consider only messages with UIDs between minuid and maxuid (inclusive)
 	 * and those named in the excs array (smaller than minuid).
 	 * The driver takes ownership of the excs array. Messages below newuid do not need
 	 * to have the TUID populated even if OPEN_FIND is set. */
-	void (*load)( store_t *ctx, int minuid, int maxuid, int newuid, int *excs, int nexcs,
-	              void (*cb)( int sts, void *aux ), void *aux );
+	void (*load_box)( store_t *ctx, int minuid, int maxuid, int newuid, int *excs, int nexcs,
+	                  void (*cb)( int sts, void *aux ), void *aux );
 
 	/* Fetch the contents and flags of the given message from the current mailbox. */
 	void (*fetch_msg)( store_t *ctx, message_t *msg, msg_data_t *data,
@@ -198,8 +198,8 @@ struct driver {
 	 * a pre-fetched one (in which case the in-memory representation is updated),
 	 * or it may be identifed by UID only. The operation may be delayed until commit()
 	 * is called. */
-	void (*set_flags)( store_t *ctx, message_t *msg, int uid, int add, int del, /* msg can be null, therefore uid as a fallback */
-	                   void (*cb)( int sts, void *aux ), void *aux );
+	void (*set_msg_flags)( store_t *ctx, message_t *msg, int uid, int add, int del, /* msg can be null, therefore uid as a fallback */
+	                       void (*cb)( int sts, void *aux ), void *aux );
 
 	/* Move the given message from the current mailbox to the trash folder.
 	 * This may expunge the original message immediately, but it needn't to. */
@@ -208,18 +208,18 @@ struct driver {
 
 	/* Expunge deleted messages from the current mailbox and close it.
 	 * There is no need to explicitly close a mailbox if no expunge is needed. */
-	void (*close)( store_t *ctx, /* IMAP-style: expunge inclusive */
-	               void (*cb)( int sts, void *aux ), void *aux );
+	void (*close_box)( store_t *ctx, /* IMAP-style: expunge inclusive */
+	                   void (*cb)( int sts, void *aux ), void *aux );
 
 	/* Cancel queued commands which are not in flight yet; they will have their
 	 * callbacks invoked with DRV_CANCELED. Afterwards, wait for the completion of
 	 * the in-flight commands. If the store is canceled before this command completes,
 	 * the callback will *not* be invoked. */
-	void (*cancel)( store_t *ctx,
-	                void (*cb)( void *aux ), void *aux );
+	void (*cancel_cmds)( store_t *ctx,
+	                     void (*cb)( void *aux ), void *aux );
 
-	/* Commit any pending set_flags() commands. */
-	void (*commit)( store_t *ctx );
+	/* Commit any pending set_msg_flags() commands. */
+	void (*commit_cmds)( store_t *ctx );
 };
 
 void free_generic_messages( message_t * );

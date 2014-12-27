@@ -484,7 +484,7 @@ cancel_sync( sync_vars_t *svars )
 		} else if (!(svars->state[t] & ST_SENT_CANCEL)) {
 			/* ignore subsequent failures from in-flight commands */
 			svars->state[t] |= ST_SENT_CANCEL;
-			svars->drv[t]->cancel( svars->ctx[t], cancel_done, AUX );
+			svars->drv[t]->cancel_cmds( svars->ctx[t], cancel_done, AUX );
 		}
 		if (other_state & ST_CANCELED)
 			break;
@@ -621,7 +621,7 @@ sync_boxes( store_t *ctx[], const char *names[], channel_conf_t *chan,
 	sync_ref( svars );
 	for (t = 0; t < 2; t++) {
 		info( "Selecting %s %s...\n", str_ms[t], svars->orig_name[t] );
-		svars->drv[t]->select( ctx[t], svars->box_name[t], (chan->ops[t] & OP_CREATE) != 0, box_selected, AUX );
+		svars->drv[t]->select_box( ctx[t], svars->box_name[t], (chan->ops[t] & OP_CREATE) != 0, box_selected, AUX );
 		if (check_cancel( svars ))
 			break;
 	}
@@ -1007,8 +1007,8 @@ box_selected( int sts, void *aux )
 					assert( !"sync record with stray TUID" );
 			}
 		}
-	svars->drv[M]->prepare_load( ctx[M], opts[M] );
-	svars->drv[S]->prepare_load( ctx[S], opts[S] );
+	svars->drv[M]->prepare_load_box( ctx[M], opts[M] );
+	svars->drv[S]->prepare_load_box( ctx[S], opts[S] );
 
 	mexcs = 0;
 	nmexcs = rmexcs = 0;
@@ -1094,7 +1094,7 @@ load_box( sync_vars_t *svars, int t, int minwuid, int *mexcs, int nmexcs )
 		maxwuid = 0;
 	info( "Loading %s...\n", str_ms[t] );
 	debug( maxwuid == INT_MAX ? "loading %s [%d,inf]\n" : "loading %s [%d,%d]\n", str_ms[t], minwuid, maxwuid );
-	svars->drv[t]->load( svars->ctx[t], minwuid, maxwuid, svars->newuid[t], mexcs, nmexcs, box_loaded, AUX );
+	svars->drv[t]->load_box( svars->ctx[t], minwuid, maxwuid, svars->newuid[t], mexcs, nmexcs, box_loaded, AUX );
 }
 
 typedef struct {
@@ -1489,7 +1489,7 @@ box_loaded( int sts, void *aux )
 				fv->srec = srec;
 				fv->aflags = aflags;
 				fv->dflags = dflags;
-				svars->drv[t]->set_flags( svars->ctx[t], srec->msg[t], srec->uid[t], aflags, dflags, flags_set, fv );
+				svars->drv[t]->set_msg_flags( svars->ctx[t], srec->msg[t], srec->uid[t], aflags, dflags, flags_set, fv );
 				if (check_cancel( svars ))
 					goto out;
 			} else
@@ -1497,7 +1497,7 @@ box_loaded( int sts, void *aux )
 		}
 	}
 	for (t = 0; t < 2; t++) {
-		svars->drv[t]->commit( svars->ctx[t] );
+		svars->drv[t]->commit_cmds( svars->ctx[t] );
 		svars->state[t] |= ST_SENT_FLAGS;
 		msgs_flags_set( svars, t );
 		if (check_cancel( svars ))
@@ -1797,7 +1797,7 @@ sync_close( sync_vars_t *svars, int t )
 
 	if ((svars->chan->ops[t] & OP_EXPUNGE) /*&& !(svars->state[t] & ST_TRASH_BAD)*/) {
 		debug( "expunging %s\n", str_ms[t] );
-		svars->drv[t]->close( svars->ctx[t], box_closed, AUX );
+		svars->drv[t]->close_box( svars->ctx[t], box_closed, AUX );
 	} else {
 		box_closed_p2( svars, t );
 	}

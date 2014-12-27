@@ -2108,11 +2108,11 @@ imap_open_store_bail( imap_store_t *ctx )
 	cb( 0, aux );
 }
 
-/******************* imap_select *******************/
+/******************* imap_select_box *******************/
 
 static void
-imap_select( store_t *gctx, const char *name, int create,
-             void (*cb)( int sts, void *aux ), void *aux )
+imap_select_box( store_t *gctx, const char *name, int create,
+                 void (*cb)( int sts, void *aux ), void *aux )
 {
 	imap_store_t *ctx = (imap_store_t *)gctx;
 	struct imap_cmd_simple *cmd;
@@ -2138,10 +2138,10 @@ imap_select( store_t *gctx, const char *name, int create,
 	free( buf );
 }
 
-/******************* imap_load *******************/
+/******************* imap_load_box *******************/
 
 static void
-imap_prepare_load( store_t *gctx, int opts )
+imap_prepare_load_box( store_t *gctx, int opts )
 {
 	gctx->opts = opts;
 }
@@ -2149,8 +2149,8 @@ imap_prepare_load( store_t *gctx, int opts )
 static int imap_submit_load( imap_store_t *, const char *, int, struct imap_cmd_refcounted_state * );
 
 static void
-imap_load( store_t *gctx, int minuid, int maxuid, int newuid, int *excs, int nexcs,
-           void (*cb)( int sts, void *aux ), void *aux )
+imap_load_box( store_t *gctx, int minuid, int maxuid, int newuid, int *excs, int nexcs,
+               void (*cb)( int sts, void *aux ), void *aux )
 {
 	imap_store_t *ctx = (imap_store_t *)gctx;
 	int i, j, bl;
@@ -2239,7 +2239,7 @@ imap_fetch_msg_p2( imap_store_t *ctx, struct imap_cmd *gcmd, int response )
 	imap_done_simple_msg( ctx, gcmd, response );
 }
 
-/******************* imap_set_flags *******************/
+/******************* imap_set_msg_flags *******************/
 
 static void imap_set_flags_p2( imap_store_t *, struct imap_cmd *, int );
 
@@ -2273,8 +2273,8 @@ imap_flags_helper( imap_store_t *ctx, int uid, char what, int flags,
 }
 
 static void
-imap_set_flags( store_t *gctx, message_t *msg, int uid, int add, int del,
-                void (*cb)( int sts, void *aux ), void *aux )
+imap_set_msg_flags( store_t *gctx, message_t *msg, int uid, int add, int del,
+                    void (*cb)( int sts, void *aux ), void *aux )
 {
 	imap_store_t *ctx = (imap_store_t *)gctx;
 
@@ -2311,11 +2311,11 @@ imap_set_flags_p2( imap_store_t *ctx ATTR_UNUSED, struct imap_cmd *cmd, int resp
 	imap_refcounted_done( sts );
 }
 
-/******************* imap_close *******************/
+/******************* imap_close_box *******************/
 
 static void
-imap_close( store_t *gctx,
-            void (*cb)( int sts, void *aux ), void *aux )
+imap_close_box( store_t *gctx,
+                void (*cb)( int sts, void *aux ), void *aux )
 {
 	imap_store_t *ctx = (imap_store_t *)gctx;
 
@@ -2472,11 +2472,11 @@ imap_find_new_msgs_p2( imap_store_t *ctx, struct imap_cmd *gcmd, int response )
 	           "UID FETCH %d:1000000000 (UID BODY.PEEK[HEADER.FIELDS (X-TUID)])", cmdp->uid );
 }
 
-/******************* imap_list *******************/
+/******************* imap_list_store *******************/
 
 static void
-imap_list( store_t *gctx, int flags,
-           void (*cb)( int sts, void *aux ), void *aux )
+imap_list_store( store_t *gctx, int flags,
+                 void (*cb)( int sts, void *aux ), void *aux )
 {
 	imap_store_t *ctx = (imap_store_t *)gctx;
 	struct imap_cmd_refcounted_state *sts = imap_refcounted_new_state( cb, aux );
@@ -2491,11 +2491,11 @@ imap_list( store_t *gctx, int flags,
 	imap_refcounted_done( sts );
 }
 
-/******************* imap_cancel *******************/
+/******************* imap_cancel_cmds *******************/
 
 static void
-imap_cancel( store_t *gctx,
-             void (*cb)( void *aux ), void *aux )
+imap_cancel_cmds( store_t *gctx,
+                  void (*cb)( void *aux ), void *aux )
 {
 	imap_store_t *ctx = (imap_store_t *)gctx;
 
@@ -2509,10 +2509,10 @@ imap_cancel( store_t *gctx,
 	}
 }
 
-/******************* imap_commit *******************/
+/******************* imap_commit_cmds *******************/
 
 static void
-imap_commit( store_t *gctx )
+imap_commit_cmds( store_t *gctx )
 {
 	(void)gctx;
 }
@@ -2778,16 +2778,16 @@ struct driver imap_driver = {
 	imap_open_store,
 	imap_disown_store,
 	imap_cancel_store,
-	imap_list,
-	imap_select,
-	imap_prepare_load,
-	imap_load,
+	imap_list_store,
+	imap_select_box,
+	imap_prepare_load_box,
+	imap_load_box,
 	imap_fetch_msg,
 	imap_store_msg,
 	imap_find_new_msgs,
-	imap_set_flags,
+	imap_set_msg_flags,
 	imap_trash_msg,
-	imap_close,
-	imap_cancel,
-	imap_commit,
+	imap_close_box,
+	imap_cancel_cmds,
+	imap_commit_cmds,
 };

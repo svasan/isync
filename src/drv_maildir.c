@@ -295,8 +295,8 @@ maildir_list_path( store_t *gctx, int *flags )
 }
 
 static void
-maildir_list( store_t *gctx, int flags,
-              void (*cb)( int sts, void *aux ), void *aux )
+maildir_list_store( store_t *gctx, int flags,
+                    void (*cb)( int sts, void *aux ), void *aux )
 {
 	if (((flags & LIST_PATH) && maildir_list_path( gctx, &flags ) < 0) ||
 	    ((flags & LIST_INBOX) && maildir_list_inbox( gctx, &flags ) < 0)) {
@@ -927,8 +927,8 @@ maildir_app_msg( maildir_store_t *ctx, message_t ***msgapp, msg_t *entry )
 }
 
 static void
-maildir_select( store_t *gctx, const char *name, int create,
-                void (*cb)( int sts, void *aux ), void *aux )
+maildir_select_box( store_t *gctx, const char *name, int create,
+                    void (*cb)( int sts, void *aux ), void *aux )
 {
 	maildir_store_t *ctx = (maildir_store_t *)gctx;
 	int ret;
@@ -1041,7 +1041,7 @@ maildir_select( store_t *gctx, const char *name, int create,
 }
 
 static void
-maildir_prepare_load( store_t *gctx, int opts )
+maildir_prepare_load_box( store_t *gctx, int opts )
 {
 	if (opts & OPEN_SETFLAGS)
 		opts |= OPEN_OLD;
@@ -1051,8 +1051,8 @@ maildir_prepare_load( store_t *gctx, int opts )
 }
 
 static void
-maildir_load( store_t *gctx, int minuid, int maxuid, int newuid, int *excs, int nexcs,
-              void (*cb)( int sts, void *aux ), void *aux )
+maildir_load_box( store_t *gctx, int minuid, int maxuid, int newuid, int *excs, int nexcs,
+                  void (*cb)( int sts, void *aux ), void *aux )
 {
 	maildir_store_t *ctx = (maildir_store_t *)gctx;
 	message_t **msgapp;
@@ -1302,8 +1302,8 @@ maildir_find_new_msgs( store_t *gctx ATTR_UNUSED, int newuid ATTR_UNUSED,
 }
 
 static void
-maildir_set_flags( store_t *gctx, message_t *gmsg, int uid ATTR_UNUSED, int add, int del,
-                   void (*cb)( int sts, void *aux ), void *aux )
+maildir_set_msg_flags( store_t *gctx, message_t *gmsg, int uid ATTR_UNUSED, int add, int del,
+                       void (*cb)( int sts, void *aux ), void *aux )
 {
 	maildir_store_conf_t *conf = (maildir_store_conf_t *)gctx->conf;
 	maildir_store_t *ctx = (maildir_store_t *)gctx;
@@ -1424,8 +1424,8 @@ maildir_trash_msg( store_t *gctx, message_t *gmsg,
 }
 
 static void
-maildir_close( store_t *gctx,
-               void (*cb)( int sts, void *aux ), void *aux )
+maildir_close_box( store_t *gctx,
+                   void (*cb)( int sts, void *aux ), void *aux )
 {
 #ifdef USE_DB
 	maildir_store_t *ctx = (maildir_store_t *)gctx;
@@ -1468,14 +1468,14 @@ maildir_close( store_t *gctx,
 }
 
 static void
-maildir_cancel( store_t *gctx ATTR_UNUSED,
-                void (*cb)( void *aux ), void *aux )
+maildir_cancel_cmds( store_t *gctx ATTR_UNUSED,
+                     void (*cb)( void *aux ), void *aux )
 {
 	cb( aux );
 }
 
 static void
-maildir_commit( store_t *gctx )
+maildir_commit_cmds( store_t *gctx )
 {
 	(void) gctx;
 }
@@ -1530,16 +1530,16 @@ struct driver maildir_driver = {
 	maildir_open_store,
 	maildir_disown_store,
 	maildir_disown_store, /* _cancel_, but it's the same */
-	maildir_list,
-	maildir_select,
-	maildir_prepare_load,
-	maildir_load,
+	maildir_list_store,
+	maildir_select_box,
+	maildir_prepare_load_box,
+	maildir_load_box,
 	maildir_fetch_msg,
 	maildir_store_msg,
 	maildir_find_new_msgs,
-	maildir_set_flags,
+	maildir_set_msg_flags,
 	maildir_trash_msg,
-	maildir_close,
-	maildir_cancel,
-	maildir_commit,
+	maildir_close_box,
+	maildir_cancel_cmds,
+	maildir_commit_cmds,
 };

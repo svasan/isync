@@ -756,7 +756,7 @@ store_opened( store_t *ctx, void *aux )
 			}
 		}
 		set_bad_callback( ctx, store_bad, AUX );
-		mvars->drv[t]->list( ctx, flags, store_listed, AUX );
+		mvars->drv[t]->list_store( ctx, flags, store_listed, AUX );
 	} else {
 		mvars->state[t] = ST_OPEN;
 		sync_chans( mvars, E_OPEN );
