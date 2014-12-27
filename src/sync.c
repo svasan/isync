@@ -497,14 +497,11 @@ cancel_done( void *aux )
 
 	svars->state[t] |= ST_CANCELED;
 	if (svars->state[1-t] & ST_CANCELED) {
-		if (svars->lfd >= 0) {
+		if (svars->nfp) {
 			Fclose( svars->nfp, 0 );
 			Fclose( svars->jfp, 0 );
-			sync_bail( svars );
-		} else {
-			/* Early failure during box selection. */
-			sync_bail2( svars );
 		}
+		sync_bail( svars );
 	}
 }
 
@@ -626,6 +623,8 @@ lock_state( sync_vars_t *svars )
 {
 	struct flock lck;
 
+	if (svars->lfd >= 0)
+		return 1;
 	memset( &lck, 0, sizeof(lck) );
 #if SEEK_SET != 0
 	lck.l_whence = SEEK_SET;
@@ -641,6 +640,7 @@ lock_state( sync_vars_t *svars )
 		error( "Error: channel :%s:%s-:%s:%s is locked\n",
 		       svars->chan->stores[M]->name, svars->orig_name[M], svars->chan->stores[S]->name, svars->orig_name[S] );
 		close( svars->lfd );
+		svars->lfd = -1;
 		return 0;
 	}
 	return 1;
@@ -689,6 +689,8 @@ load_state( sync_vars_t *svars )
 	char buf[128], buf1[64], buf2[64];
 
 	if ((jfp = fopen( svars->dname, "r" ))) {
+		if (!lock_state( svars ))
+			goto jbail;
 		debug( "reading sync state %s ...\n", svars->dname );
 		line = 0;
 		while (fgets( buf, sizeof(buf), jfp )) {
@@ -775,6 +777,8 @@ load_state( sync_vars_t *svars )
 	svars->mmaxxuid = INT_MAX;
 	line = 0;
 	if ((jfp = fopen( svars->jname, "r" ))) {
+		if (!lock_state( svars ))
+			goto jbail;
 		if (!stat( svars->nname, &st ) && fgets( buf, sizeof(buf), jfp )) {
 			debug( "recovering journal ...\n" );
 			if (!(t = strlen( buf )) || buf[t - 1] != '\n') {
@@ -936,6 +940,7 @@ sync_boxes( store_t *ctx[], const char *names[], channel_conf_t *chan,
 	svars->ctx[0] = ctx[0];
 	svars->ctx[1] = ctx[1];
 	svars->chan = chan;
+	svars->lfd = -1;
 	svars->uidval[0] = svars->uidval[1] = -1;
 	svars->srecadd = &svars->srecs;
 
@@ -995,7 +1000,7 @@ box_opened( int sts, void *aux )
 	if (!(svars->state[1-t] & ST_SELECTED))
 		return;
 
-	if (!prepare_state( svars ) || !lock_state( svars )) {
+	if (!prepare_state( svars )) {
 		svars->ret = SYNC_FAIL;
 		sync_bail2( svars );
 		return;
@@ -1020,6 +1025,8 @@ box_opened( int sts, void *aux )
 		return;
 	}
 
+	if (!lock_state( svars ))
+		goto bail;
 	if (!(svars->nfp = fopen( svars->nname, "w" ))) {
 		sys_error( "Error: cannot create new sync state %s", svars->nname );
 		goto bail;
@@ -1944,8 +1951,10 @@ sync_bail( sync_vars_t *svars )
 		nsrec = srec->next;
 		free( srec );
 	}
-	unlink( svars->lname );
-	close( svars->lfd );
+	if (svars->lfd >= 0) {
+		unlink( svars->lname );
+		close( svars->lfd );
+	}
 	sync_bail2( svars );
 }
 
