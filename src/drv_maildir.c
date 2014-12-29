@@ -68,7 +68,7 @@ typedef struct maildir_message {
 
 typedef struct maildir_store {
 	store_t gen;
-	int uvfd, uvok, nuid, fresh;
+	int uvfd, uvok, nuid, fresh[3];
 	int minuid, maxuid, newuid, nexcs, *excs;
 	char *trash;
 #ifdef USE_DB
@@ -378,47 +378,48 @@ maildir_validate( const char *box, int create, maildir_store_t *ctx )
 
 	bl = nfsnprintf( buf, sizeof(buf) - 4, "%s/", box );
 	if (stat( buf, &st )) {
-		if (errno == ENOENT) {
-			if (create) {
-				p = memrchr( buf, '/', bl - 1 );
-				if (*(p + 1) == '.') {
-					*p = 0;
-					if ((ret = maildir_validate( buf, 1, ctx )) != DRV_OK)
-						return ret;
-					*p = '/';
-				}
-				if (mkdir( buf, 0700 )) {
-					sys_error( "Maildir error: cannot create mailbox '%s'", buf );
-					maildir_invoke_bad_callback( &ctx->gen );
-					return DRV_CANCELED;
-				}
-				for (i = 0; i < 3; i++) {
-					memcpy( buf + bl, subdirs[i], 4 );
-					if (mkdir( buf, 0700 )) {
-						sys_error( "Maildir error: cannot create directory %s", buf );
-						return DRV_BOX_BAD;
-					}
-				}
-			} else {
-				error( "Maildir error: mailbox '%s' does not exist\n", buf );
-				return DRV_BOX_BAD;
-			}
-		} else {
-			sys_error( "Maildir error: cannot access mailbox '%s'", buf );
+		if (errno != ENOENT) {
+			sys_error( "Maildir error: cannot access mailbox '%s'", box );
 			return DRV_BOX_BAD;
 		}
-		ctx->fresh = 1;
-	} else {
-		for (i = 0; i < 3; i++) {
-			memcpy( buf + bl, subdirs[i], 4 );
-			if (stat( buf, &st ) || !S_ISDIR(st.st_mode)) {
-				error( "Maildir error: '%.*s' is no valid mailbox\n", bl, buf );
+		if (!create)
+			return DRV_BOX_BAD;
+		p = memrchr( buf, '/', bl - 1 );
+		if (*(p + 1) == '.') {
+			*p = 0;
+			if ((ret = maildir_validate( buf, 1, ctx )) != DRV_OK)
+				return ret;
+			*p = '/';
+		}
+		if (mkdir( buf, 0700 )) {
+			sys_error( "Maildir error: cannot create mailbox '%s'", box );
+			maildir_invoke_bad_callback( &ctx->gen );
+			return DRV_CANCELED;
+		}
+	} else if (!S_ISDIR(st.st_mode)) {
+	  notdir:
+		error( "Maildir error: '%s' is no valid mailbox\n", box );
+		return DRV_BOX_BAD;
+	}
+	for (i = 0; i < 3; i++) {
+		memcpy( buf + bl, subdirs[i], 4 );
+		if (stat( buf, &st )) {
+			/* We always create new/ and tmp/ if they are missing. cur/ is the presence indicator. */
+			if (!i && !create)
+				return DRV_BOX_BAD;
+			if (mkdir( buf, 0700 )) {
+				sys_error( "Maildir error: cannot create directory %s", buf );
 				return DRV_BOX_BAD;
 			}
+			ctx->fresh[i] = 1;
+		} else if (!S_ISDIR(st.st_mode)) {
+			goto notdir;
+		} else {
+			if (i == 2) {
+				if ((ret = maildir_clear_tmp( buf, sizeof(buf), bl )) != DRV_OK)
+					return ret;
+			}
 		}
-		if ((ret = maildir_clear_tmp( buf, sizeof(buf), bl )) != DRV_OK)
-			return ret;
-		ctx->fresh = 0;
 	}
 	return DRV_OK;
 }
@@ -676,7 +677,7 @@ maildir_scan( maildir_store_t *ctx, msglist_t *msglist )
 				sys_error( "Maildir error: cannot stat %s", buf );
 				goto dfail;
 			}
-			if (st.st_mtime == now && !(DFlags & ZERODELAY)) {
+			if (st.st_mtime == now && !(DFlags & ZERODELAY) && !ctx->fresh[i]) {
 				/* If the modification happened during this second, we wouldn't be able to
 				 * tell if there were further modifications during this second. So wait.
 				 * This has the nice side effect that we wait for "batches" of changes to
@@ -948,6 +949,7 @@ maildir_select_box( store_t *gctx, const char *name )
 #ifdef USE_DB
 	ctx->db = 0;
 #endif /* USE_DB */
+	ctx->fresh[0] = ctx->fresh[1] = 0;
 	if (starts_with( name, -1, "INBOX", 5 ) && (!name[5] || name[5] == '/')) {
 		gctx->path = maildir_join_path( ((maildir_store_conf_t *)gctx->conf)->inbox, name + 5 );
 	} else {
@@ -1088,11 +1090,6 @@ maildir_load_box( store_t *gctx, int minuid, int maxuid, int newuid, int *excs, 
 	ctx->excs = nfrealloc( excs, nexcs * sizeof(int) );
 	ctx->nexcs = nexcs;
 
-	if (ctx->fresh) {
-		ctx->gen.count = ctx->gen.recent = 0;
-		goto dontscan;
-	}
-
 	if (maildir_scan( ctx, &msglist ) != DRV_OK) {
 		cb( DRV_BOX_BAD, aux );
 		return;
@@ -1102,7 +1099,6 @@ maildir_load_box( store_t *gctx, int minuid, int maxuid, int newuid, int *excs, 
 		maildir_app_msg( ctx, &msgapp, msglist.ents + i );
 	maildir_free_scan( &msglist );
 
-  dontscan:
 	cb( DRV_OK, aux );
 }
 
@@ -1114,6 +1110,7 @@ maildir_rescan( maildir_store_t *ctx )
 	msglist_t msglist;
 	int i;
 
+	ctx->fresh[0] = ctx->fresh[1] = 0;
 	if (maildir_scan( ctx, &msglist ) != DRV_OK)
 		return DRV_BOX_BAD;
 	for (msgapp = &ctx->gen.msgs, i = 0;
