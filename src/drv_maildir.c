@@ -336,12 +336,42 @@ maildir_free_scan( msglist_t *msglist )
 #define _24_HOURS (3600 * 24)
 
 static int
-maildir_validate( const char *box, int create, maildir_store_t *ctx )
+maildir_clear_tmp( char *buf, int bufsz, int bl )
 {
 	DIR *dirp;
 	struct dirent *entry;
-	char *p;
 	time_t now;
+	struct stat st;
+
+	memcpy( buf + bl, "tmp/", 5 );
+	bl += 4;
+	if (!(dirp = opendir( buf ))) {
+		sys_error( "Maildir error: cannot list %s", buf );
+		return DRV_BOX_BAD;
+	}
+	time( &now );
+	while ((entry = readdir( dirp ))) {
+		nfsnprintf( buf + bl, bufsz - bl, "%s", entry->d_name );
+		if (stat( buf, &st )) {
+			if (errno != ENOENT)
+				sys_error( "Maildir error: cannot access %s", buf );
+		} else if (S_ISREG(st.st_mode) && now - st.st_ctime >= _24_HOURS) {
+			/* This should happen infrequently enough that it won't be
+			 * bothersome to the user to display when it occurs.
+			 */
+			info( "Maildir notice: removing stale file %s\n", buf );
+			if (unlink( buf ) && errno != ENOENT)
+				sys_error( "Maildir error: cannot remove %s", buf );
+		}
+	}
+	closedir( dirp );
+	return DRV_OK;
+}
+
+static int
+maildir_validate( const char *box, int create, maildir_store_t *ctx )
+{
+	char *p;
 	int i, bl, ret;
 	struct stat st;
 	char buf[_POSIX_PATH_MAX];
@@ -386,28 +416,8 @@ maildir_validate( const char *box, int create, maildir_store_t *ctx )
 				return DRV_BOX_BAD;
 			}
 		}
-		memcpy( buf + bl, "tmp/", 5 );
-		bl += 4;
-		if (!(dirp = opendir( buf ))) {
-			sys_error( "Maildir error: cannot list %s", buf );
-			return DRV_BOX_BAD;
-		}
-		time( &now );
-		while ((entry = readdir( dirp ))) {
-			nfsnprintf( buf + bl, sizeof(buf) - bl, "%s", entry->d_name );
-			if (stat( buf, &st )) {
-				if (errno != ENOENT)
-					sys_error( "Maildir error: cannot access %s", buf );
-			} else if (S_ISREG(st.st_mode) && now - st.st_ctime >= _24_HOURS) {
-				/* this should happen infrequently enough that it won't be
-				 * bothersome to the user to display when it occurs.
-				 */
-				info( "Maildir notice: removing stale file %s\n", buf );
-				if (unlink( buf ) && errno != ENOENT)
-					sys_error( "Maildir error: cannot remove %s", buf );
-			}
-		}
-		closedir( dirp );
+		if ((ret = maildir_clear_tmp( buf, sizeof(buf), bl )) != DRV_OK)
+			return ret;
 		ctx->fresh = 0;
 	}
 	return DRV_OK;
