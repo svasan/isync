@@ -1001,7 +1001,7 @@ parse_capability( imap_store_t *ctx, char *cmd )
 	ctx->auth_mechs = 0;
 	ctx->caps = 0x80000000;
 	while ((arg = next_arg( &cmd ))) {
-		if (!memcmp( "AUTH=", arg, 5 )) {
+		if (starts_with( arg, -1, "AUTH=", 5 )) {
 			add_string_list( &ctx->auth_mechs, arg + 5 );
 		} else {
 			for (i = 0; i < as(cap_list); i++)
@@ -2519,7 +2519,7 @@ imap_parse_store( conffile_t *cfg, store_conf_t **storep )
 #endif
 			if (starts_with( arg, -1, "imap:", 5 ))
 				arg += 5;
-			if (!memcmp( "//", arg, 2 ))
+			if (starts_with( arg, -1, "//", 2 ))
 				arg += 2;
 			if (arg != cfg->val)
 				warn( "%s:%d: Notice: URL notation is deprecated; use a plain host name and possibly 'SSLType IMAPS' instead\n", cfg->file, cfg->line );
