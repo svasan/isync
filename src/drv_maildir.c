@@ -951,7 +951,7 @@ maildir_select_box( store_t *gctx, const char *name )
 }
 
 static void
-maildir_open_box( store_t *gctx, int create,
+maildir_open_box( store_t *gctx,
                   void (*cb)( int sts, void *aux ), void *aux )
 {
 	maildir_store_t *ctx = (maildir_store_t *)gctx;
@@ -961,7 +961,7 @@ maildir_open_box( store_t *gctx, int create,
 #endif /* USE_DB */
 	char uvpath[_POSIX_PATH_MAX];
 
-	if ((ret = maildir_validate( gctx->path, create, ctx )) != DRV_OK) {
+	if ((ret = maildir_validate( gctx->path, 0, ctx )) != DRV_OK) {
 		cb( ret, aux );
 		return;
 	}
@@ -1044,6 +1044,13 @@ maildir_open_box( store_t *gctx, int create,
 	maildir_uidval_unlock( ctx );
 
 	cb( DRV_OK, aux );
+}
+
+static void
+maildir_create_box( store_t *gctx,
+                    void (*cb)( int sts, void *aux ), void *aux )
+{
+	cb( maildir_validate( gctx->path, 1, (maildir_store_t *)gctx ), aux );
 }
 
 static void
@@ -1538,6 +1545,7 @@ struct driver maildir_driver = {
 	maildir_disown_store, /* _cancel_, but it's the same */
 	maildir_list_store,
 	maildir_select_box,
+	maildir_create_box,
 	maildir_open_box,
 	maildir_prepare_load_box,
 	maildir_load_box,

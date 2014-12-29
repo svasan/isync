@@ -143,8 +143,8 @@ struct imap_cmd {
 		int uid; /* to identify fetch responses */
 		char high_prio; /* if command is queued, put it at the front of the queue. */
 		char to_trash; /* we are storing to trash, not current. */
-		char create; /* create the mailbox if we get an error ... */
-		char trycreate; /* ... but only if this is true or the server says so. */
+		char create; /* create the mailbox if we get an error which suggests so. */
+		char failok; /* Don't complain about NO response. */
 	} param;
 };
 
@@ -1333,10 +1333,7 @@ imap_socket_read( void *aux )
 				resp = RESP_OK;
 			} else {
 				if (!strcmp( "NO", arg )) {
-					if (cmdp->param.create &&
-					    (cmdp->param.trycreate ||
-					     (cmd && starts_with( cmd, -1, "[TRYCREATE]", 11 ))))
-					{ /* SELECT, APPEND or UID COPY */
+					if (cmdp->param.create && cmd && starts_with( cmd, -1, "[TRYCREATE]", 11 )) { /* APPEND or UID COPY */
 						struct imap_cmd_trycreate *cmd2 =
 							(struct imap_cmd_trycreate *)new_imap_cmd( sizeof(*cmd2) );
 						cmd2->orig_cmd = cmdp;
@@ -1348,12 +1345,15 @@ imap_socket_read( void *aux )
 						continue;
 					}
 					resp = RESP_NO;
+					if (cmdp->param.failok)
+						goto doresp;
 				} else /*if (!strcmp( "BAD", arg ))*/
 					resp = RESP_CANCEL;
 				error( "IMAP command '%s' returned an error: %s %s\n",
 				       !starts_with( cmdp->cmd, -1, "LOGIN", 5 ) ? cmdp->cmd : "LOGIN <user> <pass>",
 				       arg, cmd ? cmd : "" );
 			}
+		  doresp:
 			if ((resp2 = parse_response_code( ctx, cmdp, cmd )) > resp)
 				resp = resp2;
 			imap_ref( ctx );
@@ -2124,7 +2124,7 @@ imap_select_box( store_t *gctx, const char *name )
 }
 
 static void
-imap_open_box( store_t *gctx, int create,
+imap_open_box( store_t *gctx,
                void (*cb)( int sts, void *aux ), void *aux )
 {
 	imap_store_t *ctx = (imap_store_t *)gctx;
@@ -2139,10 +2139,30 @@ imap_open_box( store_t *gctx, int create,
 	ctx->gen.uidnext = 0;
 
 	INIT_IMAP_CMD(imap_cmd_simple, cmd, cb, aux)
-	cmd->gen.param.create = create;
-	cmd->gen.param.trycreate = 1;
+	cmd->gen.param.failok = 1;
 	imap_exec( ctx, &cmd->gen, imap_done_simple_box,
 	           "SELECT \"%\\s\"", buf );
+	free( buf );
+}
+
+/******************* imap_create_box *******************/
+
+static void
+imap_create_box( store_t *gctx,
+                 void (*cb)( int sts, void *aux ), void *aux )
+{
+	imap_store_t *ctx = (imap_store_t *)gctx;
+	struct imap_cmd_simple *cmd;
+	char *buf;
+
+	if (prepare_box( &buf, ctx ) < 0) {
+		cb( DRV_BOX_BAD, aux );
+		return;
+	}
+
+	INIT_IMAP_CMD(imap_cmd_simple, cmd, cb, aux)
+	imap_exec( ctx, &cmd->gen, imap_done_simple_box,
+	           "CREATE \"%\\s\"", buf );
 	free( buf );
 }
 
@@ -2788,6 +2808,7 @@ struct driver imap_driver = {
 	imap_cancel_store,
 	imap_list_store,
 	imap_select_box,
+	imap_create_box,
 	imap_open_box,
 	imap_prepare_load_box,
 	imap_load_box,

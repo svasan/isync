@@ -923,7 +923,10 @@ load_state( sync_vars_t *svars )
 	return 1;
 }
 
+static void box_confirmed( int sts, void *aux );
+static void box_created( int sts, void *aux );
 static void box_opened( int sts, void *aux );
+static void box_opened2( sync_vars_t *svars, int t );
 static void load_box( sync_vars_t *svars, int t, int minwuid, int *mexcs, int nmexcs );
 
 void
@@ -984,7 +987,7 @@ sync_boxes( store_t *ctx[], const char *names[], channel_conf_t *chan,
 	sync_ref( svars );
 	for (t = 0; ; t++) {
 		info( "Opening %s box %s...\n", str_ms[t], svars->orig_name[t] );
-		svars->drv[t]->open_box( ctx[t], (chan->ops[t] & OP_CREATE) != 0, box_opened, AUX );
+		svars->drv[t]->open_box( ctx[t], box_confirmed, AUX );
 		if (t || check_cancel( svars ))
 			break;
 	}
@@ -992,18 +995,69 @@ sync_boxes( store_t *ctx[], const char *names[], channel_conf_t *chan,
 }
 
 static void
+box_confirmed( int sts, void *aux )
+{
+	DECL_SVARS;
+
+	if (sts == DRV_CANCELED)
+		return;
+	INIT_SVARS(aux);
+	if (check_cancel( svars ))
+		return;
+
+	if (sts == DRV_BOX_BAD) {
+		if (!(svars->chan->ops[t] & OP_CREATE)) {
+			box_opened( sts, aux );
+		} else {
+			info( "Creating %s %s...\n", str_ms[t], svars->orig_name[t] );
+			svars->drv[t]->create_box( svars->ctx[t], box_created, AUX );
+		}
+	} else {
+		box_opened2( svars, t );
+	}
+}
+
+static void
+box_created( int sts, void *aux )
+{
+	DECL_SVARS;
+
+	if (check_ret( sts, aux ))
+		return;
+	INIT_SVARS(aux);
+
+	svars->drv[t]->open_box( svars->ctx[t], box_opened, AUX );
+}
+
+static void
 box_opened( int sts, void *aux )
 {
 	DECL_SVARS;
+
+	if (sts == DRV_CANCELED)
+		return;
+	INIT_SVARS(aux);
+	if (check_cancel( svars ))
+		return;
+
+	if (sts == DRV_BOX_BAD) {
+		error( "Error: channel %s: %s %s cannot be opened.\n",
+		       svars->chan->name, str_ms[t], svars->orig_name[t] );
+		svars->ret = SYNC_FAIL;
+		sync_bail( svars );
+	} else {
+		box_opened2( svars, t );
+	}
+}
+
+static void
+box_opened2( sync_vars_t *svars, int t )
+{
 	store_t *ctx[2];
 	channel_conf_t *chan;
 	sync_rec_t *srec;
 	int opts[2], fails;
 	int *mexcs, nmexcs, rmexcs, minwuid;
-
-	if (check_ret( sts, aux ))
-		return;
-	INIT_SVARS(aux);
 
 	svars->state[t] |= ST_SELECTED;
 	if (!(svars->state[1-t] & ST_SELECTED))

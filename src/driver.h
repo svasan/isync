@@ -165,8 +165,13 @@ struct driver {
 	 * As a side effect, this should resolve ctx->path if applicable. */
 	int (*select_box)( store_t *ctx, const char *name );
 
-	/* Open the selected mailbox. Optionally create missing boxes. */
-	void (*open_box)( store_t *ctx, int create,
+	/* Create the selected mailbox. */
+	void (*create_box)( store_t *ctx,
+	                    void (*cb)( int sts, void *aux ), void *aux );
+
+	/* Open the selected mailbox.
+	 * Note that this should not directly complain about failure to open. */
+	void (*open_box)( store_t *ctx,
 	                  void (*cb)( int sts, void *aux ), void *aux );
 
 	/* Invoked before load_box(), this informs the driver which operations (OP_*)
