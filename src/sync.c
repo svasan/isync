@@ -205,6 +205,8 @@ static int check_cancel( sync_vars_t *svars );
 #define ST_SELECTED        (1<<10)
 #define ST_DID_EXPUNGE     (1<<11)
 #define ST_CLOSING         (1<<12)
+#define ST_CONFIRMED       (1<<13)
+#define ST_PRESENT         (1<<14)
 
 
 static void
@@ -923,7 +925,20 @@ load_state( sync_vars_t *svars )
 	return 1;
 }
 
+static void
+delete_state( sync_vars_t *svars )
+{
+	unlink( svars->nname );
+	unlink( svars->jname );
+	if (unlink( svars->dname ) || unlink( svars->lname )) {
+		sys_error( "Error: channel %s: sync state cannot be deleted", svars->chan->name );
+		svars->ret = SYNC_FAIL;
+	}
+}
+
 static void box_confirmed( int sts, void *aux );
+static void box_confirmed2( sync_vars_t *svars, int t );
+static void box_deleted( int sts, void *aux );
 static void box_created( int sts, void *aux );
 static void box_opened( int sts, void *aux );
 static void box_opened2( sync_vars_t *svars, int t );
@@ -988,7 +1003,7 @@ sync_boxes( store_t *ctx[], const char *names[], int present[], channel_conf_t *
 	for (t = 0; ; t++) {
 		info( "Opening %s box %s...\n", str_ms[t], svars->orig_name[t] );
 		if (present[t] == BOX_ABSENT)
-			box_confirmed( DRV_BOX_BAD, AUX );
+			box_confirmed2( svars, t );
 		else
 			svars->drv[t]->open_box( ctx[t], box_confirmed, AUX );
 		if (t || check_cancel( svars ))
@@ -1008,16 +1023,80 @@ box_confirmed( int sts, void *aux )
 	if (check_cancel( svars ))
 		return;
 
-	if (sts == DRV_BOX_BAD) {
-		if (!(svars->chan->ops[t] & OP_CREATE)) {
-			box_opened( sts, aux );
+	if (sts == DRV_OK)
+		svars->state[t] |= ST_PRESENT;
+	box_confirmed2( svars, t );
+}
+
+static void
+box_confirmed2( sync_vars_t *svars, int t )
+{
+	svars->state[t] |= ST_CONFIRMED;
+	if (!(svars->state[1-t] & ST_CONFIRMED))
+		return;
+
+	sync_ref( svars );
+	for (t = 0; ; t++) {
+		if (!(svars->state[t] & ST_PRESENT)) {
+			if (!(svars->state[1-t] & ST_PRESENT)) {
+				if (!svars->existing) {
+					error( "Error: channel %s: both master %s and slave %s cannot be opened.\n",
+					       svars->chan->name, svars->orig_name[M], svars->orig_name[S] );
+				  bail:
+					svars->ret = SYNC_FAIL;
+				} else {
+					/* This can legitimately happen if a deletion propagation was interrupted.
+					 * We have no place to record this transaction, so we just assume it.
+					 * Of course this bears the danger of clearing the state if both mailboxes
+					 * temorarily cannot be opened for some weird reason (while the stores can). */
+					delete_state( svars );
+				}
+			  done:
+				sync_bail( svars );
+				break;
+			}
+			if (svars->existing) {
+				if (!(svars->chan->ops[1-t] & OP_REMOVE)) {
+					error( "Error: channel %s: %s %s cannot be opened.\n",
+					       svars->chan->name, str_ms[t], svars->orig_name[t] );
+					goto bail;
+				}
+				if (svars->drv[1-t]->confirm_box_empty( svars->ctx[1-t] ) != DRV_OK) {
+					warn( "Warning: channel %s: %s %s cannot be opened and %s %s not empty.\n",
+					      svars->chan->name, str_ms[t], svars->orig_name[t], str_ms[1-t], svars->orig_name[1-t] );
+					goto done;
+				}
+				info( "Deleting %s %s...\n", str_ms[1-t], svars->orig_name[1-t] );
+				svars->drv[1-t]->delete_box( svars->ctx[1-t], box_deleted, INV_AUX );
+			} else {
+				if (!(svars->chan->ops[t] & OP_CREATE)) {
+					box_opened( DRV_BOX_BAD, AUX );
+				} else {
+					info( "Creating %s %s...\n", str_ms[t], svars->orig_name[t] );
+					svars->drv[t]->create_box( svars->ctx[t], box_created, AUX );
+				}
+			}
 		} else {
-			info( "Creating %s %s...\n", str_ms[t], svars->orig_name[t] );
-			svars->drv[t]->create_box( svars->ctx[t], box_created, AUX );
+			box_opened2( svars, t );
 		}
-	} else {
-		box_opened2( svars, t );
+		if (t || check_cancel( svars ))
+			break;
 	}
+	sync_deref( svars );
+}
+
+static void
+box_deleted( int sts, void *aux )
+{
+	DECL_SVARS;
+
+	if (check_ret( sts, aux ))
+		return;
+	INIT_SVARS(aux);
+
+	delete_state( svars );
+	svars->drv[t]->finish_delete_box( svars->ctx[t] );
+	sync_bail( svars );
 }
 
 static void

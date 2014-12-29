@@ -58,6 +58,9 @@ and exit.
 \fB-C\fR[\fBm\fR][\fBs\fR], \fB--create\fR[\fB-master\fR|\fB-slave\fR]
 Override any \fBCreate\fR options from the config file. See below.
 .TP
+\fB-R\fR[\fBm\fR][\fBs\fR], \fB--remove\fR[\fB-master\fR|\fB-slave\fR]
+Override any \fBRemove\fR options from the config file. See below.
+.TP
 \fB-X\fR[\fBm\fR][\fBs\fR], \fB--expunge\fR[\fB-master\fR|\fB-slave\fR]
 Override any \fBExpunge\fR options from the config file. See below.
 .TP
@@ -483,7 +486,20 @@ Note that it is not allowed to assert a cell in two ways, e.g.
 \fBCreate\fR {\fINone\fR|\fIMaster\fR|\fISlave\fR|\fIBoth\fR}
 Automatically create missing mailboxes [on the Master/Slave].
 Otherwise print an error message and skip that mailbox pair if a mailbox
-does not exist.
+and the corresponding sync state does not exist.
+(Global default: \fINone\fR)
+..
+.TP
+\fBRemove\fR {\fINone\fR|\fIMaster\fR|\fISlave\fR|\fIBoth\fR}
+Propagate mailbox deletions [to the Master/Slave].
+Otherwise print an error message and skip that mailbox pair if a mailbox
+does not exist but the corresponding sync state does.
+.br
+For MailDir mailboxes it is sufficient to delete the cur/ subdirectory to
+mark them as deleted. This ensures compatibility with \fBSyncState *\fR.
+.br
+Note that for safety, non-empty mailboxes are never deleted.
+.br
 (Global default: \fINone\fR)
 ..
 .TP
@@ -503,7 +519,7 @@ date\fR) is actually the arrival time, but it is usually close enough.
 (Default: \fIno\fR)
 ..
 .P
-\fBSync\fR, \fBCreate\fR, \fBExpunge\fR,
+\fBSync\fR, \fBCreate\fR, \fBRemove\fR, \fBExpunge\fR,
 \fBMaxMessages\fR, and \fBCopyArrivalDate\fR
 can be used before any section for a global effect.
 The global settings are overridden by Channel-specific options,

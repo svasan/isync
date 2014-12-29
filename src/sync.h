@@ -35,12 +35,14 @@
 #define  OP_MASK_TYPE      (OP_NEW|OP_RENEW|OP_DELETE|OP_FLAGS) /* asserted in the target ops */
 #define OP_EXPUNGE         (1<<4)
 #define OP_CREATE          (1<<5)
-#define XOP_PUSH           (1<<6)
-#define XOP_PULL           (1<<7)
+#define OP_REMOVE          (1<<6)
+#define XOP_PUSH           (1<<8)
+#define XOP_PULL           (1<<9)
 #define  XOP_MASK_DIR      (XOP_PUSH|XOP_PULL)
-#define XOP_HAVE_TYPE      (1<<8)
-#define XOP_HAVE_EXPUNGE   (1<<9)
-#define XOP_HAVE_CREATE    (1<<10)
+#define XOP_HAVE_TYPE      (1<<10)
+#define XOP_HAVE_EXPUNGE   (1<<11)
+#define XOP_HAVE_CREATE    (1<<12)
+#define XOP_HAVE_REMOVE    (1<<13)
 
 typedef struct channel_conf {
 	struct channel_conf *next;

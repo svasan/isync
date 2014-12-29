@@ -12,6 +12,8 @@ Support for Windows file systems has been added.
 
 Support for compressed data transfer has been added.
 
+Folder deletions can be propagated now.
+
 [1.1.0]
 
 Support for hierarchical mailboxes in Patterns.

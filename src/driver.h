@@ -174,6 +174,19 @@ struct driver {
 	void (*open_box)( store_t *ctx,
 	                  void (*cb)( int sts, void *aux ), void *aux );
 
+	/* Confirm that the open mailbox is empty. */
+	int (*confirm_box_empty)( store_t *ctx );
+
+	/* Delete the open mailbox. The mailbox is expected to be empty.
+	 * Subfolders of the mailbox are *not* deleted.
+	 * Some artifacts of the mailbox may remain, but they won't be
+	 * recognized as a mailbox any more. */
+	void (*delete_box)( store_t *ctx,
+	                    void (*cb)( int sts, void *aux ), void *aux );
+
+	/* Remove the last artifacts of the open mailbox, as far as possible. */
+	int (*finish_delete_box)( store_t *ctx );
+
 	/* Invoked before load_box(), this informs the driver which operations (OP_*)
 	 * will be performed on the mailbox. The driver may extend the set by implicitly
 	 * needed or available operations. */

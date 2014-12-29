@@ -149,6 +149,7 @@ static const struct {
 } boxOps[] = {
 	{ OP_EXPUNGE, "Expunge" },
 	{ OP_CREATE, "Create" },
+	{ OP_REMOVE, "Remove" },
 };
 
 static int

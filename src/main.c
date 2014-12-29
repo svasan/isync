@@ -299,7 +299,11 @@ main( int argc, char **argv )
 						mvars->ops[S] |= op;
 					else
 						goto badopt;
-					mvars->ops[M] |= op & (XOP_HAVE_CREATE|XOP_HAVE_EXPUNGE);
+					mvars->ops[M] |= op & (XOP_HAVE_CREATE|XOP_HAVE_REMOVE|XOP_HAVE_EXPUNGE);
+				} else if (starts_with( opt, -1, "remove", 6 )) {
+					opt += 6;
+					op = OP_REMOVE|XOP_HAVE_REMOVE;
+					goto lcop;
 				} else if (starts_with( opt, -1, "expunge", 7 )) {
 					opt += 7;
 					op = OP_EXPUNGE|XOP_HAVE_EXPUNGE;
@@ -308,6 +312,8 @@ main( int argc, char **argv )
 					mvars->ops[M] |= XOP_HAVE_EXPUNGE;
 				else if (!strcmp( opt, "no-create" ))
 					mvars->ops[M] |= XOP_HAVE_CREATE;
+				else if (!strcmp( opt, "no-remove" ))
+					mvars->ops[M] |= XOP_HAVE_REMOVE;
 				else if (!strcmp( opt, "full" ))
 					mvars->ops[M] |= XOP_HAVE_TYPE|XOP_PULL|XOP_PUSH;
 				else if (!strcmp( opt, "noop" ))
@@ -386,8 +392,11 @@ main( int argc, char **argv )
 				ochar++;
 			else
 				cops |= op;
-			mvars->ops[M] |= op & (XOP_HAVE_CREATE|XOP_HAVE_EXPUNGE);
+			mvars->ops[M] |= op & (XOP_HAVE_CREATE|XOP_HAVE_REMOVE|XOP_HAVE_EXPUNGE);
 			break;
+		case 'R':
+			op = OP_REMOVE|XOP_HAVE_REMOVE;
+			goto cop;
 		case 'X':
 			op = OP_EXPUNGE|XOP_HAVE_EXPUNGE;
 			goto cop;
@@ -589,6 +598,7 @@ sync_chans( main_vars_t *mvars, int ent )
 		}
 		merge_actions( mvars->chan, mvars->ops, XOP_HAVE_TYPE, OP_MASK_TYPE, OP_MASK_TYPE );
 		merge_actions( mvars->chan, mvars->ops, XOP_HAVE_CREATE, OP_CREATE, 0 );
+		merge_actions( mvars->chan, mvars->ops, XOP_HAVE_REMOVE, OP_REMOVE, 0 );
 		merge_actions( mvars->chan, mvars->ops, XOP_HAVE_EXPUNGE, OP_EXPUNGE, 0 );
 
 		mvars->state[M] = mvars->state[S] = ST_FRESH;
@@ -652,12 +662,8 @@ sync_chans( main_vars_t *mvars, int ent )
 					present[t] = BOX_PRESENT;
 					present[1-t] = BOX_ABSENT;
 					mvars->boxes[t] = mbox->next;
-					if ((mvars->chan->ops[1-t] & OP_MASK_TYPE) && (mvars->chan->ops[1-t] & OP_CREATE)) {
-						if (sync_listed_boxes( mvars, mbox, present ))
-							goto syncw;
-					} else {
-						free( mbox );
-					}
+					if (sync_listed_boxes( mvars, mbox, present ))
+						goto syncw;
 				}
 		} else {
 			if (!mvars->list) {

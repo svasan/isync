@@ -2166,6 +2166,55 @@ imap_create_box( store_t *gctx,
 	free( buf );
 }
 
+/******************* imap_delete_box *******************/
+
+static int
+imap_confirm_box_empty( store_t *gctx )
+{
+	return gctx->count ? DRV_BOX_BAD : DRV_OK;
+}
+
+static void imap_delete_box_p2( imap_store_t *, struct imap_cmd *, int );
+
+static void
+imap_delete_box( store_t *gctx,
+                 void (*cb)( int sts, void *aux ), void *aux )
+{
+	imap_store_t *ctx = (imap_store_t *)gctx;
+	struct imap_cmd_simple *cmd;
+
+	INIT_IMAP_CMD(imap_cmd_simple, cmd, cb, aux)
+	imap_exec( ctx, &cmd->gen, imap_delete_box_p2, "CLOSE" );
+}
+
+static void
+imap_delete_box_p2( imap_store_t *ctx, struct imap_cmd *gcmd, int response )
+{
+	struct imap_cmd_simple *cmdp = (struct imap_cmd_simple *)gcmd;
+	struct imap_cmd_simple *cmd;
+	char *buf;
+
+	if (response != RESP_OK) {
+		imap_done_simple_box( ctx, &cmdp->gen, response );
+		return;
+	}
+
+	if (prepare_box( &buf, ctx ) < 0) {
+		imap_done_simple_box( ctx, &cmdp->gen, RESP_NO );
+		return;
+	}
+	INIT_IMAP_CMD(imap_cmd_simple, cmd, cmdp->callback, cmdp->callback_aux)
+	imap_exec( ctx, &cmd->gen, imap_done_simple_box,
+	           "DELETE \"%\\s\"", buf );
+	free( buf );
+}
+
+static int
+imap_finish_delete_box( store_t *gctx ATTR_UNUSED )
+{
+	return DRV_OK;
+}
+
 /******************* imap_load_box *******************/
 
 static void
@@ -2810,6 +2859,9 @@ struct driver imap_driver = {
 	imap_select_box,
 	imap_create_box,
 	imap_open_box,
+	imap_confirm_box_empty,
+	imap_delete_box,
+	imap_finish_delete_box,
 	imap_prepare_load_box,
 	imap_load_box,
 	imap_fetch_msg,

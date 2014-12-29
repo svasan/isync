@@ -1076,6 +1076,73 @@ maildir_create_box( store_t *gctx,
 	cb( maildir_validate( gctx->path, 1, (maildir_store_t *)gctx ), aux );
 }
 
+static int
+maildir_confirm_box_empty( store_t *gctx )
+{
+	maildir_store_t *ctx = (maildir_store_t *)gctx;
+	msglist_t msglist;
+
+	ctx->nexcs = ctx->minuid = ctx->maxuid = ctx->newuid = 0;
+
+	if (maildir_scan( ctx, &msglist ) != DRV_OK)
+		return DRV_BOX_BAD;
+	maildir_free_scan( &msglist );
+	return gctx->count ? DRV_BOX_BAD : DRV_OK;
+}
+
+static void
+maildir_delete_box( store_t *gctx,
+                    void (*cb)( int sts, void *aux ), void *aux )
+{
+	int i, bl, ret = DRV_OK;
+	struct stat st;
+	char buf[_POSIX_PATH_MAX];
+
+	bl = nfsnprintf( buf, sizeof(buf) - 4, "%s/", gctx->path );
+	if (stat( buf, &st )) {
+		if (errno != ENOENT) {
+			sys_error( "Maildir error: cannot access mailbox '%s'", gctx->path );
+			ret = DRV_BOX_BAD;
+		}
+	} else if (!S_ISDIR(st.st_mode)) {
+		error( "Maildir error: '%s' is no valid mailbox\n", gctx->path );
+		ret = DRV_BOX_BAD;
+	} else if ((ret = maildir_clear_tmp( buf, sizeof(buf), bl )) == DRV_OK) {
+		nfsnprintf( buf + bl, sizeof(buf) - bl, ".uidvalidity" );
+		if (unlink( buf ) && errno != ENOENT)
+			goto badrm;
+#ifdef USE_DB
+		nfsnprintf( buf + bl, sizeof(buf) - bl, ".isyncuidmap.db" );
+		if (unlink( buf ) && errno != ENOENT)
+			goto badrm;
+#endif
+		/* We delete cur/ last, as it is the indicator for a present mailbox.
+		 * That way an interrupted operation can be resumed. */
+		for (i = 3; --i >= 0; ) {
+			memcpy( buf + bl, subdirs[i], 4 );
+			if (rmdir( buf ) && errno != ENOENT) {
+			  badrm:
+				sys_error( "Maildir error: cannot remove '%s'", buf );
+				ret = DRV_BOX_BAD;
+				break;
+			}
+		}
+	}
+	cb( ret, aux );
+}
+
+static int
+maildir_finish_delete_box( store_t *gctx )
+{
+	/* Subfolders are not deleted; the deleted folder is only "stripped of its mailboxness".
+	 * Consequently, the rmdir may legitimately fail. This behavior follows the IMAP spec. */
+	if (rmdir( gctx->path ) && errno != ENOENT && errno != ENOTEMPTY) {
+		sys_error( "Maildir warning: cannot remove '%s'", gctx->path );
+		return DRV_BOX_BAD;
+	}
+	return DRV_OK;
+}
+
 static void
 maildir_prepare_load_box( store_t *gctx, int opts )
 {
@@ -1565,6 +1632,9 @@ struct driver maildir_driver = {
 	maildir_select_box,
 	maildir_create_box,
 	maildir_open_box,
+	maildir_confirm_box_empty,
+	maildir_delete_box,
+	maildir_finish_delete_box,
 	maildir_prepare_load_box,
 	maildir_load_box,
 	maildir_fetch_msg,
