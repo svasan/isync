@@ -930,7 +930,7 @@ static void box_opened2( sync_vars_t *svars, int t );
 static void load_box( sync_vars_t *svars, int t, int minwuid, int *mexcs, int nmexcs );
 
 void
-sync_boxes( store_t *ctx[], const char *names[], channel_conf_t *chan,
+sync_boxes( store_t *ctx[], const char *names[], int present[], channel_conf_t *chan,
             void (*cb)( int sts, void *aux ), void *aux )
 {
 	sync_vars_t *svars;
@@ -987,7 +987,10 @@ sync_boxes( store_t *ctx[], const char *names[], channel_conf_t *chan,
 	sync_ref( svars );
 	for (t = 0; ; t++) {
 		info( "Opening %s box %s...\n", str_ms[t], svars->orig_name[t] );
-		svars->drv[t]->open_box( ctx[t], box_confirmed, AUX );
+		if (present[t] == BOX_ABSENT)
+			box_confirmed( DRV_BOX_BAD, AUX );
+		else
+			svars->drv[t]->open_box( ctx[t], box_confirmed, AUX );
 		if (t || check_cancel( svars ))
 			break;
 	}

@@ -513,7 +513,7 @@ main( int argc, char **argv )
 
 static void store_opened( store_t *ctx, void *aux );
 static void store_listed( int sts, void *aux );
-static int sync_listed_boxes( main_vars_t *mvars, string_list_t *mbox );
+static int sync_listed_boxes( main_vars_t *mvars, string_list_t *mbox, int present[] );
 static void done_sync_dyn( int sts, void *aux );
 static void done_sync_2_dyn( int sts, void *aux );
 static void done_sync( int sts, void *aux );
@@ -641,15 +641,19 @@ sync_chans( main_vars_t *mvars, int ent )
 		mvars->done = mvars->cben = 0;
 		if (mvars->boxlist) {
 			while ((mbox = mvars->cboxes)) {
+				int present[] = { BOX_PRESENT, BOX_PRESENT };
 				mvars->cboxes = mbox->next;
-				if (sync_listed_boxes( mvars, mbox ))
+				if (sync_listed_boxes( mvars, mbox, present ))
 					goto syncw;
 			}
 			for (t = 0; t < 2; t++)
 				while ((mbox = mvars->boxes[t])) {
+					int present[2];
+					present[t] = BOX_PRESENT;
+					present[1-t] = BOX_ABSENT;
 					mvars->boxes[t] = mbox->next;
 					if ((mvars->chan->ops[1-t] & OP_MASK_TYPE) && (mvars->chan->ops[1-t] & OP_CREATE)) {
-						if (sync_listed_boxes( mvars, mbox ))
+						if (sync_listed_boxes( mvars, mbox, present ))
 							goto syncw;
 					} else {
 						free( mbox );
@@ -657,7 +661,8 @@ sync_chans( main_vars_t *mvars, int ent )
 				}
 		} else {
 			if (!mvars->list) {
-				sync_boxes( mvars->ctx, mvars->chan->boxes, mvars->chan, done_sync, mvars );
+				int present[] = { BOX_POSSIBLE, BOX_POSSIBLE };
+				sync_boxes( mvars->ctx, mvars->chan->boxes, present, mvars->chan, done_sync, mvars );
 				mvars->skip = 1;
 			  syncw:
 				mvars->cben = 1;
@@ -799,7 +804,7 @@ store_listed( int sts, void *aux )
 }
 
 static int
-sync_listed_boxes( main_vars_t *mvars, string_list_t *mbox )
+sync_listed_boxes( main_vars_t *mvars, string_list_t *mbox, int present[] )
 {
 	if (mvars->chan->boxes[M] || mvars->chan->boxes[S]) {
 		const char *mpfx = nz( mvars->chan->boxes[M], "" );
@@ -808,14 +813,14 @@ sync_listed_boxes( main_vars_t *mvars, string_list_t *mbox )
 			nfasprintf( &mvars->names[M], "%s%s", mpfx, mbox->string );
 			nfasprintf( &mvars->names[S], "%s%s", spfx, mbox->string );
 			free( mbox );
-			sync_boxes( mvars->ctx, (const char **)mvars->names, mvars->chan, done_sync_2_dyn, mvars );
+			sync_boxes( mvars->ctx, (const char **)mvars->names, present, mvars->chan, done_sync_2_dyn, mvars );
 			return 1;
 		}
 		printf( "%s%s <=> %s%s\n", mpfx, mbox->string, spfx, mbox->string );
 	} else {
 		if (!mvars->list) {
 			mvars->names[M] = mvars->names[S] = mbox->string;
-			sync_boxes( mvars->ctx, (const char **)mvars->names, mvars->chan, done_sync_dyn, mvars );
+			sync_boxes( mvars->ctx, (const char **)mvars->names, present, mvars->chan, done_sync_dyn, mvars );
 			return 1;
 		}
 		puts( mbox->string );

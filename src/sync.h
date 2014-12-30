@@ -74,8 +74,12 @@ extern const char *str_ms[2], *str_hl[2];
 #define SYNC_NOGOOD   16 /* internal */
 #define SYNC_CANCELED 32 /* internal */
 
+#define BOX_POSSIBLE -1
+#define BOX_ABSENT    0
+#define BOX_PRESENT   1
+
 /* All passed pointers must stay alive until cb is called. */
-void sync_boxes( store_t *ctx[], const char *names[], channel_conf_t *chan,
+void sync_boxes( store_t *ctx[], const char *names[], int present[], channel_conf_t *chan,
                  void (*cb)( int sts, void *aux ), void *aux );
 
 #endif
