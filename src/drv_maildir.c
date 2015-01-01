@@ -486,7 +486,7 @@ maildir_set_uid( maildir_store_t *ctx, const char *name, int *uid )
 #endif /* USE_DB */
 
 static int
-maildir_store_uid( maildir_store_t *ctx )
+maildir_store_uidval( maildir_store_t *ctx )
 {
 	int n;
 	char buf[128];
@@ -502,7 +502,7 @@ maildir_store_uid( maildir_store_t *ctx )
 }
 
 static int
-maildir_init_uid( maildir_store_t *ctx )
+maildir_init_uidval( maildir_store_t *ctx )
 {
 	ctx->gen.uidvalidity = time( 0 );
 	ctx->nuid = 0;
@@ -514,14 +514,14 @@ maildir_init_uid( maildir_store_t *ctx )
 		return maildir_set_uid( ctx, 0, 0 );
 	}
 #endif /* USE_DB */
-	return maildir_store_uid( ctx );
+	return maildir_store_uidval( ctx );
 }
 
 static int
-maildir_init_uid_new( maildir_store_t *ctx )
+maildir_init_uidval_new( maildir_store_t *ctx )
 {
 	info( "Maildir notice: no UIDVALIDITY, creating new.\n" );
-	return maildir_init_uid( ctx );
+	return maildir_init_uidval( ctx );
 }
 
 static int
@@ -563,7 +563,7 @@ maildir_uidval_lock( maildir_store_t *ctx )
 			return DRV_BOX_BAD;
 		}
 #endif
-		return maildir_init_uid_new( ctx );
+		return maildir_init_uidval_new( ctx );
 	} else
 		ctx->uvok = 1;
 	conf_wakeup( &ctx->lcktmr, 2 );
@@ -595,7 +595,7 @@ maildir_obtain_uid( maildir_store_t *ctx, int *uid )
 	if ((ret = maildir_uidval_lock( ctx )) != DRV_OK)
 		return ret;
 	*uid = ++ctx->nuid;
-	return maildir_store_uid( ctx );
+	return maildir_store_uidval( ctx );
 }
 
 static int
@@ -1058,7 +1058,7 @@ maildir_open_box( store_t *gctx,
 				cb( DRV_BOX_BAD, aux );
 				return;
 			}
-			if (maildir_init_uid_new( ctx ) != DRV_OK) {
+			if (maildir_init_uidval_new( ctx ) != DRV_OK) {
 				cb( DRV_BOX_BAD, aux );
 				return;
 			}
