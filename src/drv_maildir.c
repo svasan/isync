@@ -590,6 +590,10 @@ lcktmr_timeout( void *aux )
 static int
 maildir_obtain_uid( maildir_store_t *ctx, int *uid )
 {
+	int ret;
+
+	if ((ret = maildir_uidval_lock( ctx )) != DRV_OK)
+		return ret;
 	*uid = ++ctx->nuid;
 	return maildir_store_uid( ctx );
 }
@@ -673,12 +677,6 @@ maildir_scan( maildir_store_t *ctx, msglist_t *msglist )
 	time_t now, stamps[2];
 	struct stat st;
 	char buf[_POSIX_PATH_MAX], nbuf[_POSIX_PATH_MAX];
-
-#ifdef USE_DB
-	if (!ctx->db)
-#endif /* USE_DB */
-		if ((ret = maildir_uidval_lock( ctx )) != DRV_OK)
-			return ret;
 
   again:
 	msglist->ents = 0;
@@ -1329,8 +1327,7 @@ maildir_store_msg( store_t *gctx, msg_data_t *data, int to_trash,
 		} else
 #endif /* USE_DB */
 		{
-			if ((ret = maildir_uidval_lock( ctx )) != DRV_OK ||
-			    (ret = maildir_obtain_uid( ctx, &uid )) != DRV_OK) {
+			if ((ret = maildir_obtain_uid( ctx, &uid )) != DRV_OK) {
 				free( data->data );
 				cb( ret, 0, aux );
 				return;
