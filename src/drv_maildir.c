@@ -74,6 +74,7 @@ typedef struct maildir_store {
 #ifdef USE_DB
 	DB *db;
 #endif /* USE_DB */
+	wakeup_t lcktmr;
 } maildir_store_t;
 
 #ifdef USE_DB
@@ -139,6 +140,8 @@ maildir_validate_path( const store_conf_t *conf )
 	return 0;
 }
 
+static void lcktmr_timeout( void *aux );
+
 static void
 maildir_open_store( store_conf_t *conf, const char *label ATTR_UNUSED,
                     void (*cb)( store_t *ctx, void *aux ), void *aux )
@@ -148,6 +151,7 @@ maildir_open_store( store_conf_t *conf, const char *label ATTR_UNUSED,
 	ctx = nfcalloc( sizeof(*ctx) );
 	ctx->gen.conf = conf;
 	ctx->uvfd = -1;
+	init_wakeup( &ctx->lcktmr, lcktmr_timeout, ctx );
 	if (conf->trash) {
 		if (maildir_validate_path( conf ) < 0) {
 			free( ctx );
@@ -185,13 +189,17 @@ maildir_cleanup( store_t *gctx )
 	free( ctx->excs );
 	if (ctx->uvfd >= 0)
 		close( ctx->uvfd );
+	conf_wakeup( &ctx->lcktmr, -1 );
 }
 
 static void
 maildir_disown_store( store_t *gctx )
 {
+	maildir_store_t *ctx = (maildir_store_t *)gctx;
+
 	maildir_cleanup( gctx );
-	free( ((maildir_store_t *)gctx)->trash );
+	wipe_wakeup( &ctx->lcktmr );
+	free( ctx->trash );
 	free_string_list( gctx->boxes );
 	free( gctx );
 }
@@ -489,6 +497,7 @@ maildir_store_uid( maildir_store_t *ctx )
 		error( "Maildir error: cannot write UIDVALIDITY.\n" );
 		return DRV_BOX_BAD;
 	}
+	conf_wakeup( &ctx->lcktmr, 2 );
 	return DRV_OK;
 }
 
@@ -521,6 +530,10 @@ maildir_uidval_lock( maildir_store_t *ctx )
 	int n;
 	char buf[128];
 
+	if (ctx->lcktmr.links.next) {
+		/* The unlock timer is active, so we are obviously already locked. */
+		return DRV_OK;
+	}
 #ifdef LEGACY_FLOCK
 	/* This is legacy only */
 	if (flock( ctx->uvfd, LOCK_EX ) < 0) {
@@ -553,6 +566,7 @@ maildir_uidval_lock( maildir_store_t *ctx )
 		return maildir_init_uid_new( ctx );
 	} else
 		ctx->uvok = 1;
+	conf_wakeup( &ctx->lcktmr, 2 );
 	return DRV_OK;
 }
 
@@ -565,6 +579,12 @@ maildir_uidval_unlock( maildir_store_t *ctx )
 	/* This is legacy only */
 	flock( ctx->uvfd, LOCK_UN );
 #endif
+}
+
+static void
+lcktmr_timeout( void *aux )
+{
+	maildir_uidval_unlock( (maildir_store_t *)aux );
 }
 
 static int
@@ -912,10 +932,6 @@ maildir_scan( maildir_store_t *ctx, msglist_t *msglist )
 		}
 		ctx->uvok = 1;
 	}
-#ifdef USE_DB
-	if (!ctx->db)
-#endif /* ! USE_DB */
-		maildir_uidval_unlock( ctx );
 	return DRV_OK;
 }
 
@@ -984,10 +1000,8 @@ maildir_open_box( store_t *gctx,
 #endif /* USE_DB */
 	char uvpath[_POSIX_PATH_MAX];
 
-	if ((ret = maildir_validate( gctx->path, 0, ctx )) != DRV_OK) {
-		cb( ret, aux );
-		return;
-	}
+	if ((ret = maildir_validate( gctx->path, 0, ctx )) != DRV_OK)
+		goto bail;
 
 	nfsnprintf( uvpath, sizeof(uvpath), "%s/.uidvalidity", gctx->path );
 #ifndef USE_DB
@@ -1060,13 +1074,10 @@ maildir_open_box( store_t *gctx,
 	}
   fnok:
 #endif /* USE_DB */
-	if ((ret = maildir_uidval_lock( ctx )) != DRV_OK) {
-		cb( ret, aux );
-		return;
-	}
-	maildir_uidval_unlock( ctx );
+	ret = maildir_uidval_lock( ctx );
 
-	cb( DRV_OK, aux );
+  bail:
+	cb( ret, aux );
 }
 
 static void
@@ -1324,7 +1335,6 @@ maildir_store_msg( store_t *gctx, msg_data_t *data, int to_trash,
 				cb( ret, 0, aux );
 				return;
 			}
-			maildir_uidval_unlock( ctx );
 			nfsnprintf( base + bl, sizeof(base) - bl, ",U=%d", uid );
 		}
 		box = gctx->path;
