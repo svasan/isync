@@ -73,6 +73,7 @@ typedef struct maildir_store {
 	char *trash;
 #ifdef USE_DB
 	DB *db;
+	char *usedb;
 #endif /* USE_DB */
 	wakeup_t lcktmr;
 } maildir_store_t;
@@ -184,6 +185,7 @@ maildir_cleanup( store_t *gctx )
 #ifdef USE_DB
 	if (ctx->db)
 		ctx->db->close( ctx->db, 0 );
+	free( ctx->usedb );
 #endif /* USE_DB */
 	free( gctx->path );
 	free( ctx->excs );
@@ -518,6 +520,10 @@ static int
 maildir_uidval_lock( maildir_store_t *ctx )
 {
 	int n;
+#ifdef USE_DB
+	int ret;
+	struct stat st;
+#endif
 	char buf[128];
 
 	if (ctx->lcktmr.links.next) {
@@ -541,21 +547,52 @@ maildir_uidval_lock( maildir_store_t *ctx )
 		error( "Maildir error: cannot fcntl lock UIDVALIDITY.\n" );
 		return DRV_BOX_BAD;
 	}
-	lseek( ctx->uvfd, 0, SEEK_SET );
-	if ((n = read( ctx->uvfd, buf, sizeof(buf) - 1 )) <= 0 ||
-	    (buf[n] = 0, sscanf( buf, "%d\n%d", &ctx->gen.uidvalidity, &ctx->nuid ) != 2)) {
-#if 1
-		/* In a generic driver, resetting the UID validity would be the right thing.
-		 * But this would mess up the sync state completely. So better bail out and
-		 * give the user a chance to fix the mailbox. */
-		if (n) {
-			error( "Maildir error: cannot read UIDVALIDITY.\n" );
+
+#ifdef USE_DB
+	if (ctx->usedb) {
+		if (fstat( ctx->uvfd, &st )) {
+			sys_error( "Maildir error: cannot fstat UID database" );
 			return DRV_BOX_BAD;
 		}
-#endif
-		return maildir_init_uidval_new( ctx );
+		if (db_create( &ctx->db, 0, 0 )) {
+			fputs( "Maildir error: db_create() failed\n", stderr );
+			return DRV_BOX_BAD;
+		}
+		if ((ret = (ctx->db->open)( ctx->db, 0, ctx->usedb, 0, DB_HASH,
+		                            st.st_size ? 0 : DB_CREATE | DB_TRUNCATE, 0 ))) {
+			ctx->db->err( ctx->db, ret, "Maildir error: db->open(%s)", ctx->usedb );
+			return DRV_BOX_BAD;
+		}
+		key.data = (void *)"UIDVALIDITY";
+		key.size = 11;
+		if ((ret = ctx->db->get( ctx->db, 0, &key, &value, 0 ))) {
+			if (ret != DB_NOTFOUND) {
+				ctx->db->err( ctx->db, ret, "Maildir error: db->get()" );
+				return DRV_BOX_BAD;
+			}
+			return maildir_init_uidval_new( ctx );
+		}
+		ctx->gen.uidvalidity = ((int *)value.data)[0];
+		ctx->nuid = ((int *)value.data)[1];
 	} else
-		ctx->uvok = 1;
+#endif
+	{
+		lseek( ctx->uvfd, 0, SEEK_SET );
+		if ((n = read( ctx->uvfd, buf, sizeof(buf) - 1 )) <= 0 ||
+			(buf[n] = 0, sscanf( buf, "%d\n%d", &ctx->gen.uidvalidity, &ctx->nuid ) != 2)) {
+#if 1
+			/* In a generic driver, resetting the UID validity would be the right thing.
+			 * But this would mess up the sync state completely. So better bail out and
+			 * give the user a chance to fix the mailbox. */
+			if (n) {
+				error( "Maildir error: cannot read UIDVALIDITY.\n" );
+				return DRV_BOX_BAD;
+			}
+#endif
+			return maildir_init_uidval_new( ctx );
+		}
+	}
+	ctx->uvok = 1;
 	conf_wakeup( &ctx->lcktmr, 2 );
 	return DRV_OK;
 }
@@ -563,6 +600,12 @@ maildir_uidval_lock( maildir_store_t *ctx )
 static void
 maildir_uidval_unlock( maildir_store_t *ctx )
 {
+#ifdef USE_DB
+	if (ctx->db) {
+		ctx->db->close( ctx->db, 0 );
+		ctx->db = 0;
+	}
+#endif /* USE_DB */
 	lck.l_type = F_UNLCK;
 	fcntl( ctx->uvfd, F_SETLK, &lck );
 #ifdef LEGACY_FLOCK
@@ -594,6 +637,8 @@ maildir_set_uid( maildir_store_t *ctx, const char *name, int *uid )
 {
 	int ret;
 
+	if ((ret = maildir_uidval_lock( ctx )) != DRV_OK)
+		return ret;
 	*uid = ++ctx->nuid;
 
 	make_key( ((maildir_store_conf_t *)ctx->gen.conf)->info_stop, &key, (char *)name );
@@ -693,7 +738,7 @@ maildir_scan( maildir_store_t *ctx, msglist_t *msglist )
 	ctx->gen.count = ctx->gen.recent = 0;
 	if (ctx->uvok || ctx->maxuid == INT_MAX) {
 #ifdef USE_DB
-		if (ctx->db) {
+		if (ctx->usedb) {
 			if (db_create( &tdb, 0, 0 )) {
 				fputs( "Maildir error: db_create() failed\n", stderr );
 				return DRV_BOX_BAD;
@@ -734,7 +779,7 @@ maildir_scan( maildir_store_t *ctx, msglist_t *msglist )
 				maildir_free_scan( msglist );
 			  dfail:
 #ifdef USE_DB
-				if (ctx->db)
+				if (ctx->usedb)
 					tdb->close( tdb, 0 );
 #endif /* USE_DB */
 				return DRV_BOX_BAD;
@@ -745,7 +790,9 @@ maildir_scan( maildir_store_t *ctx, msglist_t *msglist )
 				ctx->gen.count++;
 				ctx->gen.recent += i;
 #ifdef USE_DB
-				if (ctx->db) {
+				if (ctx->usedb) {
+					if (maildir_uidval_lock( ctx ) != DRV_OK)
+						goto mbork;
 					make_key( conf->info_stop, &key, e->d_name );
 					if ((ret = ctx->db->get( ctx->db, 0, &key, &value, 0 ))) {
 						if (ret != DB_NOTFOUND) {
@@ -802,7 +849,7 @@ maildir_scan( maildir_store_t *ctx, msglist_t *msglist )
 			if (st.st_mtime != stamps[i]) {
 				/* Somebody messed with the mailbox since we started listing it. */
 #ifdef USE_DB
-				if (ctx->db)
+				if (ctx->usedb)
 					tdb->close( tdb, 0 );
 #endif /* USE_DB */
 				maildir_free_scan( msglist );
@@ -810,8 +857,10 @@ maildir_scan( maildir_store_t *ctx, msglist_t *msglist )
 			}
 		}
 #ifdef USE_DB
-		if (ctx->db) {
-			if ((ret = ctx->db->cursor( ctx->db, 0, &dbc, 0 )))
+		if (ctx->usedb) {
+			if (maildir_uidval_lock( ctx ) != DRV_OK)
+				;
+			else if ((ret = ctx->db->cursor( ctx->db, 0, &dbc, 0 )))
 				ctx->db->err( ctx->db, ret, "Maildir error: db->cursor()" );
 			else {
 				for (;;) {
@@ -868,7 +917,7 @@ maildir_scan( maildir_store_t *ctx, msglist_t *msglist )
 				if ((ctx->gen.opts & OPEN_SIZE) || ((ctx->gen.opts & OPEN_FIND) && uid >= ctx->newuid))
 					nfsnprintf( buf + bl, sizeof(buf) - bl, "%s/%s", subdirs[entry->recent], entry->base );
 #ifdef USE_DB
-			} else if (ctx->db) {
+			} else if (ctx->usedb) {
 				if ((ret = maildir_set_uid( ctx, entry->base, &uid )) != DRV_OK) {
 					maildir_free_scan( msglist );
 					return ret;
@@ -982,6 +1031,7 @@ maildir_select_box( store_t *gctx, const char *name )
 	ctx->uvfd = -1;
 #ifdef USE_DB
 	ctx->db = 0;
+	ctx->usedb = 0;
 #endif /* USE_DB */
 	ctx->fresh[0] = ctx->fresh[1] = 0;
 	if (starts_with( name, -1, "INBOX", 5 ) && (!name[5] || name[5] == '/')) {
@@ -1002,9 +1052,6 @@ maildir_open_box( store_t *gctx,
 {
 	maildir_store_t *ctx = (maildir_store_t *)gctx;
 	int ret;
-#ifdef USE_DB
-	struct stat st;
-#endif /* USE_DB */
 	char uvpath[_POSIX_PATH_MAX];
 
 	if ((ret = maildir_validate( gctx->path, 0, ctx )) != DRV_OK)
@@ -1018,6 +1065,7 @@ maildir_open_box( store_t *gctx,
 		return;
 	}
 #else
+	ctx->usedb = 0;
 	if ((ctx->uvfd = open( uvpath, O_RDWR, 0600 )) < 0) {
 		nfsnprintf( uvpath, sizeof(uvpath), "%s/.isyncuidmap.db", gctx->path );
 		if ((ctx->uvfd = open( uvpath, O_RDWR, 0600 )) < 0) {
@@ -1032,52 +1080,10 @@ maildir_open_box( store_t *gctx,
 			sys_error( "Maildir error: cannot write %s", uvpath );
 			cb( DRV_BOX_BAD, aux );
 			return;
-		}
-	  dbok:
-#if SEEK_SET != 0
-		lck.l_whence = SEEK_SET;
-#endif
-		lck.l_type = F_WRLCK;
-		if (fcntl( ctx->uvfd, F_SETLKW, &lck )) {
-			sys_error( "Maildir error: cannot lock %s", uvpath );
-			cb( DRV_BOX_BAD, aux );
-			return;
-		}
-		if (fstat( ctx->uvfd, &st )) {
-			sys_error( "Maildir error: cannot stat %s", uvpath );
-			cb( DRV_BOX_BAD, aux );
-			return;
-		}
-		if (db_create( &ctx->db, 0, 0 )) {
-			fputs( "Maildir error: db_create() failed\n", stderr );
-			cb( DRV_BOX_BAD, aux );
-			return;
-		}
-		if ((ret = (ctx->db->open)( ctx->db, 0, uvpath, 0, DB_HASH,
-		                            st.st_size ? 0 : DB_CREATE | DB_TRUNCATE, 0 ))) {
-			ctx->db->err( ctx->db, ret, "Maildir error: db->open(%s)", uvpath );
-			cb( DRV_BOX_BAD, aux );
-			return;
-		}
-		key.data = (void *)"UIDVALIDITY";
-		key.size = 11;
-		if ((ret = ctx->db->get( ctx->db, 0, &key, &value, 0 ))) {
-			if (ret != DB_NOTFOUND) {
-				ctx->db->err( ctx->db, ret, "Maildir error: db->get()" );
-				cb( DRV_BOX_BAD, aux );
-				return;
-			}
-			if (maildir_init_uidval_new( ctx ) != DRV_OK) {
-				cb( DRV_BOX_BAD, aux );
-				return;
-			}
 		} else {
-			ctx->gen.uidvalidity = ((int *)value.data)[0];
-			ctx->nuid = ((int *)value.data)[1];
-			ctx->uvok = 1;
+		  dbok:
+			ctx->usedb = nfstrdup( uvpath );
 		}
-		cb( DRV_OK, aux );
-		return;
 	}
   fnok:
 #endif /* USE_DB */
@@ -1327,7 +1333,7 @@ maildir_store_msg( store_t *gctx, msg_data_t *data, int to_trash,
 	bl = nfsnprintf( base, sizeof(base), "%ld.%d_%d.%s", (long)time( 0 ), Pid, ++MaildirCount, Hostname );
 	if (!to_trash) {
 #ifdef USE_DB
-		if (ctx->db) {
+		if (ctx->usedb) {
 			if ((ret = maildir_set_uid( ctx, base, &uid )) != DRV_OK) {
 				free( data->data );
 				cb( ret, 0, aux );
@@ -1480,6 +1486,8 @@ maildir_purge_msg( maildir_store_t *ctx, const char *name )
 {
 	int ret;
 
+	if ((ret = maildir_uidval_lock( ctx )) != DRV_OK)
+		return ret;
 	make_key( ((maildir_store_conf_t *)ctx->gen.conf)->info_stop, &key, (char *)name );
 	if ((ret = ctx->db->del( ctx->db, 0, &key, 0 ))) {
 		ctx->db->err( ctx->db, ret, "Maildir error: db->del()" );
@@ -1529,7 +1537,7 @@ maildir_trash_msg( store_t *gctx, message_t *gmsg,
 	gctx->count--;
 
 #ifdef USE_DB
-	if (ctx->db) {
+	if (ctx->usedb) {
 		cb( maildir_purge_msg( ctx, msg->base ), aux );
 		return;
 	}

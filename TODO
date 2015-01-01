@@ -18,11 +18,6 @@ add alternative treatments of expired messages. ExpiredMessageMode: Prune
 (delete messages like now), Keep (just don't sync) and Archive (move to
 separate folder - ArchiveSuffix, default .archive).
 
-unify maildir locking between the two UID storage schemes.
-re-opening the db may be expensive, so keep it open.
-but keeping lock for too long (e.g., big message downloads) may block other
-clients. auto-release lock after 500 ms?
-
 kill the concept of an INBOX, it is a relic from single-channel operation.
 if somebody needs it, he can have two stores with different Paths. the path
 can name a single (in-)box (curr. broken with maildir). an empty box name
