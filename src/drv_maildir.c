@@ -451,51 +451,42 @@ make_key( const char *info_stop, DBT *tkey, char *name )
 	tkey->data = name;
 	tkey->size = u ? (size_t)(u - name) : strlen( name );
 }
-
-static int
-maildir_set_uid( maildir_store_t *ctx, const char *name, int *uid )
-{
-	int ret, uv[2];
-
-	if (uid)
-		*uid = ++ctx->nuid;
-	key.data = (void *)"UIDVALIDITY";
-	key.size = 11;
-	uv[0] = ctx->gen.uidvalidity;
-	uv[1] = ctx->nuid;
-	value.data = uv;
-	value.size = sizeof(uv);
-	if ((ret = ctx->db->put( ctx->db, 0, &key, &value, 0 ))) {
-	  tbork:
-		ctx->db->err( ctx->db, ret, "Maildir error: db->put()" );
-		return DRV_BOX_BAD;
-	}
-	if (uid) {
-		make_key( ((maildir_store_conf_t *)ctx->gen.conf)->info_stop, &key, (char *)name );
-		value.data = uid;
-		value.size = sizeof(*uid);
-		if ((ret = ctx->db->put( ctx->db, 0, &key, &value, 0 )))
-			goto tbork;
-	}
-	if ((ret = ctx->db->sync( ctx->db, 0 ))) {
-		ctx->db->err( ctx->db, ret, "Maildir error: db->sync()" );
-		return DRV_BOX_BAD;
-	}
-	return DRV_OK;
-}
 #endif /* USE_DB */
 
 static int
 maildir_store_uidval( maildir_store_t *ctx )
 {
 	int n;
+#ifdef USE_DB
+	int ret, uv[2];
+#endif
 	char buf[128];
 
-	n = sprintf( buf, "%d\n%d\n", ctx->gen.uidvalidity, ctx->nuid );
-	lseek( ctx->uvfd, 0, SEEK_SET );
-	if (write( ctx->uvfd, buf, n ) != n || ftruncate( ctx->uvfd, n ) || (UseFSync && fdatasync( ctx->uvfd ))) {
-		error( "Maildir error: cannot write UIDVALIDITY.\n" );
-		return DRV_BOX_BAD;
+#ifdef USE_DB
+	if (ctx->db) {
+		key.data = (void *)"UIDVALIDITY";
+		key.size = 11;
+		uv[0] = ctx->gen.uidvalidity;
+		uv[1] = ctx->nuid;
+		value.data = uv;
+		value.size = sizeof(uv);
+		if ((ret = ctx->db->put( ctx->db, 0, &key, &value, 0 ))) {
+			ctx->db->err( ctx->db, ret, "Maildir error: db->put()" );
+			return DRV_BOX_BAD;
+		}
+		if ((ret = ctx->db->sync( ctx->db, 0 ))) {
+			ctx->db->err( ctx->db, ret, "Maildir error: db->sync()" );
+			return DRV_BOX_BAD;
+		}
+	} else
+#endif /* USE_DB */
+	{
+		n = sprintf( buf, "%d\n%d\n", ctx->gen.uidvalidity, ctx->nuid );
+		lseek( ctx->uvfd, 0, SEEK_SET );
+		if (write( ctx->uvfd, buf, n ) != n || ftruncate( ctx->uvfd, n ) || (UseFSync && fdatasync( ctx->uvfd ))) {
+			error( "Maildir error: cannot write UIDVALIDITY.\n" );
+			return DRV_BOX_BAD;
+		}
 	}
 	conf_wakeup( &ctx->lcktmr, 2 );
 	return DRV_OK;
@@ -511,7 +502,6 @@ maildir_init_uidval( maildir_store_t *ctx )
 	if (ctx->db) {
 		u_int32_t count;
 		ctx->db->truncate( ctx->db, 0, &count, 0 );
-		return maildir_set_uid( ctx, 0, 0 );
 	}
 #endif /* USE_DB */
 	return maildir_store_uidval( ctx );
@@ -597,6 +587,25 @@ maildir_obtain_uid( maildir_store_t *ctx, int *uid )
 	*uid = ++ctx->nuid;
 	return maildir_store_uidval( ctx );
 }
+
+#ifdef USE_DB
+static int
+maildir_set_uid( maildir_store_t *ctx, const char *name, int *uid )
+{
+	int ret;
+
+	*uid = ++ctx->nuid;
+
+	make_key( ((maildir_store_conf_t *)ctx->gen.conf)->info_stop, &key, (char *)name );
+	value.data = uid;
+	value.size = sizeof(*uid);
+	if ((ret = ctx->db->put( ctx->db, 0, &key, &value, 0 ))) {
+		ctx->db->err( ctx->db, ret, "Maildir error: db->put()" );
+		return DRV_BOX_BAD;
+	}
+	return maildir_store_uidval( ctx );
+}
+#endif
 
 static int
 maildir_compare( const void *l, const void *r )
