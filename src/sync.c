@@ -497,11 +497,12 @@ cancel_done( void *aux )
 
 	svars->state[t] |= ST_CANCELED;
 	if (svars->state[1-t] & ST_CANCELED) {
-		if (svars->lfd) {
+		if (svars->lfd >= 0) {
 			Fclose( svars->nfp, 0 );
 			Fclose( svars->jfp, 0 );
 			sync_bail( svars );
 		} else {
+			/* Early failure during box selection. */
 			sync_bail2( svars );
 		}
 	}
