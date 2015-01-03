@@ -924,6 +924,7 @@ load_state( sync_vars_t *svars )
 }
 
 static void box_opened( int sts, void *aux );
+static void load_box( sync_vars_t *svars, int t, int minwuid, int *mexcs, int nmexcs );
 
 void
 sync_boxes( store_t *ctx[], const char *names[], channel_conf_t *chan,
@@ -968,37 +969,6 @@ sync_boxes( store_t *ctx[], const char *names[], channel_conf_t *chan,
 			return;
 		}
 	}
-	sync_ref( svars );
-	for (t = 0; t < 2; t++) {
-		info( "Opening %s box %s...\n", str_ms[t], svars->orig_name[t] );
-		svars->drv[t]->open_box( ctx[t], (chan->ops[t] & OP_CREATE) != 0, box_opened, AUX );
-		if (check_cancel( svars ))
-			break;
-	}
-	sync_deref( svars );
-}
-
-static void load_box( sync_vars_t *svars, int t, int minwuid, int *mexcs, int nmexcs );
-
-static void
-box_opened( int sts, void *aux )
-{
-	DECL_SVARS;
-	sync_rec_t *srec;
-	store_t *ctx[2];
-	channel_conf_t *chan;
-	int opts[2], fails;
-	int *mexcs, nmexcs, rmexcs, minwuid;
-
-	if (check_ret( sts, aux ))
-		return;
-	INIT_SVARS(aux);
-	ctx[0] = svars->ctx[0];
-	ctx[1] = svars->ctx[1];
-	chan = svars->chan;
-	svars->state[t] |= ST_SELECTED;
-	if (!(svars->state[1-t] & ST_SELECTED))
-		return;
 
 	if (!prepare_state( svars )) {
 		svars->ret = SYNC_FAIL;
@@ -1010,6 +980,37 @@ box_opened( int sts, void *aux )
 		sync_bail( svars );
 		return;
 	}
+
+	sync_ref( svars );
+	for (t = 0; ; t++) {
+		info( "Opening %s box %s...\n", str_ms[t], svars->orig_name[t] );
+		svars->drv[t]->open_box( ctx[t], (chan->ops[t] & OP_CREATE) != 0, box_opened, AUX );
+		if (t || check_cancel( svars ))
+			break;
+	}
+	sync_deref( svars );
+}
+
+static void
+box_opened( int sts, void *aux )
+{
+	DECL_SVARS;
+	store_t *ctx[2];
+	channel_conf_t *chan;
+	sync_rec_t *srec;
+	int opts[2], fails;
+	int *mexcs, nmexcs, rmexcs, minwuid;
+
+	if (check_ret( sts, aux ))
+		return;
+	INIT_SVARS(aux);
+
+	svars->state[t] |= ST_SELECTED;
+	if (!(svars->state[1-t] & ST_SELECTED))
+		return;
+	ctx[0] = svars->ctx[0];
+	ctx[1] = svars->ctx[1];
+	chan = svars->chan;
 
 	fails = 0;
 	for (t = 0; t < 2; t++)
