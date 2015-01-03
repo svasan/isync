@@ -126,16 +126,18 @@ maildir_join_path( const char *prefix, const char *box )
 }
 
 static int
-maildir_validate_path( const store_conf_t *conf )
+maildir_validate_path( store_conf_t *conf )
 {
 	struct stat st;
 
 	if (!conf->path) {
 		error( "Maildir error: store '%s' has no Path\n", conf->name );
+		conf->failed = FAIL_FINAL;
 		return -1;
 	}
 	if (stat( conf->path, &st ) || !S_ISDIR(st.st_mode)) {
 		error( "Maildir error: cannot open store '%s'\n", conf->path );
+		conf->failed = FAIL_FINAL;
 		return -1;
 	}
 	return 0;
@@ -414,6 +416,7 @@ maildir_validate( const char *box, int create, maildir_store_t *ctx )
 			return DRV_BOX_BAD;
 		if (make_box_dir( buf, bl )) {
 			sys_error( "Maildir error: cannot create mailbox '%s'", box );
+			ctx->gen.conf->failed = FAIL_FINAL;
 			maildir_invoke_bad_callback( &ctx->gen );
 			return DRV_CANCELED;
 		}

@@ -601,9 +601,17 @@ sync_chans( main_vars_t *mvars, int ent )
 		merge_actions( mvars->chan, mvars->ops, XOP_HAVE_REMOVE, OP_REMOVE, 0 );
 		merge_actions( mvars->chan, mvars->ops, XOP_HAVE_EXPUNGE, OP_EXPUNGE, 0 );
 
-		mvars->state[M] = mvars->state[S] = ST_FRESH;
 		info( "Channel %s\n", mvars->chan->name );
 		mvars->skip = mvars->cben = 0;
+		for (t = 0; t < 2; t++) {
+			if (mvars->chan->stores[t]->failed != FAIL_TEMP) {
+				info( "Skipping due to failed %s store %s.\n", str_ms[t], mvars->chan->stores[t]->name );
+				mvars->skip = 1;
+			}
+		}
+		if (mvars->skip)
+			goto next2;
+		mvars->state[M] = mvars->state[S] = ST_FRESH;
 		if (mvars->chan->stores[M]->driver->flags & mvars->chan->stores[S]->driver->flags & DRV_VERBOSE)
 			labels[M] = "M: ", labels[S] = "S: ";
 		else
@@ -694,6 +702,7 @@ sync_chans( main_vars_t *mvars, int ent )
 		free_string_list( mvars->cboxes );
 		free_string_list( mvars->boxes[M] );
 		free_string_list( mvars->boxes[S] );
+	  next2:
 		if (mvars->all) {
 			if (!(mvars->chan = mvars->chan->next))
 				break;

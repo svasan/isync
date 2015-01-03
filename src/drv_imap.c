@@ -1508,7 +1508,13 @@ static void imap_open_store_finalize( imap_store_t * );
 #ifdef HAVE_LIBSSL
 static void imap_open_store_ssl_bail( imap_store_t * );
 #endif
-static void imap_open_store_bail( imap_store_t * );
+static void imap_open_store_bail( imap_store_t *, int );
+
+static void
+imap_open_store_bad( void *aux )
+{
+	imap_open_store_bail( (imap_store_t *)aux, FAIL_TEMP );
+}
 
 static void
 imap_open_store( store_conf_t *conf, const char *label,
@@ -1540,7 +1546,7 @@ imap_open_store( store_conf_t *conf, const char *label,
 			ctx->delimiter = 0;
 			ctx->callbacks.imap_open = cb;
 			ctx->callback_aux = aux;
-			set_bad_callback( &ctx->gen, (void (*)(void *))imap_open_store_bail, ctx );
+			set_bad_callback( &ctx->gen, imap_open_store_bad, ctx );
 			imap_open_store_namespace( ctx );
 			return;
 		}
@@ -1551,7 +1557,7 @@ imap_open_store( store_conf_t *conf, const char *label,
 	ctx->ref_count = 1;
 	ctx->callbacks.imap_open = cb;
 	ctx->callback_aux = aux;
-	set_bad_callback( &ctx->gen, (void (*)(void *))imap_open_store_bail, ctx );
+	set_bad_callback( &ctx->gen, imap_open_store_bad, ctx );
 	ctx->in_progress_append = &ctx->in_progress;
 	ctx->pending_append = &ctx->pending;
 
@@ -1571,7 +1577,7 @@ imap_open_store_connected( int ok, void *aux )
 #endif
 
 	if (!ok)
-		imap_open_store_bail( ctx );
+		imap_open_store_bail( ctx, FAIL_WAIT );
 #ifdef HAVE_LIBSSL
 	else if (srvc->ssl_type == SSL_IMAPS)
 		socket_start_tls( &ctx->conn, imap_open_store_tlsstarted1 );
@@ -1602,7 +1608,7 @@ static void
 imap_open_store_p2( imap_store_t *ctx, struct imap_cmd *cmd ATTR_UNUSED, int response )
 {
 	if (response == RESP_NO)
-		imap_open_store_bail( ctx );
+		imap_open_store_bail( ctx, FAIL_FINAL );
 	else if (response == RESP_OK)
 		imap_open_store_authenticate( ctx );
 }
@@ -1623,7 +1629,7 @@ imap_open_store_authenticate( imap_store_t *ctx )
 				return;
 			} else {
 				error( "IMAP error: SSL support not available\n" );
-				imap_open_store_bail( ctx );
+				imap_open_store_bail( ctx, FAIL_FINAL );
 				return;
 			}
 		}
@@ -1633,7 +1639,7 @@ imap_open_store_authenticate( imap_store_t *ctx )
 #ifdef HAVE_LIBSSL
 		if (srvc->ssl_type == SSL_STARTTLS) {
 			error( "IMAP error: SSL support not available\n" );
-			imap_open_store_bail( ctx );
+			imap_open_store_bail( ctx, FAIL_FINAL );
 			return;
 		}
 #endif
@@ -1646,7 +1652,7 @@ static void
 imap_open_store_authenticate_p2( imap_store_t *ctx, struct imap_cmd *cmd ATTR_UNUSED, int response )
 {
 	if (response == RESP_NO)
-		imap_open_store_bail( ctx );
+		imap_open_store_bail( ctx, FAIL_FINAL );
 	else if (response == RESP_OK)
 		socket_start_tls( &ctx->conn, imap_open_store_tlsstarted2 );
 }
@@ -1666,7 +1672,7 @@ static void
 imap_open_store_authenticate_p3( imap_store_t *ctx, struct imap_cmd *cmd ATTR_UNUSED, int response )
 {
 	if (response == RESP_NO)
-		imap_open_store_bail( ctx );
+		imap_open_store_bail( ctx, FAIL_FINAL );
 	else if (response == RESP_OK)
 		imap_open_store_authenticate2( ctx );
 }
@@ -1872,7 +1878,7 @@ do_sasl_auth( imap_store_t *ctx, struct imap_cmd *cmdp ATTR_UNUSED, const char *
 	return socket_write( &ctx->conn, iov, iovcnt );
 
   bail:
-	imap_open_store_bail( ctx );
+	imap_open_store_bail( ctx, FAIL_FINAL );
 	return -1;
 }
 
@@ -1996,14 +2002,14 @@ imap_open_store_authenticate2( imap_store_t *ctx )
 	error( "IMAP error: server supports no acceptable authentication mechanism\n" );
 
   bail:
-	imap_open_store_bail( ctx );
+	imap_open_store_bail( ctx, FAIL_FINAL );
 }
 
 static void
 imap_open_store_authenticate2_p2( imap_store_t *ctx, struct imap_cmd *cmd ATTR_UNUSED, int response )
 {
 	if (response == RESP_NO)
-		imap_open_store_bail( ctx );
+		imap_open_store_bail( ctx, FAIL_FINAL );
 	else if (response == RESP_OK)
 		imap_open_store_namespace( ctx );
 }
@@ -2030,7 +2036,7 @@ static void
 imap_open_store_namespace_p2( imap_store_t *ctx, struct imap_cmd *cmd ATTR_UNUSED, int response )
 {
 	if (response == RESP_NO) {
-		imap_open_store_bail( ctx );
+		imap_open_store_bail( ctx, FAIL_FINAL );
 	} else if (response == RESP_OK) {
 		ctx->got_namespace = 1;
 		imap_open_store_namespace2( ctx );
@@ -2061,7 +2067,7 @@ imap_open_store_namespace2( imap_store_t *ctx )
 #endif
 		imap_open_store_finalize( ctx );
 	} else {
-		imap_open_store_bail( ctx );
+		imap_open_store_bail( ctx, FAIL_FINAL );
 	}
 }
 
@@ -2095,15 +2101,16 @@ imap_open_store_ssl_bail( imap_store_t *ctx )
 {
 	/* This avoids that we try to send LOGOUT to an unusable socket. */
 	socket_close( &ctx->conn );
-	imap_open_store_bail( ctx );
+	imap_open_store_bail( ctx, FAIL_FINAL );
 }
 #endif
 
 static void
-imap_open_store_bail( imap_store_t *ctx )
+imap_open_store_bail( imap_store_t *ctx, int failed )
 {
 	void (*cb)( store_t *srv, void *aux ) = ctx->callbacks.imap_open;
 	void *aux = ctx->callback_aux;
+	ctx->gen.conf->failed = failed;
 	imap_cancel_store( &ctx->gen );
 	cb( 0, aux );
 }

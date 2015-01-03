@@ -27,6 +27,10 @@
 
 typedef struct driver driver_t;
 
+#define FAIL_TEMP   0  /* Retry immediately (also: no error) */
+#define FAIL_WAIT   1  /* Retry after some time (if at all) */
+#define FAIL_FINAL  2  /* Don't retry until store reconfiguration */
+
 typedef struct store_conf {
 	struct store_conf *next;
 	char *name;
@@ -37,6 +41,7 @@ typedef struct store_conf {
 	const char *trash;
 	uint max_size; /* off_t is overkill */
 	char trash_remote_new, trash_only_new;
+	char failed;
 } store_conf_t;
 
 /* For message->flags */
