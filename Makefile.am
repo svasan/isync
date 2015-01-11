@@ -51,7 +51,7 @@ $(srcdir)/ChangeLog: log
 log:
 	@test -z "$(srcdir)" || cd $(srcdir) && \
 	 ( ! test -d .git || \
-	   git log --date=iso --log-size --name-only | \
+	   git log --date=iso --log-size --name-only --no-merges | \
 	     perl -e '$(LOG_PL)' > ChangeLog )
 
 deb: deb-clean
