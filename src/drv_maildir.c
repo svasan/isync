@@ -1292,7 +1292,7 @@ maildir_store_msg( store_t *gctx, msg_data_t *data, int to_trash,
 }
 
 static void
-maildir_find_new_msgs( store_t *gctx ATTR_UNUSED,
+maildir_find_new_msgs( store_t *gctx ATTR_UNUSED, int newuid ATTR_UNUSED,
                        void (*cb)( int sts, void *aux ) ATTR_UNUSED, void *aux ATTR_UNUSED )
 {
 	assert( !"maildir_find_new_msgs is not supposed to be called" );

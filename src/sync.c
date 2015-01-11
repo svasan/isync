@@ -1506,7 +1506,8 @@ box_loaded( int sts, void *aux )
 	if (UseFSync)
 		fdatasync( fileno( svars->jfp ) );
 	for (t = 0; t < 2; t++) {
-		Fprintf( svars->jfp, "%c %d\n", "{}"[t], svars->ctx[t]->uidnext );
+		svars->newuid[t] = svars->ctx[t]->uidnext;
+		Fprintf( svars->jfp, "%c %d\n", "{}"[t], svars->newuid[t] );
 		for (tmsg = svars->ctx[1-t]->msgs; tmsg; tmsg = tmsg->next) {
 			if ((srec = tmsg->srec) && srec->tuid[0]) {
 				svars->new_total[t]++;
@@ -1604,7 +1605,7 @@ msgs_copied( sync_vars_t *svars, int t )
 
 	if (svars->state[t] & ST_FIND_NEW) {
 		debug( "finding just copied messages on %s\n", str_ms[t] );
-		svars->drv[t]->find_new_msgs( svars->ctx[t], msgs_found_new, AUX );
+		svars->drv[t]->find_new_msgs( svars->ctx[t], svars->newuid[t], msgs_found_new, AUX );
 	} else {
 		msgs_new_done( svars, t );
 	}
