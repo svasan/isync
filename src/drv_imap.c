@@ -166,6 +166,11 @@ struct imap_cmd_out_uid {
 	int out_uid;
 };
 
+struct imap_cmd_find_new {
+	struct imap_cmd_simple gen;
+	int uid;
+};
+
 struct imap_cmd_refcounted_state {
 	void (*callback)( int sts, void *aux );
 	void *callback_aux;
@@ -2392,28 +2397,30 @@ imap_store_msg_p2( imap_store_t *ctx ATTR_UNUSED, struct imap_cmd *cmd, int resp
 static void imap_find_new_msgs_p2( imap_store_t *, struct imap_cmd *, int );
 
 static void
-imap_find_new_msgs( store_t *gctx,
+imap_find_new_msgs( store_t *gctx, int newuid,
                     void (*cb)( int sts, void *aux ), void *aux )
 {
 	imap_store_t *ctx = (imap_store_t *)gctx;
-	struct imap_cmd_simple *cmd;
+	struct imap_cmd_find_new *cmd;
 
-	INIT_IMAP_CMD(imap_cmd_simple, cmd, cb, aux)
-	imap_exec( (imap_store_t *)ctx, &cmd->gen, imap_find_new_msgs_p2, "CHECK" );
+	INIT_IMAP_CMD_X(imap_cmd_find_new, cmd, cb, aux)
+	cmd->uid = newuid;
+	imap_exec( (imap_store_t *)ctx, &cmd->gen.gen, imap_find_new_msgs_p2, "CHECK" );
 }
 
 static void
 imap_find_new_msgs_p2( imap_store_t *ctx, struct imap_cmd *gcmd, int response )
 {
-	struct imap_cmd_simple *cmdp = (struct imap_cmd_simple *)gcmd, *cmd;
+	struct imap_cmd_find_new *cmdp = (struct imap_cmd_find_new *)gcmd;
+	struct imap_cmd_simple *cmd;
 
 	if (response != RESP_OK) {
 		imap_done_simple_box( ctx, gcmd, response );
 		return;
 	}
-	INIT_IMAP_CMD(imap_cmd_simple, cmd, cmdp->callback, cmdp->callback_aux)
+	INIT_IMAP_CMD(imap_cmd_simple, cmd, cmdp->gen.callback, cmdp->gen.callback_aux)
 	imap_exec( (imap_store_t *)ctx, &cmd->gen, imap_done_simple_box,
-	           "UID FETCH %d:1000000000 (UID BODY.PEEK[HEADER.FIELDS (X-TUID)])", ctx->gen.uidnext );
+	           "UID FETCH %d:1000000000 (UID BODY.PEEK[HEADER.FIELDS (X-TUID)])", cmdp->uid );
 }
 
 /******************* imap_list *******************/

@@ -154,7 +154,7 @@ verify_hostname( X509 *cert, const char *hostname )
 static int
 verify_cert_host( const server_conf_t *conf, conn_t *sock )
 {
-	unsigned i;
+	int i;
 	long err;
 	X509 *cert;
 	STACK_OF(X509_OBJECT) *trusted;
@@ -165,8 +165,8 @@ verify_cert_host( const server_conf_t *conf, conn_t *sock )
 		return -1;
 	}
 
-	trusted = SSL_CTX_get_cert_store( conf->SSLContext )->objs;
-	for (i = 0; i < conf->num_trusted; i++) {
+	trusted = (STACK_OF(X509_OBJECT) *)sock->conf->trusted_certs;
+	for (i = 0; i < sk_X509_OBJECT_num( trusted ); i++) {
 		if (!X509_cmp( cert, sk_X509_OBJECT_value( trusted, i )->data.x509 ))
 			return 0;
 	}
@@ -218,7 +218,7 @@ init_ssl_ctx( const server_conf_t *conf )
 		       conf->cert_file, ERR_error_string( ERR_get_error(), 0 ) );
 		return 0;
 	}
-	mconf->num_trusted = sk_X509_OBJECT_num( SSL_CTX_get_cert_store( mconf->SSLContext )->objs );
+	mconf->trusted_certs = (_STACK *)sk_X509_OBJECT_dup( SSL_CTX_get_cert_store( mconf->SSLContext )->objs );
 	if (mconf->system_certs && !SSL_CTX_set_default_verify_paths( mconf->SSLContext ))
 		warn( "Warning: Unable to load default certificate files: %s\n",
 		      ERR_error_string( ERR_get_error(), 0 ) );

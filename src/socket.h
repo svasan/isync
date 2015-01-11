@@ -28,6 +28,7 @@
 #ifdef HAVE_LIBSSL
 typedef struct ssl_st SSL;
 typedef struct ssl_ctx_st SSL_CTX;
+typedef struct stack_st _STACK;
 
 enum {
 	SSLv2 = 1,
@@ -49,7 +50,7 @@ typedef struct server_conf {
 
 	/* these are actually variables and are leaked at the end */
 	char ssl_ctx_valid;
-	unsigned num_trusted;
+	_STACK *trusted_certs;
 	SSL_CTX *SSLContext;
 #endif
 } server_conf_t;

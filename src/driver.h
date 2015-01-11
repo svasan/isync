@@ -191,7 +191,7 @@ struct driver {
 	/* Index the messages which have newly appeared in the mailbox, including their
 	 * temporary UID headers. This is needed if store_msg() does not guarantee returning
 	 * a UID; otherwise the driver needs to implement only the OPEN_FIND flag. */
-	void (*find_new_msgs)( store_t *ctx,
+	void (*find_new_msgs)( store_t *ctx, int newuid,
 	                       void (*cb)( int sts, void *aux ), void *aux );
 
 	/* Add/remove the named flags to/from the given message. The message may be either
