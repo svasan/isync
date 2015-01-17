@@ -214,22 +214,22 @@ maildir_list_recurse( store_t *gctx, int isBox, int *flags, const char *inbox, i
                       char *path, int pathLen, char *name, int nameLen )
 {
 	DIR *dir;
-	int pl, nl, missing;
+	int pl, nl;
 	struct dirent *de;
 	struct stat st;
 
 	if (isBox) {
 		path[pathLen++] = '/';
-		nfsnprintf( path + pathLen, _POSIX_PATH_MAX - pathLen, "cur" );
-		missing = stat( path, &st ) || !S_ISDIR(st.st_mode);
-		if (!missing || isBox > 1)
+		if (isBox > 1 ||
+		    (nfsnprintf( path + pathLen, _POSIX_PATH_MAX - pathLen, "cur" ),
+		     !stat( path, &st ) && S_ISDIR(st.st_mode)))
 			add_string_list( &gctx->boxes, name );
-		if (missing)
-			return 0;
 		path[pathLen] = 0;
 		name[nameLen++] = '/';
 	}
 	if (!(dir = opendir( path ))) {
+		if (isBox && (errno == ENOENT || errno == ENOTDIR))
+			return 0;
 		sys_error( "Maildir error: cannot list %s", path );
 		return -1;
 	}
@@ -369,9 +369,27 @@ maildir_clear_tmp( char *buf, int bufsz, int bl )
 }
 
 static int
-maildir_validate( const char *box, int create, maildir_store_t *ctx )
+make_box_dir( char *buf, int bl )
 {
 	char *p;
+
+	if (!mkdir( buf, 0700 ) || errno == EEXIST)
+		return 0;
+	p = memrchr( buf, '/', bl - 1 );
+	if (*(p + 1) != '.') {
+		errno = ENOENT;
+		return -1;
+	}
+	*p = 0;
+	if (make_box_dir( buf, (int)(p - buf) ))
+		return -1;
+	*p = '/';
+	return mkdir( buf, 0700 );
+}
+
+static int
+maildir_validate( const char *box, int create, maildir_store_t *ctx )
+{
 	int i, bl, ret;
 	struct stat st;
 	char buf[_POSIX_PATH_MAX];
@@ -384,14 +402,7 @@ maildir_validate( const char *box, int create, maildir_store_t *ctx )
 		}
 		if (!create)
 			return DRV_BOX_BAD;
-		p = memrchr( buf, '/', bl - 1 );
-		if (*(p + 1) == '.') {
-			*p = 0;
-			if ((ret = maildir_validate( buf, 1, ctx )) != DRV_OK)
-				return ret;
-			*p = '/';
-		}
-		if (mkdir( buf, 0700 )) {
+		if (make_box_dir( buf, bl )) {
 			sys_error( "Maildir error: cannot create mailbox '%s'", box );
 			maildir_invoke_bad_callback( &ctx->gen );
 			return DRV_CANCELED;
