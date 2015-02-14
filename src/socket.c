@@ -597,7 +597,7 @@ static void
 socket_fill_z( conn_t *sock )
 {
 	char *buf;
-	int len;
+	int len, ret;
 
 	if (prepare_read( sock, &buf, &len ) < 0)
 		return;
@@ -605,7 +605,8 @@ socket_fill_z( conn_t *sock )
 	sock->in_z->avail_out = len;
 	sock->in_z->next_out = (unsigned char *)buf;
 
-	if (inflate( sock->in_z, Z_SYNC_FLUSH ) != Z_OK) {
+	ret = inflate( sock->in_z, Z_SYNC_FLUSH );
+	if (ret != Z_OK && ret != Z_STREAM_END) {
 		error( "Error decompressing data from %s: %s\n", sock->name, sock->in_z->msg );
 		socket_fail( sock );
 		return;
