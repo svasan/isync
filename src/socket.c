@@ -627,11 +627,13 @@ socket_fill( conn_t *sock )
 {
 #ifdef HAVE_LIBZ
 	if (sock->in_z) {
+		int ret;
 		/* The timer will preempt reads until the buffer is empty. */
 		assert( !sock->in_z->avail_in );
 		sock->in_z->next_in = (uchar *)sock->z_buf;
-		if ((sock->in_z->avail_in = do_read( sock, sock->z_buf, sizeof(sock->z_buf) )) <= 0)
+		if ((ret = do_read( sock, sock->z_buf, sizeof(sock->z_buf) )) <= 0)
 			return;
+		sock->in_z->avail_in = ret;
 		socket_fill_z( sock );
 	} else
 #endif
