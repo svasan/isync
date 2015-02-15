@@ -164,6 +164,7 @@ typedef struct {
 void init_wakeup( wakeup_t *tmr, void (*cb)( void * ), void *aux );
 void conf_wakeup( wakeup_t *tmr, int timeout );
 void wipe_wakeup( wakeup_t *tmr );
+static INLINE int pending_wakeup( wakeup_t *tmr ) { return tmr->links.next != 0; }
 
 void main_loop( void );
 

@@ -529,7 +529,7 @@ maildir_uidval_lock( maildir_store_t *ctx )
 #endif
 	char buf[128];
 
-	if (ctx->lcktmr.links.next) {
+	if (pending_wakeup( &ctx->lcktmr )) {
 		/* The unlock timer is active, so we are obviously already locked. */
 		return DRV_OK;
 	}
