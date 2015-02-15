@@ -114,6 +114,8 @@ typedef struct imap_store {
 
 	/* Used during sequential operations like connect */
 	enum { GreetingPending = 0, GreetingBad, GreetingOk, GreetingPreauth } greeting;
+	int expectBYE; /* LOGOUT is in progress */
+	int expectEOF; /* received LOGOUT's OK or unsolicited BYE */
 	int canceling; /* imap_cancel() is in progress */
 	union {
 		void (*imap_open)( store_t *srv, void *aux );
@@ -674,7 +676,7 @@ parse_imap_list( imap_store_t *ctx, char **sp, parse_list_state_t *sts )
 {
 	list_t *cur, **curp;
 	char *s = *sp, *d, *p;
-	int bytes;
+	int n, bytes;
 	char c;
 
 	assert( sts );
@@ -724,7 +726,13 @@ parse_imap_list( imap_store_t *ctx, char **sp, parse_list_state_t *sts )
 			s[cur->len] = 0;
 
 		  getbytes:
-			bytes -= socket_read( &ctx->conn, s, bytes );
+			n = socket_read( &ctx->conn, s, bytes );
+			if (n < 0) {
+			  badeof:
+				error( "IMAP error: unexpected EOF from %s\n", ctx->conn.name );
+				goto bail;
+			}
+			bytes -= n;
 			if (bytes > 0)
 				goto postpone;
 
@@ -738,6 +746,8 @@ parse_imap_list( imap_store_t *ctx, char **sp, parse_list_state_t *sts )
 		  getline:
 			if (!(s = socket_read_line( &ctx->conn )))
 				goto postpone;
+			if (s == (void *)~0)
+				goto badeof;
 			if (DFlags & VERBOSE) {
 				printf( "%s%s\n", ctx->label, s );
 				fflush( stdout );
@@ -1218,6 +1228,12 @@ imap_socket_read( void *aux )
 		}
 		if (!(cmd = socket_read_line( &ctx->conn )))
 			return;
+		if (cmd == (void *)~0) {
+			if (!ctx->expectEOF)
+				error( "IMAP error: unexpected EOF from %s\n", ctx->conn.name );
+			/* A clean shutdown sequence ends with bad_callback as well (see imap_cleanup()). */
+			break;
+		}
 		if (DFlags & VERBOSE) {
 			printf( "%s%s\n", ctx->label, cmd );
 			fflush( stdout );
@@ -1250,12 +1266,14 @@ imap_socket_read( void *aux )
 					goto dogreet;
 				}
 			} else if (!strcmp( "BYE", arg )) {
-				if (ctx->conn.state != SCK_CLOSING) {
-					ctx->conn.state = SCK_CLOSING;
+				if (!ctx->expectBYE) {
 					ctx->greeting = GreetingBad;
 					error( "IMAP error: unexpected BYE response: %s\n", cmd );
+					/* We just wait for the server to close the connection now. */
+					ctx->expectEOF = 1;
+				} else {
+					/* We still need to wait for the LOGOUT's tagged OK. */
 				}
-				/* We just wait for the server to close the connection now. */
 			} else if (ctx->greeting == GreetingPending) {
 				error( "IMAP error: bogus greeting response %s\n", arg );
 				break;
@@ -1470,7 +1488,7 @@ imap_cleanup( void )
 	for (ctx = unowned; ctx; ctx = nctx) {
 		nctx = ctx->next;
 		set_bad_callback( ctx, (void (*)(void *))imap_cancel_store, ctx );
-		((imap_store_t *)ctx)->conn.state = SCK_CLOSING;
+		((imap_store_t *)ctx)->expectBYE = 1;
 		imap_exec( (imap_store_t *)ctx, 0, imap_cleanup_p2, "LOGOUT" );
 	}
 }
@@ -1481,6 +1499,8 @@ imap_cleanup_p2( imap_store_t *ctx,
 {
 	if (response == RESP_NO)
 		imap_cancel_store( &ctx->gen );
+	else if (response == RESP_OK)
+		ctx->expectEOF = 1;
 }
 
 /******************* imap_open_store *******************/
