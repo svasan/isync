@@ -154,6 +154,7 @@ typedef struct {
 	store_t *ctx[2];
 	driver_t *drv[2];
 	const char *orig_name[2];
+	message_t *new_msgs[2];
 	int state[2], ref_count, nsrecs, ret, lfd, existing, replayed;
 	int new_total[2], new_done[2];
 	int flags_total[2], flags_done[2];
@@ -207,6 +208,7 @@ static int check_cancel( sync_vars_t *svars );
 #define ST_CLOSING         (1<<12)
 #define ST_CONFIRMED       (1<<13)
 #define ST_PRESENT         (1<<14)
+#define ST_SENDING_NEW     (1<<15)
 
 
 static void
@@ -1336,7 +1338,6 @@ box_loaded( int sts, void *aux )
 	sync_rec_t *srec;
 	sync_rec_map_t *srecmap;
 	message_t *tmsg;
-	copy_vars_t *cv;
 	flag_vars_t *fv;
 	int uid, no[2], del[2], alive, todel, t1, t2;
 	int sflags, nflags, aflags, dflags, nex;
@@ -1724,21 +1725,7 @@ box_loaded( int sts, void *aux )
 	for (t = 0; t < 2; t++) {
 		svars->newuid[t] = svars->ctx[t]->uidnext;
 		Fprintf( svars->jfp, "%c %d\n", "{}"[t], svars->newuid[t] );
-		for (tmsg = svars->ctx[1-t]->msgs; tmsg; tmsg = tmsg->next) {
-			if ((srec = tmsg->srec) && srec->tuid[0]) {
-				svars->new_total[t]++;
-				stats( svars );
-				cv = nfmalloc( sizeof(*cv) );
-				cv->cb = msg_copied;
-				cv->aux = AUX;
-				cv->srec = srec;
-				cv->msg = tmsg;
-				copy_msg( cv );
-				if (check_cancel( svars ))
-					goto out;
-			}
-		}
-		svars->state[t] |= ST_SENT_NEW;
+		svars->new_msgs[t] = svars->ctx[1-t]->msgs;
 		msgs_copied( svars, t );
 		if (check_cancel( svars ))
 			goto out;
@@ -1809,10 +1796,41 @@ static void sync_close( sync_vars_t *svars, int t );
 static void
 msgs_copied( sync_vars_t *svars, int t )
 {
-	if (!(svars->state[t] & ST_SENT_NEW) || svars->new_done[t] < svars->new_total[t])
+	message_t *tmsg;
+	sync_rec_t *srec;
+	copy_vars_t *cv;
+
+	if (svars->state[t] & ST_SENDING_NEW)
 		return;
 
 	sync_ref( svars );
+
+	if (!(svars->state[t] & ST_SENT_NEW)) {
+		for (tmsg = svars->new_msgs[t]; tmsg; tmsg = tmsg->next) {
+			if ((srec = tmsg->srec) && srec->tuid[0]) {
+				if (svars->drv[t]->memory_usage( svars->ctx[t] ) >= BufferLimit) {
+					svars->new_msgs[t] = tmsg;
+					goto out;
+				}
+				svars->new_total[t]++;
+				stats( svars );
+				svars->state[t] |= ST_SENDING_NEW;
+				cv = nfmalloc( sizeof(*cv) );
+				cv->cb = msg_copied;
+				cv->aux = AUX;
+				cv->srec = srec;
+				cv->msg = tmsg;
+				copy_msg( cv );
+				svars->state[t] &= ~ST_SENDING_NEW;
+				if (check_cancel( svars ))
+					goto out;
+			}
+		}
+		svars->state[t] |= ST_SENT_NEW;
+	}
+
+	if (svars->new_done[t] < svars->new_total[t])
+		goto out;
 
 	Fprintf( svars->jfp, "%c %d\n", ")("[t], svars->maxuid[1-t] );
 	sync_close( svars, 1-t );

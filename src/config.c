@@ -482,6 +482,14 @@ load_config( const char *where, int pseudo )
 				}
 			}
 		}
+		else if (!strcasecmp( "BufferLimit", cfile.cmd ))
+		{
+			BufferLimit = parse_size( &cfile );
+			if (BufferLimit <= 0) {
+				error( "%s:%d: BufferLimit must be positive\n", cfile.file, cfile.line );
+				cfile.err = 1;
+			}
+		}
 		else if (!getopt_helper( &cfile, &gcops, &global_conf ))
 		{
 			error( "%s:%d: unknown section keyword '%s'\n",

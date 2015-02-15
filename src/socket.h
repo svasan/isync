@@ -104,6 +104,7 @@ typedef struct {
 	int append_avail; /* space left in accumulating buffer */
 #endif
 	int write_offset; /* offset into buffer head */
+	int buffer_mem; /* memory currently occupied by buffers in the queue */
 
 	/* reading */
 	int offset; /* start of filled bytes in buffer */

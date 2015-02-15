@@ -1606,6 +1606,12 @@ maildir_commit_cmds( store_t *gctx )
 }
 
 static int
+maildir_memory_usage( store_t *gctx ATTR_UNUSED )
+{
+	return 0;
+}
+
+static int
 maildir_parse_store( conffile_t *cfg, store_conf_t **storep )
 {
 	maildir_store_conf_t *store;
@@ -1672,4 +1678,5 @@ struct driver maildir_driver = {
 	maildir_close_box,
 	maildir_cancel_cmds,
 	maildir_commit_cmds,
+	maildir_memory_usage,
 };

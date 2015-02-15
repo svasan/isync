@@ -246,6 +246,9 @@ struct driver {
 
 	/* Commit any pending set_msg_flags() commands. */
 	void (*commit_cmds)( store_t *ctx );
+
+	/* Get approximate amount of memory occupied by the driver. */
+	int (*memory_usage)( store_t *ctx );
 };
 
 void free_generic_messages( message_t * );

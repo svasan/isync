@@ -111,6 +111,7 @@ typedef struct imap_store {
 	int nexttag, num_in_progress;
 	struct imap_cmd *pending, **pending_append;
 	struct imap_cmd *in_progress, **in_progress_append;
+	int buffer_mem; /* memory currently occupied by buffers in the queue */
 
 	/* Used during sequential operations like connect */
 	enum { GreetingPending = 0, GreetingBad, GreetingOk, GreetingPreauth } greeting;
@@ -256,7 +257,10 @@ static void
 done_imap_cmd( imap_store_t *ctx, struct imap_cmd *cmd, int response )
 {
 	cmd->param.done( ctx, cmd, response );
-	free( cmd->param.data );
+	if (cmd->param.data) {
+		free( cmd->param.data );
+		ctx->buffer_mem -= cmd->param.data_len;
+	}
 	free( cmd->cmd );
 	free( cmd );
 }
@@ -299,6 +303,7 @@ send_imap_cmd( imap_store_t *ctx, struct imap_cmd *cmd )
 		iov[1].len = cmd->param.data_len;
 		iov[1].takeOwn = GiveOwn;
 		cmd->param.data = 0;
+		ctx->buffer_mem -= cmd->param.data_len;
 		iov[2].buf = "\r\n";
 		iov[2].len = 2;
 		iov[2].takeOwn = KeepOwn;
@@ -1317,6 +1322,7 @@ imap_socket_read( void *aux )
 				iov[0].len = cmdp->param.data_len;
 				iov[0].takeOwn = GiveOwn;
 				cmdp->param.data = 0;
+				ctx->buffer_mem -= cmdp->param.data_len;
 				iov[1].buf = "\r\n";
 				iov[1].len = 2;
 				iov[1].takeOwn = KeepOwn;
@@ -2507,6 +2513,7 @@ imap_store_msg( store_t *gctx, msg_data_t *data, int to_trash,
 	flagstr[d] = 0;
 
 	INIT_IMAP_CMD(imap_cmd_out_uid, cmd, cb, aux)
+	ctx->buffer_mem += data->len;
 	cmd->gen.param.data_len = data->len;
 	cmd->gen.param.data = data->data;
 	cmd->out_uid = -2;
@@ -2619,6 +2626,16 @@ static void
 imap_commit_cmds( store_t *gctx )
 {
 	(void)gctx;
+}
+
+/******************* imap_memory_usage *******************/
+
+static int
+imap_memory_usage( store_t *gctx )
+{
+	imap_store_t *ctx = (imap_store_t *)gctx;
+
+	return ctx->buffer_mem + ctx->conn.buffer_mem;
 }
 
 /******************* imap_parse_store *******************/
@@ -2899,4 +2916,5 @@ struct driver imap_driver = {
 	imap_close_box,
 	imap_cancel_cmds,
 	imap_commit_cmds,
+	imap_memory_usage,
 };

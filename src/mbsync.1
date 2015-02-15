@@ -583,6 +583,14 @@ This option is meaningless for \fBSyncState\fR if the latter is \fB*\fR,
 obviously. However, it also determines the default of \fBInfoDelimiter\fR.
 (Global default: \fI;\fR on Windows, \fI:\fR everywhere else)
 ..
+.TP
+\fBBufferLimit\fR \fIsize\fR[\fBk\fR|\fBm\fR][\fBb\fR]
+The per-Channel, per-direction instantaneous memory usage above which
+\fBmbsync\fR will refrain from using more memory. Note that this is no
+absolute limit, as even a single message can consume more memory than
+this.
+(Default: \fI10M\fR)
+..
 .SH RECOMMENDATIONS
 Make sure your IMAP server does not auto-expunge deleted messages - it is
 slow, and semantically somewhat questionable. Specifically, Gmail needs to

@@ -43,6 +43,8 @@ int Pid;		/* for maildir and imap */
 char Hostname[256];	/* for maildir */
 const char *Home;	/* for config */
 
+int BufferLimit = 10 * 1024 * 1024;
+
 static void
 version( void )
 {

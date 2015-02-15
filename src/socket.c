@@ -737,6 +737,7 @@ dispose_chunk( conn_t *conn )
 	buff_chunk_t *bc = conn->write_buf;
 	if (!(conn->write_buf = bc->next))
 		conn->write_buf_append = &conn->write_buf;
+	conn->buffer_mem -= bc->len;
 	free( bc );
 }
 
@@ -770,6 +771,7 @@ static void
 do_append( conn_t *conn, buff_chunk_t *bc )
 {
 	bc->next = 0;
+	conn->buffer_mem += bc->len;
 	*conn->write_buf_append = bc;
 	conn->write_buf_append = &bc->next;
 }

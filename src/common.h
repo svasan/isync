@@ -76,6 +76,8 @@ extern int Pid;
 extern char Hostname[256];
 extern const char *Home;
 
+extern int BufferLimit;
+
 /* util.c */
 
 void ATTR_PRINTFLIKE(1, 2) debug( const char *, ... );
