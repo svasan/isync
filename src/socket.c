@@ -76,6 +76,7 @@ ssl_return( const char *func, conn_t *conn, int ret )
 	case SSL_ERROR_SSL:
 		if (!(err = ERR_get_error())) {
 			if (ret == 0) {
+	case SSL_ERROR_ZERO_RETURN:
 				/* Callers take the short path out, so signal higher layers from here. */
 				conn->state = SCK_EOF;
 				conn->read_callback( conn->callback_aux );
