@@ -812,7 +812,7 @@ socket_write( conn_t *conn, conn_iovec_t *iov, int iovcnt )
 
 	for (i = 0; i < iovcnt; i++)
 		total += iov[i].len;
-	if (total >= WRITE_CHUNK_SIZE) {
+	if (total >= WRITE_CHUNK_SIZE && pending_wakeup( &conn->fd_fake )) {
 		/* If the new data is too big, queue the pending buffer to avoid latency. */
 		do_flush( conn );
 	}
