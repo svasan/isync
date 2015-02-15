@@ -236,8 +236,13 @@ getopt_helper( conffile_t *cfile, int *cops, channel_conf_t *conf )
 int
 getcline( conffile_t *cfile )
 {
+	char *arg;
 	int comment;
 
+	if (cfile->rest && (arg = get_arg( cfile, ARG_OPTIONAL, 0 ))) {
+		error( "%s:%d: excess token '%s'\n", cfile->file, cfile->line, arg );
+		cfile->err = 1;
+	}
 	while (fgets( cfile->buf, cfile->bufl, cfile->fp )) {
 		cfile->line++;
 		cfile->rest = cfile->buf;
@@ -337,6 +342,7 @@ load_config( const char *where, int pseudo )
 	cfile.bufl = sizeof(buf) - 1;
 	cfile.line = 0;
 	cfile.err = 0;
+	cfile.rest = 0;
 
 	gcops = 0;
 	global_conf.expire_unread = -1;
