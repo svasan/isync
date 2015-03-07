@@ -1527,6 +1527,7 @@ static void imap_open_store_authenticate2_p2( imap_store_t *, struct imap_cmd *,
 static void imap_open_store_namespace( imap_store_t * );
 static void imap_open_store_namespace_p2( imap_store_t *, struct imap_cmd *, int );
 static void imap_open_store_namespace2( imap_store_t * );
+static void imap_open_store_compress( imap_store_t * );
 #ifdef HAVE_LIBZ
 static void imap_open_store_compress_p2( imap_store_t *, struct imap_cmd *, int );
 #endif
@@ -2055,7 +2056,7 @@ imap_open_store_namespace( imap_store_t *ctx )
 			imap_open_store_namespace2( ctx );
 		return;
 	}
-	imap_open_store_finalize( ctx );
+	imap_open_store_compress( ctx );
 }
 
 static void
@@ -2085,16 +2086,22 @@ imap_open_store_namespace2( imap_store_t *ctx )
 			ctx->prefix = nsp_1st_ns->val;
 		if (!ctx->delimiter)
 			ctx->delimiter = nfstrdup( nsp_1st_dl->val );
-#ifdef HAVE_LIBZ
-		if (CAP(COMPRESS_DEFLATE)) { /* XXX make that configurable */
-			imap_exec( ctx, 0, imap_open_store_compress_p2, "COMPRESS DEFLATE" );
-			return;
-		}
-#endif
-		imap_open_store_finalize( ctx );
+		imap_open_store_compress( ctx );
 	} else {
 		imap_open_store_bail( ctx, FAIL_FINAL );
 	}
+}
+
+static void
+imap_open_store_compress( imap_store_t *ctx )
+{
+#ifdef HAVE_LIBZ
+	if (CAP(COMPRESS_DEFLATE)) { /* XXX make that configurable */
+		imap_exec( ctx, 0, imap_open_store_compress_p2, "COMPRESS DEFLATE" );
+		return;
+	}
+#endif
+	imap_open_store_finalize( ctx );
 }
 
 #ifdef HAVE_LIBZ
