@@ -2018,7 +2018,6 @@ imap_open_store_authenticate2( imap_store_t *ctx )
 	if (auth_login) {
 		if (!ensure_user( srvc ) || !ensure_password( srvc ))
 			goto bail;
-		info( "Logging in...\n" );
 #ifdef HAVE_LIBSSL
 		if (!ctx->conn.ssl)
 #endif
