@@ -1149,14 +1149,16 @@ parse_list_rsp_p2( imap_store_t *ctx, list_t *list, char *cmd ATTR_UNUSED )
 	}
 	arg = list->val;
 	argl = list->len;
-	if (!is_inbox( ctx, arg, argl ) && (l = strlen( ctx->prefix ))) {
-		if (!starts_with( arg, argl, ctx->prefix, l ))
-			goto skip;
-		arg += l;
-		argl -= l;
-		if (is_inbox( ctx, arg, argl )) {
-			if (!arg[5])
-				warn( "IMAP warning: ignoring INBOX in %s\n", ctx->prefix );
+	if ((l = strlen( ctx->prefix ))) {
+		if (starts_with( arg, argl, ctx->prefix, l )) {
+			arg += l;
+			argl -= l;
+			if (is_inbox( ctx, arg, argl )) {
+				if (!arg[5])
+					warn( "IMAP warning: ignoring INBOX in %s\n", ctx->prefix );
+				goto skip;
+			}
+		} else if (!is_inbox( ctx, arg, argl )) {
 			goto skip;
 		}
 	}
