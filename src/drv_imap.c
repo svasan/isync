@@ -289,10 +289,12 @@ send_imap_cmd( imap_store_t *ctx, struct imap_cmd *cmd )
 	if (DFlags & VERBOSE) {
 		if (ctx->num_in_progress)
 			printf( "(%d in progress) ", ctx->num_in_progress );
-		if (!starts_with( cmd->cmd, -1, "LOGIN", 5 ))
-			printf( "%s>>> %s", ctx->label, buf );
-		else
+		if (starts_with( cmd->cmd, -1, "LOGIN", 5 ))
 			printf( "%s>>> %d LOGIN <user> <pass>\n", ctx->label, cmd->tag );
+		else if (starts_with( cmd->cmd, -1, "AUTHENTICATE PLAIN", 18 ))
+			printf( "%s>>> %d AUTHENTICATE PLAIN <authdata>\n", ctx->label, cmd->tag );
+		else
+			printf( "%s>>> %s", ctx->label, buf );
 		fflush( stdout );
 	}
 	iov[0].buf = buf;
