@@ -286,7 +286,7 @@ send_imap_cmd( imap_store_t *ctx, struct imap_cmd *cmd )
 	}
 	bufl = nfsnprintf( buf, sizeof(buf), buffmt,
 	                   cmd->tag, cmd->cmd, cmd->param.data_len );
-	if (DFlags & VERBOSE) {
+	if (DFlags & DEBUG_NET) {
 		if (ctx->num_in_progress)
 			printf( "(%d in progress) ", ctx->num_in_progress );
 		if (starts_with( cmd->cmd, -1, "LOGIN", 5 ))
@@ -743,7 +743,7 @@ parse_imap_list( imap_store_t *ctx, char **sp, parse_list_state_t *sts )
 			if (bytes > 0)
 				goto postpone;
 
-			if (DFlags & XVERBOSE) {
+			if (DFlags & DEBUG_NET_ALL) {
 				printf( "%s=========\n", ctx->label );
 				fwrite( cur->val, cur->len, 1, stdout );
 				printf( "%s=========\n", ctx->label );
@@ -755,7 +755,7 @@ parse_imap_list( imap_store_t *ctx, char **sp, parse_list_state_t *sts )
 				goto postpone;
 			if (s == (void *)~0)
 				goto badeof;
-			if (DFlags & VERBOSE) {
+			if (DFlags & DEBUG_NET) {
 				printf( "%s%s\n", ctx->label, s );
 				fflush( stdout );
 			}
@@ -1243,7 +1243,7 @@ imap_socket_read( void *aux )
 			/* A clean shutdown sequence ends with bad_callback as well (see imap_cleanup()). */
 			break;
 		}
-		if (DFlags & VERBOSE) {
+		if (DFlags & DEBUG_NET) {
 			printf( "%s%s\n", ctx->label, cmd );
 			fflush( stdout );
 		}
@@ -1895,12 +1895,12 @@ do_sasl_auth( imap_store_t *ctx, struct imap_cmd *cmdp ATTR_UNUSED, const char *
 		iov[0].takeOwn = GiveOwn;
 		iovcnt = 1;
 
-		if (DFlags & VERBOSE) {
+		if (DFlags & DEBUG_NET) {
 			printf( "%s>+> %s\n", ctx->label, enc );
 			fflush( stdout );
 		}
 	} else {
-		if (DFlags & VERBOSE) {
+		if (DFlags & DEBUG_NET) {
 			printf( "%s>+>\n", ctx->label );
 			fflush( stdout );
 		}

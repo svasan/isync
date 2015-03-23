@@ -5,6 +5,9 @@ The 'isync' compatibility wrapper is now deprecated.
 An IMAP Path/NAMESPACE rooted in INBOX won't be handled specially any more.
 This means that some Patterns may need adjustment.
 
+The default output is a lot less verbose now.
+The meanings of the -V and -D options changed significantly.
+
 The SSL/TLS configuration has been re-designed.
 SSL is now explicitly enabled or disabled - "use SSL if available" is gone.
 Notice: Tunnels are assumed to be secure and thus default to no SSL.

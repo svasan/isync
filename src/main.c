@@ -79,9 +79,9 @@ PACKAGE " " VERSION " - mailbox synchronizer\n"
 "  -C, --create		create mailboxes if nonexistent\n"
 "  -X, --expunge		expunge	deleted messages\n"
 "  -c, --config CONFIG	read an alternate config file (default: ~/." EXE "rc)\n"
-"  -D, --debug		print debugging messages\n"
-"  -V, --verbose		verbose mode (display network traffic)\n"
-"  -q, --quiet		don't display progress info\n"
+"  -D, --debug		debugging modes (see manual)\n"
+"  -V, --verbose		display what is happening\n"
+"  -q, --quiet		don't display progress counters\n"
 "  -v, --version		display version\n"
 "  -h, --help		display this help message\n"
 "\nIf neither --pull nor --push are specified, both are active.\n"
@@ -137,7 +137,7 @@ stats( void )
 	int t, l, ll, cls;
 	static int cols = -1;
 
-	if (DFlags & QUIET)
+	if (!(DFlags & PROGRESS))
 		return;
 
 	if (cols < 0 && (!(cs = getenv( "COLUMNS" )) || !(cols = atoi( cs ))))
@@ -152,7 +152,7 @@ stats( void )
 		if (l > cls)
 			buf[t][cls - 1] = '~';
 	}
-	infon( "\v\r%s  M: %.*s  S: %.*s", buf[2], cls, buf[0], cls, buf[1] );
+	progress( "\r%s  M: %.*s  S: %.*s", buf[2], cls, buf[0], cls, buf[1] );
 }
 
 static int
@@ -424,13 +424,25 @@ main( int argc, char **argv )
 					else
 						DFlags |= QUIET;
 				} else if (!strcmp( opt, "verbose" )) {
-					if (DFlags & VERBOSE)
-						DFlags |= XVERBOSE;
+					DFlags |= VERBOSE;
+				} else if (starts_with( opt, -1, "debug", 5 )) {
+					opt += 5;
+					if (!*opt)
+						op = VERBOSE | DEBUG_ALL;
+					else if (!strcmp( opt, "-crash" ))
+						op = DEBUG_CRASH;
+					else if (!strcmp( opt, "-maildir" ))
+						op = VERBOSE | DEBUG_MAILDIR;
+					else if (!strcmp( opt, "-net" ))
+						op = VERBOSE | DEBUG_NET;
+					else if (!strcmp( opt, "-net-all" ))
+						op = VERBOSE | DEBUG_NET_ALL;
+					else if (!strcmp( opt, "-sync" ))
+						op = VERBOSE | DEBUG_SYNC;
 					else
-						DFlags |= VERBOSE | QUIET;
-				} else if (!strcmp( opt, "debug" ))
-					DFlags |= DEBUG | QUIET;
-				else if (!strcmp( opt, "pull" ))
+						goto badopt;
+					DFlags |= op;
+				} else if (!strcmp( opt, "pull" ))
 					cops |= XOP_PULL, ops[M] |= XOP_HAVE_TYPE;
 				else if (!strcmp( opt, "push" ))
 					cops |= XOP_PUSH, ops[M] |= XOP_HAVE_TYPE;
@@ -595,16 +607,34 @@ main( int argc, char **argv )
 				DFlags |= QUIET;
 			break;
 		case 'V':
-			if (DFlags & VERBOSE)
-				DFlags |= XVERBOSE;
-			else
-				DFlags |= VERBOSE | QUIET;
+			DFlags |= VERBOSE;
 			break;
 		case 'D':
-			if (*ochar == 'C')
-				DFlags |= CRASHDEBUG, ochar++;
-			else
-				DFlags |= CRASHDEBUG | DEBUG | QUIET;
+			for (op = 0; *ochar; ochar++) {
+				switch (*ochar) {
+				case 'C':
+					op |= DEBUG_CRASH;
+					break;
+				case 'm':
+					op |= DEBUG_MAILDIR | VERBOSE;
+					break;
+				case 'n':
+					op |= DEBUG_NET | VERBOSE;
+					break;
+				case 'N':
+					op |= DEBUG_NET_ALL | VERBOSE;
+					break;
+				case 's':
+					op |= DEBUG_SYNC | VERBOSE;
+					break;
+				default:
+					error( "Unknown -D flag '%c'\n", *ochar );
+					return 1;
+				}
+			}
+			if (!op)
+				op = DEBUG_ALL | VERBOSE;
+			DFlags |= op;
 			break;
 		case 'J':
 			DFlags |= KEEPJOURNAL;
@@ -622,8 +652,11 @@ main( int argc, char **argv )
 		}
 	}
 
+	if (!(DFlags & (QUIET | DEBUG_ALL)) && isatty( 1 ))
+		DFlags |= PROGRESS;
+
 #ifdef __linux__
-	if (DFlags & CRASHDEBUG) {
+	if (DFlags & DEBUG_CRASH) {
 		signal( SIGSEGV, crashHandler );
 		signal( SIGBUS, crashHandler );
 		signal( SIGILL, crashHandler );

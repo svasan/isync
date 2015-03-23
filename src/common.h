@@ -59,14 +59,18 @@ typedef unsigned int uint;
 
 /* main.c */
 
-#define DEBUG        1
-#define VERBOSE      2
-#define XVERBOSE     4
-#define QUIET        8
-#define VERYQUIET    16
-#define KEEPJOURNAL  32
-#define ZERODELAY    64
-#define CRASHDEBUG   128
+#define DEBUG_CRASH     0x01
+#define DEBUG_MAILDIR   0x02
+#define DEBUG_NET       0x04
+#define DEBUG_NET_ALL   0x08
+#define DEBUG_SYNC      0x10
+#define DEBUG_ALL       (0xFF & ~DEBUG_NET_ALL)
+#define QUIET           0x100
+#define VERYQUIET       0x200
+#define PROGRESS        0x400
+#define VERBOSE         0x800
+#define KEEPJOURNAL     0x1000
+#define ZERODELAY       0x2000
 
 extern int DFlags;
 extern int UseFSync;
@@ -86,10 +90,12 @@ void stats( void );
 
 /* util.c */
 
-void ATTR_PRINTFLIKE(1, 2) debug( const char *, ... );
-void ATTR_PRINTFLIKE(1, 2) debugn( const char *, ... );
+void vdebug( int, const char *, va_list va );
+void vdebugn( int, const char *, va_list va );
 void ATTR_PRINTFLIKE(1, 2) info( const char *, ... );
 void ATTR_PRINTFLIKE(1, 2) infon( const char *, ... );
+void ATTR_PRINTFLIKE(1, 2) progress( const char *, ... );
+void ATTR_PRINTFLIKE(1, 2) notice( const char *, ... );
 void ATTR_PRINTFLIKE(1, 2) warn( const char *, ... );
 void ATTR_PRINTFLIKE(1, 2) error( const char *, ... );
 void ATTR_PRINTFLIKE(1, 2) sys_error( const char *, ... );

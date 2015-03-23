@@ -1,7 +1,7 @@
 .ig
 \" mbsync - mailbox synchronizer
 \" Copyright (C) 2000-2002 Michael R. Elkins <me@mutt.org>
-\" Copyright (C) 2002-2004,2011-2013 Oswald Buddenhagen <ossi@users.sf.net>
+\" Copyright (C) 2002-2004,2011-2015 Oswald Buddenhagen <ossi@users.sf.net>
 \" Copyright (C) 2004 Theodore Y. Ts'o <tytso@mit.edu>
 \"
 \"  This program is free software; you can redistribute it and/or modify
@@ -20,7 +20,7 @@
 \" As a special exception, mbsync may be linked with the OpenSSL library,
 \" despite that library's more restrictive license.
 ..
-.TH mbsync 1 "2013 Dec 14"
+.TH mbsync 1 "2015 Mar 22"
 ..
 .SH NAME
 mbsync - synchronize IMAP4 and Maildir mailboxes
@@ -78,13 +78,28 @@ Display a summary of command line options.
 Display version information.
 .TP
 \fB-V\fR, \fB--verbose\fR
-Enable \fIverbose\fR mode, which displays the IMAP4 network traffic.
+Enable \fIverbose\fR mode, which displays what is currently happening.
 .TP
-\fB-D\fR, \fB--debug\fR
-Enable printing \fIdebug\fR information.
+\fB-D\fR[\fBC\fR][\fBm\fR][\fBn\fR|\fBN\fR][\fBs\fR]\fR]\fR,\
+ \fB--debug\fR[\fB-crash\fR|\fB-maildir\fR|\fB-net\fR|\fB-net-all\fR|\fB-sync\fR]
+Enable debugging categories:
+.in +4
+\fBC\fR, \fBcrash\fR - use built-in crash handler
+.br
+\fBm\fR, \fBmaildir\fR - print maildir debug info
+.br
+\fBn\fR, \fBnet\fR - print network traffic (protocol only)
+.br
+\fBN\fR, \fBnet-all\fR - print network traffic (including payloads)
+.br
+\fBs\fR, \fBsync\fR - print synchronization debug info
+.in -4
+All categories except \fBcrash\fR implictly enable \fIverbose\fR mode.
+Without category specification, all categories except net-all are enabled.
 .TP
 \fB-q\fR, \fB--quiet\fR
-Suppress informational messages.
+Suppress progress counters (this is implicit if stdout is no TTY,
+or any debugging categories are enabled) and notices.
 If specified twice, suppress warning messages as well.
 ..
 .SH CONFIGURATION

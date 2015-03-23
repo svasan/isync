@@ -53,31 +53,35 @@ printn( const char *msg, va_list va )
 }
 
 void
-debug( const char *msg, ... )
+vdebug( int cat, const char *msg, va_list va )
 {
-	va_list va;
-
-	if (DFlags & DEBUG) {
-		va_start( va, msg );
+	if (DFlags & cat) {
 		vprintf( msg, va );
-		va_end( va );
 		fflush( stdout );
 		need_nl = 0;
 	}
 }
 
 void
-debugn( const char *msg, ... )
+vdebugn( int cat, const char *msg, va_list va )
 {
-	va_list va;
-
-	if (DFlags & DEBUG) {
-		va_start( va, msg );
+	if (DFlags & cat) {
 		vprintf( msg, va );
-		va_end( va );
 		fflush( stdout );
 		need_nl = 1;
 	}
+}
+
+void
+progress( const char *msg, ... )
+{
+	va_list va;
+
+	va_start( va, msg );
+	vprintf( msg, va );
+	va_end( va );
+	fflush( stdout );
+	need_nl = 1;
 }
 
 void
@@ -85,7 +89,7 @@ info( const char *msg, ... )
 {
 	va_list va;
 
-	if (!(DFlags & QUIET)) {
+	if (DFlags & VERBOSE) {
 		va_start( va, msg );
 		printn( msg, va );
 		va_end( va );
@@ -98,11 +102,24 @@ infon( const char *msg, ... )
 {
 	va_list va;
 
-	if (!(DFlags & QUIET)) {
+	if (DFlags & VERBOSE) {
 		va_start( va, msg );
 		printn( msg, va );
 		va_end( va );
 		need_nl = 1;
+	}
+}
+
+void
+notice( const char *msg, ... )
+{
+	va_list va;
+
+	if (!(DFlags & QUIET)) {
+		va_start( va, msg );
+		printn( msg, va );
+		va_end( va );
+		need_nl = 0;
 	}
 }
 

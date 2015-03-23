@@ -85,6 +85,16 @@ static struct flock lck;
 
 static int MaildirCount;
 
+static void ATTR_PRINTFLIKE(1, 2)
+debug( const char *msg, ... )
+{
+	va_list va;
+
+	va_start( va, msg );
+	vdebug( DEBUG_SYNC, msg, va );
+	va_end( va );
+}
+
 static const char Flags[] = { 'D', 'F', 'R', 'S', 'T' };
 
 static uchar
@@ -371,7 +381,7 @@ maildir_clear_tmp( char *buf, int bufsz, int bl )
 			/* This should happen infrequently enough that it won't be
 			 * bothersome to the user to display when it occurs.
 			 */
-			info( "Maildir notice: removing stale file %s\n", buf );
+			notice( "Maildir notice: removing stale file %s\n", buf );
 			if (unlink( buf ) && errno != ENOENT)
 				sys_error( "Maildir error: cannot remove %s", buf );
 		}
@@ -515,7 +525,7 @@ maildir_init_uidval( maildir_store_t *ctx )
 static int
 maildir_init_uidval_new( maildir_store_t *ctx )
 {
-	info( "Maildir notice: no UIDVALIDITY, creating new.\n" );
+	notice( "Maildir notice: no UIDVALIDITY, creating new.\n" );
 	return maildir_init_uidval( ctx );
 }
 
@@ -768,7 +778,7 @@ maildir_scan( maildir_store_t *ctx, msglist_t *msglist )
 				 * tell if there were further modifications during this second. So wait.
 				 * This has the nice side effect that we wait for "batches" of changes to
 				 * complete. On the downside, it can potentially block indefinitely. */
-				info( "Maildir notice: sleeping due to recent directory modification.\n" );
+				notice( "Maildir notice: sleeping due to recent directory modification.\n" );
 				sleep( 1 ); /* FIXME: should make this async */
 				goto restat;
 			}
@@ -900,7 +910,7 @@ maildir_scan( maildir_store_t *ctx, msglist_t *msglist )
 					maildir_free_scan( msglist );
 					return DRV_BOX_BAD;
 #else
-					info( "Maildir notice: duplicate UID; changing UIDVALIDITY.\n");
+					notice( "Maildir notice: duplicate UID; changing UIDVALIDITY.\n");
 					if ((ret = maildir_init_uid( ctx )) != DRV_OK) {
 						maildir_free_scan( msglist );
 						return ret;

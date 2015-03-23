@@ -45,6 +45,26 @@ group_conf_t *groups;
 
 const char *str_ms[] = { "master", "slave" }, *str_hl[] = { "push", "pull" };
 
+static void ATTR_PRINTFLIKE(1, 2)
+debug( const char *msg, ... )
+{
+	va_list va;
+
+	va_start( va, msg );
+	vdebug( DEBUG_SYNC, msg, va );
+	va_end( va );
+}
+
+static void ATTR_PRINTFLIKE(1, 2)
+debugn( const char *msg, ... )
+{
+	va_list va;
+
+	va_start( va, msg );
+	vdebugn( DEBUG_SYNC, msg, va );
+	va_end( va );
+}
+
 void
 Fclose( FILE *f, int safe )
 {
@@ -1347,7 +1367,7 @@ box_loaded( int sts, void *aux )
 		if (tmsg->srec) /* found by TUID */
 			continue;
 		uid = tmsg->uid;
-		if (DFlags & DEBUG) {
+		if (DFlags & DEBUG_SYNC) {
 			make_flags( tmsg->flags, fbuf );
 			printf( svars->ctx[t]->opts & OPEN_SIZE ? "  message %5d, %-4s, %6lu: " : "  message %5d, %-4s: ", uid, fbuf, tmsg->size );
 		}
@@ -1413,7 +1433,7 @@ box_loaded( int sts, void *aux )
 						srec->uid[S] = 0;
 					} else {
 						if (srec->msg[t] && (srec->msg[t]->status & M_FLAGS) && srec->msg[t]->flags != srec->flags)
-							info( "Info: conflicting changes in (%d,%d)\n", srec->uid[M], srec->uid[S] );
+							notice( "Notice: conflicting changes in (%d,%d)\n", srec->uid[M], srec->uid[S] );
 						if (svars->chan->ops[t] & OP_DELETE) {
 							debug( "  %sing delete\n", str_hl[t] );
 							srec->aflags[t] = F_DELETED;
@@ -1439,7 +1459,7 @@ box_loaded( int sts, void *aux )
 						}
 						srec->aflags[t] = sflags & ~srec->flags;
 						srec->dflags[t] = ~sflags & srec->flags;
-						if (DFlags & DEBUG) {
+						if (DFlags & DEBUG_SYNC) {
 							char afbuf[16], dfbuf[16]; /* enlarge when support for keywords is added */
 							make_flags( srec->aflags[t], afbuf );
 							make_flags( srec->dflags[t], dfbuf );
