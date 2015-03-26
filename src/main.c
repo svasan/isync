@@ -691,11 +691,11 @@ sync_chans( main_vars_t *mvars, int ent )
 				} else if (cmp < 0) {
 					mbox->name = boxes[M][mb];
 					mbox->present[M] = BOX_PRESENT;
-					mbox->present[S] = BOX_ABSENT;
+					mbox->present[S] = (!mb && !strcmp( mbox->name, "INBOX" )) ? BOX_PRESENT : BOX_ABSENT;
 					mb++;
 				} else {
 					mbox->name = boxes[S][sb];
-					mbox->present[M] = BOX_ABSENT;
+					mbox->present[M] = (!sb && !strcmp( mbox->name, "INBOX" )) ? BOX_PRESENT : BOX_ABSENT;
 					mbox->present[S] = BOX_PRESENT;
 					sb++;
 				}
