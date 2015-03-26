@@ -68,7 +68,7 @@ typedef struct maildir_message {
 
 typedef struct maildir_store {
 	store_t gen;
-	int uvfd, uvok, nuid, fresh[3];
+	int uvfd, uvok, nuid, is_inbox, fresh[3];
 	int minuid, maxuid, newuid, nexcs, *excs;
 	char *trash;
 #ifdef USE_DB
@@ -1039,12 +1039,14 @@ maildir_select_box( store_t *gctx, const char *name )
 	ctx->fresh[0] = ctx->fresh[1] = 0;
 	if (starts_with( name, -1, "INBOX", 5 ) && (!name[5] || name[5] == '/')) {
 		gctx->path = maildir_join_path( ((maildir_store_conf_t *)gctx->conf)->inbox, name + 5 );
+		ctx->is_inbox = !name[5];
 	} else {
 		if (maildir_validate_path( gctx->conf ) < 0) {
 			gctx->path = 0;
 			return DRV_CANCELED;
 		}
 		gctx->path = maildir_join_path( gctx->conf->path, name );
+		ctx->is_inbox = 0;
 	}
 	return DRV_OK;
 }
@@ -1057,7 +1059,7 @@ maildir_open_box( store_t *gctx,
 	int ret;
 	char uvpath[_POSIX_PATH_MAX];
 
-	if ((ret = maildir_validate( gctx->path, 0, ctx )) != DRV_OK)
+	if ((ret = maildir_validate( gctx->path, ctx->is_inbox, ctx )) != DRV_OK)
 		goto bail;
 
 	nfsnprintf( uvpath, sizeof(uvpath), "%s/.uidvalidity", gctx->path );
