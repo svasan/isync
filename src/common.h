@@ -112,6 +112,7 @@ time_t timegm( struct tm *tm );
 void *nfmalloc( size_t sz );
 void *nfcalloc( size_t sz );
 void *nfrealloc( void *mem, size_t sz );
+char *nfstrndup( const char *str, size_t nchars );
 char *nfstrdup( const char *str );
 int nfvasprintf( char **str, const char *fmt, va_list va );
 int ATTR_PRINTFLIKE(2, 3) nfasprintf( char **str, const char *fmt, ... );

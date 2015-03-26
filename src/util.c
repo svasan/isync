@@ -355,13 +355,18 @@ nfrealloc( void *mem, size_t sz )
 }
 
 char *
+nfstrndup( const char *str, size_t nchars )
+{
+	char *ret = nfmalloc( nchars + 1 );
+	memcpy( ret, str, nchars );
+	ret[nchars] = 0;
+	return ret;
+}
+
+char *
 nfstrdup( const char *str )
 {
-	char *ret;
-
-	if (!(ret = strdup( str )))
-		oom();
-	return ret;
+	return nfstrndup( str, strlen( str ) );
 }
 
 int
@@ -405,15 +410,6 @@ cur_user( void )
 }
 */
 
-static char *
-my_strndup( const char *s, size_t nchars )
-{
-	char *r = nfmalloc( nchars + 1 );
-	memcpy( r, s, nchars );
-	r[nchars] = 0;
-	return r;
-}
-
 char *
 expand_strdup( const char *s )
 {
@@ -431,7 +427,7 @@ expand_strdup( const char *s )
 			q = Home;
 		} else {
 			if ((p = strchr( s, '/' ))) {
-				r = my_strndup( s, (int)(p - s) );
+				r = nfstrndup( s, (int)(p - s) );
 				pw = getpwnam( r );
 				free( r );
 			} else
