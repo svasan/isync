@@ -99,6 +99,16 @@ PACKAGE " " VERSION " - mailbox synchronizer\n"
 	exit( code );
 }
 
+static void ATTR_PRINTFLIKE(1, 2)
+debug( const char *msg, ... )
+{
+	va_list va;
+
+	va_start( va, msg );
+	vdebug( DEBUG_MAIN, msg, va );
+	va_end( va );
+}
+
 #ifdef __linux__
 static void
 crashHandler( int n )
@@ -433,6 +443,8 @@ main( int argc, char **argv )
 						op = DEBUG_CRASH;
 					else if (!strcmp( opt, "-maildir" ))
 						op = VERBOSE | DEBUG_MAILDIR;
+					else if (!strcmp( opt, "-main" ))
+						op = VERBOSE | DEBUG_MAIN;
 					else if (!strcmp( opt, "-net" ))
 						op = VERBOSE | DEBUG_NET;
 					else if (!strcmp( opt, "-net-all" ))
@@ -617,6 +629,9 @@ main( int argc, char **argv )
 					break;
 				case 'm':
 					op |= DEBUG_MAILDIR | VERBOSE;
+					break;
+				case 'M':
+					op |= DEBUG_MAIN | VERBOSE;
 					break;
 				case 'n':
 					op |= DEBUG_NET | VERBOSE;
@@ -918,6 +933,8 @@ store_opened( store_t *ctx, void *aux )
 				} else {
 					flags |= LIST_PATH;
 				}
+				debug( "pattern '%s' (effective '%s'): %sPath, %sINBOX\n",
+				       pat, buf, (flags & LIST_PATH) ? "" : "no ",  (flags & LIST_INBOX) ? "" : "no ");
 			}
 		}
 		set_bad_callback( ctx, store_bad, AUX );
@@ -932,13 +949,18 @@ static void
 store_listed( int sts, void *aux )
 {
 	MVARS(aux)
-	string_list_t **box;
+	string_list_t **box, *bx;
 
 	switch (sts) {
 	case DRV_CANCELED:
 		return;
 	case DRV_OK:
 		mvars->ctx[t]->listed = 1;
+		if (DFlags & DEBUG_MAIN) {
+			debug( "got mailbox list from %s:\n", str_ms[t] );
+			for (bx = mvars->ctx[t]->boxes; bx; bx = bx->next)
+				debug( "  %s\n", bx->string );
+		}
 		if (mvars->ctx[t]->conf->flat_delim) {
 			for (box = &mvars->ctx[t]->boxes; *box; box = &(*box)->next) {
 				string_list_t *nbox;
@@ -952,8 +974,10 @@ store_listed( int sts, void *aux )
 				}
 			}
 		}
-		if (mvars->ctx[t]->conf->map_inbox)
+		if (mvars->ctx[t]->conf->map_inbox) {
+			debug( "adding mapped inbox to %s: %s\n", str_ms[t], mvars->ctx[t]->conf->map_inbox );
 			add_string_list( &mvars->ctx[t]->boxes, mvars->ctx[t]->conf->map_inbox );
+		}
 		break;
 	default:
 		mvars->ret = mvars->skip = 1;
