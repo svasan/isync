@@ -1312,9 +1312,10 @@ imap_socket_read( void *aux )
 			error( "IMAP error: unexpected reply: %s %s\n", arg, cmd ? cmd : "" );
 			break; /* this may mean anything, so prefer not to spam the log */
 		} else if (*arg == '+') {
-			/* This can happen only with the last command underway, as
-			   it enforces a round-trip. */
-			cmdp = ctx->in_progress;
+			/* There can be any number of commands in flight, but only the last
+			 * one can require a continuation, as it enforces a round-trip. */
+			cmdp = (struct imap_cmd *)((char *)ctx->in_progress_append -
+			                           offsetof(struct imap_cmd, next));
 			if (cmdp->param.data) {
 				if (cmdp->param.to_trash)
 					ctx->trashnc = TrashKnown; /* Can't get NO [TRYCREATE] any more. */

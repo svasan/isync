@@ -750,7 +750,7 @@ store_opened( store_t *ctx, void *aux )
 			const char *pat = cpat->string;
 			if (*pat != '!') {
 				char buf[8];
-				int bufl = snprintf( buf, sizeof(buf), "%s%s", mvars->chan->boxes[t], pat );
+				int bufl = snprintf( buf, sizeof(buf), "%s%s", nz( mvars->chan->boxes[t], "" ), pat );
 				/* Partial matches like "INB*" or even "*" are not considered,
 				 * except implicity when the INBOX lives under Path. */
 				if (starts_with( buf, bufl, "INBOX", 5 )) {
