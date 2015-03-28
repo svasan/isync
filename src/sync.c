@@ -156,9 +156,7 @@ typedef struct {
 	const char *orig_name[2];
 	message_t *new_msgs[2];
 	int state[2], ref_count, nsrecs, ret, lfd, existing, replayed;
-	int new_total[2], new_done[2];
-	int flags_total[2], flags_done[2];
-	int trash_total[2], trash_done[2];
+	int new_pending[2], flags_pending[2], trash_pending[2];
 	int maxuid[2]; /* highest UID that was already propagated */
 	int newmaxuid[2]; /* highest UID that is currently being propagated */
 	int uidval[2]; /* UID validity value */
@@ -442,30 +440,6 @@ msg_stored( int sts, int uid, void *aux )
 	default:
 		vars->cb( SYNC_FAIL, 0, vars );
 		break;
-	}
-}
-
-
-static void
-stats( sync_vars_t *svars )
-{
-	char buf[2][64];
-	char *cs;
-	int t, l;
-	static int cols = -1;
-
-	if (cols < 0 && (!(cs = getenv( "COLUMNS" )) || !(cols = atoi( cs ) / 2)))
-		cols = 36;
-	if (!(DFlags & QUIET)) {
-		for (t = 0; t < 2; t++) {
-			l = sprintf( buf[t], "+%d/%d *%d/%d #%d/%d",
-			             svars->new_done[t], svars->new_total[t],
-			             svars->flags_done[t], svars->flags_total[t],
-			             svars->trash_done[t], svars->trash_total[t] );
-			if (l > cols)
-				buf[t][cols - 1] = '~';
-		}
-		infon( "\v\rM: %.*s  S: %.*s", cols, buf[0], cols, buf[1] );
 	}
 }
 
@@ -1697,8 +1671,9 @@ box_loaded( int sts, void *aux )
 				dflags &= srec->msg[t]->flags;
 			}
 			if (aflags | dflags) {
-				svars->flags_total[t]++;
-				stats( svars );
+				flags_total[t]++;
+				stats();
+				svars->flags_pending[t]++;
 				fv = nfmalloc( sizeof(*fv) );
 				fv->aux = AUX;
 				fv->srec = srec;
@@ -1756,8 +1731,9 @@ msg_copied( int sts, int uid, copy_vars_t *vars )
 		return;
 	}
 	free( vars );
-	svars->new_done[t]++;
-	stats( svars );
+	new_done[t]++;
+	stats();
+	svars->new_pending[t]--;
 	msgs_copied( svars, t );
 }
 
@@ -1812,8 +1788,9 @@ msgs_copied( sync_vars_t *svars, int t )
 					svars->new_msgs[t] = tmsg;
 					goto out;
 				}
-				svars->new_total[t]++;
-				stats( svars );
+				new_total[t]++;
+				stats();
+				svars->new_pending[t]++;
 				svars->state[t] |= ST_SENDING_NEW;
 				cv = nfmalloc( sizeof(*cv) );
 				cv->cb = msg_copied;
@@ -1829,7 +1806,7 @@ msgs_copied( sync_vars_t *svars, int t )
 		svars->state[t] |= ST_SENT_NEW;
 	}
 
-	if (svars->new_done[t] < svars->new_total[t])
+	if (svars->new_pending[t])
 		goto out;
 
 	Fprintf( svars->jfp, "%c %d\n", ")("[t], svars->maxuid[1-t] );
@@ -1885,8 +1862,9 @@ flags_set( int sts, void *aux )
 		break;
 	}
 	free( vars );
-	svars->flags_done[t]++;
-	stats( svars );
+	flags_done[t]++;
+	stats();
+	svars->flags_pending[t]--;
 	msgs_flags_set( svars, t );
 }
 
@@ -1930,7 +1908,7 @@ msgs_flags_set( sync_vars_t *svars, int t )
 	message_t *tmsg;
 	copy_vars_t *cv;
 
-	if (!(svars->state[t] & ST_SENT_FLAGS) || svars->flags_done[t] < svars->flags_total[t])
+	if (!(svars->state[t] & ST_SENT_FLAGS) || svars->flags_pending[t])
 		return;
 
 	sync_ref( svars );
@@ -1943,8 +1921,9 @@ msgs_flags_set( sync_vars_t *svars, int t )
 				if (svars->ctx[t]->conf->trash) {
 					if (!svars->ctx[t]->conf->trash_only_new || !tmsg->srec || tmsg->srec->uid[1-t] < 0) {
 						debug( "%s: trashing message %d\n", str_ms[t], tmsg->uid );
-						svars->trash_total[t]++;
-						stats( svars );
+						trash_total[t]++;
+						stats();
+						svars->trash_pending[t]++;
 						svars->drv[t]->trash_msg( svars->ctx[t], tmsg, msg_trashed, AUX );
 						if (check_cancel( svars ))
 							goto out;
@@ -1954,8 +1933,9 @@ msgs_flags_set( sync_vars_t *svars, int t )
 					if (!tmsg->srec || tmsg->srec->uid[1-t] < 0) {
 						if (tmsg->size <= svars->ctx[1-t]->conf->max_size) {
 							debug( "%s: remote trashing message %d\n", str_ms[t], tmsg->uid );
-							svars->trash_total[t]++;
-							stats( svars );
+							trash_total[t]++;
+							stats();
+							svars->trash_pending[t]++;
 							cv = nfmalloc( sizeof(*cv) );
 							cv->cb = msg_rtrashed;
 							cv->aux = INV_AUX;
@@ -1988,8 +1968,9 @@ msg_trashed( int sts, void *aux )
 	if (check_ret( sts, aux ))
 		return;
 	INIT_SVARS(aux);
-	svars->trash_done[t]++;
-	stats( svars );
+	trash_done[t]++;
+	stats();
+	svars->trash_pending[t]--;
 	sync_close( svars, t );
 }
 
@@ -2008,8 +1989,9 @@ msg_rtrashed( int sts, int uid ATTR_UNUSED, copy_vars_t *vars )
 	}
 	free( vars );
 	t ^= 1;
-	svars->trash_done[t]++;
-	stats( svars );
+	trash_done[t]++;
+	stats();
+	svars->trash_pending[t]--;
 	sync_close( svars, t );
 }
 
@@ -2019,8 +2001,8 @@ static void box_closed_p2( sync_vars_t *svars, int t );
 static void
 sync_close( sync_vars_t *svars, int t )
 {
-	if ((~svars->state[t] & (ST_FOUND_NEW|ST_SENT_TRASH)) || svars->trash_done[t] < svars->trash_total[t] ||
-	    !(svars->state[1-t] & ST_SENT_NEW) || svars->new_done[1-t] < svars->new_total[1-t])
+	if ((~svars->state[t] & (ST_FOUND_NEW|ST_SENT_TRASH)) || svars->trash_pending[t] ||
+	    !(svars->state[1-t] & ST_SENT_NEW) || svars->new_pending[1-t])
 		return;
 
 	if (svars->state[t] & ST_CLOSING)
@@ -2120,7 +2102,6 @@ sync_bail2( sync_vars_t *svars )
 	free( svars->nname );
 	free( svars->jname );
 	free( svars->dname );
-	flushn();
 	sync_bail3( svars );
 }
 

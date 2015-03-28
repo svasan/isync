@@ -45,6 +45,12 @@ const char *Home;	/* for config */
 
 int BufferLimit = 10 * 1024 * 1024;
 
+int chans_total, chans_done;
+int boxes_total, boxes_done;
+int new_total[2], new_done[2];
+int flags_total[2], flags_done[2];
+int trash_total[2], trash_done[2];
+
 static void
 version( void )
 {
@@ -122,6 +128,32 @@ crashHandler( int n )
 	exit( 3 );
 }
 #endif
+
+void
+stats( void )
+{
+	char buf[3][64];
+	char *cs;
+	int t, l, ll, cls;
+	static int cols = -1;
+
+	if (DFlags & QUIET)
+		return;
+
+	if (cols < 0 && (!(cs = getenv( "COLUMNS" )) || !(cols = atoi( cs ))))
+		cols = 80;
+	ll = sprintf( buf[2], "C: %d/%d  B: %d/%d", chans_done, chans_total, boxes_done, boxes_total );
+	cls = (cols - ll - 10) / 2;
+	for (t = 0; t < 2; t++) {
+		l = sprintf( buf[t], "+%d/%d *%d/%d #%d/%d",
+		             new_done[t], new_total[t],
+		             flags_done[t], flags_total[t],
+		             trash_done[t], trash_total[t] );
+		if (l > cls)
+			buf[t][cls - 1] = '~';
+	}
+	infon( "\v\r%s  M: %.*s  S: %.*s", buf[2], cls, buf[0], cls, buf[1] );
+}
 
 static int
 matches( const char *t, const char *p )
@@ -254,6 +286,7 @@ add_channel( chan_ent_t ***chanapp, channel_conf_t *chan, int ops[] )
 
 	**chanapp = ce;
 	*chanapp = &ce->next;
+	chans_total++;
 	return ce;
 }
 
@@ -297,8 +330,12 @@ add_named_channel( chan_ent_t ***chanapp, char *channame, int ops[] )
 			mbox->next = 0;
 			*mboxapp = mbox;
 			mboxapp = &mbox->next;
+			boxes_total++;
 			boxp = nboxp;
 		} while (boxp);
+	} else {
+		if (!chan->patterns)
+			boxes_total++;
 	}
 
 	ce = add_channel( chanapp, chan, ops );
@@ -315,7 +352,7 @@ typedef struct {
 	chan_ent_t *chanptr;
 	box_ent_t *boxptr;
 	char *names[2];
-	int ret, multiple, all, list, state[2];
+	int ret, all, list, state[2];
 	char done, skip, cben;
 } main_vars_t;
 
@@ -605,8 +642,11 @@ main( int argc, char **argv )
 	}
 
 	if (mvars->all) {
-		for (chan = channels; chan; chan = chan->next)
+		for (chan = channels; chan; chan = chan->next) {
 			add_channel( &chanapp, chan, ops );
+			if (!chan->patterns)
+				boxes_total++;
+		}
 	} else {
 		for (; argv[oind]; oind++) {
 			for (group = groups; group; group = group->next) {
@@ -627,11 +667,14 @@ main( int argc, char **argv )
 		return 1;
 	}
 	mvars->chanptr = chans;
-	mvars->multiple = !!chans->next;
 
+	if (!mvars->list)
+		stats();
 	mvars->cben = 1;
 	sync_chans( mvars, E_START );
 	main_loop();
+	if (!mvars->list)
+		flushn();
 	return mvars->ret;
 }
 
@@ -723,13 +766,16 @@ sync_chans( main_vars_t *mvars, int ent )
 				mbox->next = 0;
 				*mboxapp = mbox;
 				mboxapp = &mbox->next;
+				boxes_total++;
 			}
 			free( boxes[M] );
 			free( boxes[S] );
+			if (!mvars->list)
+				stats();
 		}
 		mvars->boxptr = mvars->chanptr->boxes;
 
-		if (mvars->list && mvars->multiple)
+		if (mvars->list && chans_total > 1)
 			printf( "%s:\n", mvars->chan->name );
 	  syncml:
 		mvars->done = mvars->cben = 0;
@@ -775,7 +821,10 @@ sync_chans( main_vars_t *mvars, int ent )
 			mvars->chanptr->boxlist = 0;
 		}
 	  next2:
-		;
+		if (!mvars->list) {
+			chans_done++;
+			stats();
+		}
 	} while ((mvars->chanptr = mvars->chanptr->next));
 	for (t = 0; t < N_DRIVERS; t++)
 		drivers[t]->cleanup();
@@ -921,6 +970,8 @@ done_sync( int sts, void *aux )
 	main_vars_t *mvars = (main_vars_t *)aux;
 
 	mvars->done = 1;
+	boxes_done++;
+	stats();
 	if (sts) {
 		mvars->ret = 1;
 		if (sts & (SYNC_BAD(M) | SYNC_BAD(S))) {

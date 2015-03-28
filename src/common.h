@@ -78,6 +78,12 @@ extern const char *Home;
 
 extern int BufferLimit;
 
+extern int new_total[2], new_done[2];
+extern int flags_total[2], flags_done[2];
+extern int trash_total[2], trash_done[2];
+
+void stats( void );
+
 /* util.c */
 
 void ATTR_PRINTFLIKE(1, 2) debug( const char *, ... );

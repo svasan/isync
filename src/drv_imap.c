@@ -1728,6 +1728,7 @@ ensure_password( imap_server_conf_t *srvc )
 		int ret;
 		char buffer[80];
 
+		flushn();
 		if (!(fp = popen( srvc->pass_cmd, "r" ))) {
 		  pipeerr:
 			sys_error( "Skipping account %s, password command failed", srvc->name );
@@ -1754,6 +1755,7 @@ ensure_password( imap_server_conf_t *srvc )
 	} else if (!srvc->pass) {
 		char *pass, prompt[80];
 
+		flushn();
 		sprintf( prompt, "Password (%s): ", srvc->name );
 		pass = getpass( prompt );
 		if (!pass) {

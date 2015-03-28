@@ -591,6 +591,21 @@ absolute limit, as even a single message can consume more memory than
 this.
 (Default: \fI10M\fR)
 ..
+.SH CONSOLE OUTPUT
+If \fBmbsync\fR's output is connected to a console, it will print progress
+counters by default. The output will look like this:
+.P
+.in +4
+C: 1/2  B: 3/4  M: +13/13 *23/42 #0/0  S: +0/7 *0/0 #0/0
+.in -4
+.P
+This represents the cumulative progress over channels, boxes, and messages
+affected on master and slave, respectively.
+The message counts represent added messages, messages with updated flags,
+and trashed messages, respectively.
+No attempt is made to calculate the totals in advance, so they grow over
+time as more information is gathered.
+..
 .SH RECOMMENDATIONS
 Make sure your IMAP server does not auto-expunge deleted messages - it is
 slow, and semantically somewhat questionable. Specifically, Gmail needs to
