@@ -1723,13 +1723,18 @@ ensure_user( imap_server_conf_t *srvc )
 static const char *
 ensure_password( imap_server_conf_t *srvc )
 {
-	if (srvc->pass_cmd) {
+	char *cmd = srvc->pass_cmd;
+
+	if (cmd) {
 		FILE *fp;
 		int ret;
 		char buffer[80];
 
-		flushn();
-		if (!(fp = popen( srvc->pass_cmd, "r" ))) {
+		if (*cmd == '+') {
+			flushn();
+			cmd++;
+		}
+		if (!(fp = popen( cmd, "r" ))) {
 		  pipeerr:
 			sys_error( "Skipping account %s, password command failed", srvc->name );
 			return 0;

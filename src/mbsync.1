@@ -288,11 +288,14 @@ If neither a password nor a password command is specified in the
 configuration file, \fBmbsync\fR will prompt you for a password.
 ..
 .TP
-\fBPassCmd\fR \fIcommand\fR
+\fBPassCmd\fR [\fB+\fR]\fIcommand\fR
 Specify a shell command to obtain a password rather than specifying a
 password directly. This allows you to use password files and agents.
 The command must produce exactly one line on stdout; the trailing newline is
 optional.
+Prepend \fB+\fR to the command to indicate that it produces TTY output
+(e.g., a decryption password prompt); failure to do so will merely produce
+messier output.
 ..
 .TP
 \fBTunnel\fR \fIcommand\fR
