@@ -1775,7 +1775,7 @@ ensure_password( imap_server_conf_t *srvc )
 #ifdef HAVE_LIBSASL
 
 static sasl_callback_t sasl_callbacks[] = {
-	{ SASL_CB_USER,     NULL, NULL },
+	{ SASL_CB_AUTHNAME, NULL, NULL },
 	{ SASL_CB_PASS,     NULL, NULL },
 	{ SASL_CB_LIST_END, NULL, NULL }
 };
@@ -1789,7 +1789,7 @@ process_sasl_interact( sasl_interact_t *interact, imap_server_conf_t *srvc )
 		switch (interact->id) {
 		case SASL_CB_LIST_END:
 			return 0;
-		case SASL_CB_USER:
+		case SASL_CB_AUTHNAME:
 			val = ensure_user( srvc );
 			break;
 		case SASL_CB_PASS:
