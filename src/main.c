@@ -792,21 +792,25 @@ sync_chans( main_vars_t *mvars, int ent )
 			boxes[M] = filter_boxes( mvars->ctx[M]->boxes, mvars->chan->boxes[M], mvars->chan->patterns );
 			boxes[S] = filter_boxes( mvars->ctx[S]->boxes, mvars->chan->boxes[S], mvars->chan->patterns );
 			mboxapp = &mvars->chanptr->boxes;
-			for (mb = sb = 0; boxes[M][mb] || boxes[S][sb]; ) {
+			for (mb = sb = 0; ; ) {
+				char *mname = boxes[M] ? boxes[M][mb] : 0;
+				char *sname = boxes[S] ? boxes[S][sb] : 0;
+				if (!mname && !sname)
+					break;
 				mbox = nfmalloc( sizeof(*mbox) );
-				if (!(cmp = !boxes[M][mb] - !boxes[S][sb]) && !(cmp = cmp_box_names( boxes[M] + mb, boxes[S] + sb ))) {
-					mbox->name = boxes[M][mb];
-					free( boxes[S][sb] );
+				if (!(cmp = !mname - !sname) && !(cmp = cmp_box_names( &mname, &sname ))) {
+					mbox->name = mname;
+					free( sname );
 					mbox->present[M] = mbox->present[S] = BOX_PRESENT;
 					mb++;
 					sb++;
 				} else if (cmp < 0) {
-					mbox->name = boxes[M][mb];
+					mbox->name = mname;
 					mbox->present[M] = BOX_PRESENT;
 					mbox->present[S] = (!mb && !strcmp( mbox->name, "INBOX" )) ? BOX_PRESENT : BOX_ABSENT;
 					mb++;
 				} else {
-					mbox->name = boxes[S][sb];
+					mbox->name = sname;
 					mbox->present[M] = (!sb && !strcmp( mbox->name, "INBOX" )) ? BOX_PRESENT : BOX_ABSENT;
 					mbox->present[S] = BOX_PRESENT;
 					sb++;
