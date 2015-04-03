@@ -54,6 +54,10 @@ log:
 	   git log --date=iso --log-size --name-only --no-merges | \
 	     perl -e '$(LOG_PL)' > ChangeLog )
 
+cov-scan: clean
+	/opt/cov-analysis-*/bin/cov-build --dir cov-int $(MAKE)
+	tar cavf isync.tar.xz cov-int
+
 deb: deb-clean
 	CFLAGS= fakeroot debian/rules binary
 
