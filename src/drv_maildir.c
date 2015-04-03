@@ -1464,7 +1464,7 @@ maildir_set_msg_flags( store_t *gctx, message_t *gmsg, int uid ATTR_UNUSED, int 
 			for (i = 0; i < as(Flags); i++) {
 				if ((p = strchr( s, Flags[i] ))) {
 					if (del & (1 << i)) {
-						memcpy( p, p + 1, fl - (p - s) );
+						memmove( p, p + 1, fl - (p - s) );
 						fl--;
 					}
 				} else if (add & (1 << i)) {
