@@ -260,6 +260,7 @@ socket_start_tls( conn_t *conn, void (*cb)( int ok, void *aux ) )
 	conn->ssl = SSL_new( ((server_conf_t *)conn->conf)->SSLContext );
 	SSL_set_fd( conn->ssl, conn->fd );
 	SSL_set_mode( conn->ssl, SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER );
+	socket_expect_read( conn, 1 );
 	conn->state = SCK_STARTTLS;
 	start_tls_p2( conn );
 }
@@ -279,6 +280,7 @@ start_tls_p2( conn_t *conn )
 
 static void start_tls_p3( conn_t *conn, int ok )
 {
+	socket_expect_read( conn, 0 );
 	conn->state = SCK_READY;
 	conn->callbacks.starttls( ok, conn->callback_aux );
 }
@@ -324,6 +326,7 @@ socket_start_deflate( conn_t *conn )
 
 static void socket_fd_cb( int, void * );
 static void socket_fake_cb( void * );
+static void socket_timeout_cb( void * );
 
 static void socket_connect_one( conn_t * );
 static void socket_connect_failed( conn_t * );
@@ -337,6 +340,7 @@ socket_open_internal( conn_t *sock, int fd )
 	fcntl( fd, F_SETFL, O_NONBLOCK );
 	init_notifier( &sock->notify, fd, socket_fd_cb, sock );
 	init_wakeup( &sock->fd_fake, socket_fake_cb, sock );
+	init_wakeup( &sock->fd_timeout, socket_timeout_cb, sock );
 }
 
 static void
@@ -344,6 +348,7 @@ socket_close_internal( conn_t *sock )
 {
 	wipe_notifier( &sock->notify );
 	wipe_wakeup( &sock->fd_fake );
+	wipe_wakeup( &sock->fd_timeout );
 	close( sock->fd );
 	sock->fd = -1;
 }
@@ -482,6 +487,7 @@ socket_connect_one( conn_t *sock )
 			return;
 		}
 		conf_notifier( &sock->notify, 0, POLLOUT );
+		socket_expect_read( sock, 1 );
 		sock->state = SCK_CONNECTING;
 		info( "\v\n" );
 		return;
@@ -512,6 +518,7 @@ socket_connected( conn_t *conn )
 	freeaddrinfo( conn->addrs );
 #endif
 	conf_notifier( &conn->notify, 0, POLLIN );
+	socket_expect_read( conn, 0 );
 	conn->state = SCK_READY;
 	conn->callbacks.connect( 1, conn->callback_aux );
 }
@@ -579,6 +586,8 @@ do_read( conn_t *sock, char *buf, int len )
 	int n;
 
 	assert( sock->fd >= 0 );
+	if (pending_wakeup( &sock->fd_timeout ))
+		conf_wakeup( &sock->fd_timeout, sock->conf->timeout );
 #ifdef HAVE_LIBSSL
 	if (sock->ssl) {
 		if ((n = ssl_return( "read from", sock, SSL_read( sock->ssl, buf, len ) )) <= 0)
@@ -660,6 +669,13 @@ socket_fill( conn_t *sock )
 		sock->bytes += len;
 		sock->read_callback( sock->callback_aux );
 	}
+}
+
+void
+socket_expect_read( conn_t *conn, int expect )
+{
+	if (conn->conf->timeout > 0 && expect != pending_wakeup( &conn->fd_timeout ))
+		conf_wakeup( &conn->fd_timeout, expect ? conn->conf->timeout : -1 );
 }
 
 int
@@ -968,6 +984,20 @@ socket_fake_cb( void *aux )
 	/* If no writes were queued before, ensure that flushing commences. */
 	if (!exwb)
 		do_queued_write( conn );
+}
+
+static void
+socket_timeout_cb( void *aux )
+{
+	conn_t *conn = (conn_t *)aux;
+
+	if (conn->state == SCK_CONNECTING) {
+		errno = ETIMEDOUT;
+		socket_connect_failed( conn );
+	} else {
+		error( "Socket error on %s: timeout.\n", conn->name );
+		socket_fail( conn );
+	}
 }
 
 #ifdef HAVE_LIBZ

@@ -1,3 +1,7 @@
+[1.3.0]
+
+Network timeout handling has been added.
+
 [1.2.0]
 
 The 'isync' compatibility wrapper is now deprecated.

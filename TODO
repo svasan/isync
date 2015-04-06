@@ -8,8 +8,7 @@ won't cause the same error message for every attached store.
 
 make SSL (connect) timeouts produce a bit more than "Unidentified socket error".
 
-network timeout handling in general would be a good idea.
-lock timeout handling, too.
+uidvalidity lock timeout handling would be a good idea.
 
 add message expiration based on arrival date (message date would be too
 unreliable). MaxAge; probably mutually exclusive to MaxMessages.
