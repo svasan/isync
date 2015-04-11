@@ -38,7 +38,6 @@
 #include <time.h>
 #include <utime.h>
 
-#define USE_DB 1
 #ifdef __linux__
 # define LEGACY_FLOCK 1
 #endif
