@@ -1365,6 +1365,7 @@ maildir_store_msg( store_t *gctx, msg_data_t *data, int to_trash,
 		}
 		box = gctx->path;
 	} else {
+		uid = 0;
 		box = ctx->trash;
 	}
 
