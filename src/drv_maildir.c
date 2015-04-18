@@ -228,10 +228,10 @@ maildir_invoke_bad_callback( store_t *ctx )
 	ctx->bad_callback( ctx->bad_callback_aux );
 }
 
-static int maildir_list_inbox( store_t *gctx, int *flags );
+static int maildir_list_inbox( store_t *gctx, int flags );
 
 static int
-maildir_list_recurse( store_t *gctx, int isBox, int *flags, const char *inbox, int inboxLen,
+maildir_list_recurse( store_t *gctx, int isBox, int flags, const char *inbox, int inboxLen,
                       char *path, int pathLen, char *name, int nameLen )
 {
 	DIR *dir;
@@ -258,7 +258,8 @@ maildir_list_recurse( store_t *gctx, int isBox, int *flags, const char *inbox, i
 		const char *ent = de->d_name;
 		pl = pathLen + nfsnprintf( path + pathLen, _POSIX_PATH_MAX - pathLen, "%s", ent );
 		if (inbox && equals( path, pl, inbox, inboxLen )) {
-			if (maildir_list_inbox( gctx, flags ) < 0) {
+			/* Inbox nested into Path. List now if it won't be listed separately anyway. */
+			if (!(flags & LIST_INBOX) && maildir_list_inbox( gctx, flags ) < 0) {
 				closedir( dir );
 				return -1;
 			}
@@ -290,11 +291,10 @@ maildir_list_recurse( store_t *gctx, int isBox, int *flags, const char *inbox, i
 }
 
 static int
-maildir_list_inbox( store_t *gctx, int *flags )
+maildir_list_inbox( store_t *gctx, int flags )
 {
 	char path[_POSIX_PATH_MAX], name[_POSIX_PATH_MAX];
 
-	*flags &= ~LIST_INBOX;
 	return maildir_list_recurse(
 	        gctx, 2, flags, 0, 0,
 	        path, nfsnprintf( path, _POSIX_PATH_MAX, "%s", ((maildir_store_conf_t *)gctx->conf)->inbox ),
@@ -302,7 +302,7 @@ maildir_list_inbox( store_t *gctx, int *flags )
 }
 
 static int
-maildir_list_path( store_t *gctx, int *flags )
+maildir_list_path( store_t *gctx, int flags )
 {
 	const char *inbox = ((maildir_store_conf_t *)gctx->conf)->inbox;
 	char path[_POSIX_PATH_MAX], name[_POSIX_PATH_MAX];
@@ -319,8 +319,8 @@ static void
 maildir_list_store( store_t *gctx, int flags,
                     void (*cb)( int sts, void *aux ), void *aux )
 {
-	if (((flags & LIST_PATH) && maildir_list_path( gctx, &flags ) < 0) ||
-	    ((flags & LIST_INBOX) && maildir_list_inbox( gctx, &flags ) < 0)) {
+	if (((flags & LIST_PATH) && maildir_list_path( gctx, flags ) < 0) ||
+	    ((flags & LIST_INBOX) && maildir_list_inbox( gctx, flags ) < 0)) {
 		maildir_invoke_bad_callback( gctx );
 		cb( DRV_CANCELED, aux );
 	} else {
