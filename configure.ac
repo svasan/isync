@@ -146,8 +146,9 @@ AC_CACHE_CHECK([for Berkley DB >= 4.2], ac_cv_berkdb4,
 	        db->truncate(db, 0, 0, 0);
 	        db->open(db, 0, "foo", "foo", DB_HASH, DB_CREATE, 0)],
 	       [ac_cv_berkdb4=yes])])
-if test "x$ac_cv_berkdb4" = xno; then
-  AC_MSG_ERROR([Berkley DB >= 4.2 not found.])
+if test "x$ac_cv_berkdb4" = xyes; then
+  AC_SUBST([DB_LIBS], ["-ldb"])
+  AC_DEFINE(USE_DB, 1, [if Berkley DB should be used])
 fi
 
 have_zlib=
@@ -165,7 +166,8 @@ AC_ARG_ENABLE(compat,
 if test "x$ob_cv_enable_compat" != xno; then
   AC_CHECK_FUNCS(getopt_long)
 fi
-AM_CONDITIONAL(with_compat, test "x$ob_cv_enable_compat" != xno)
+AM_CONDITIONAL(with_compat, test "x$ob_cv_enable_compat" != xno -a "x$ac_cv_berkdb4" = xyes)
+AM_CONDITIONAL(with_mdconvert, test "x$ac_cv_berkdb4" = xyes)
 
 AC_CONFIG_FILES([Makefile src/Makefile src/compat/Makefile isync.spec])
 AC_OUTPUT
@@ -185,5 +187,10 @@ if test -n "$have_zlib"; then
     AC_MSG_RESULT([Using zlib])
 else
     AC_MSG_RESULT([Not using zlib])
+fi
+if test "x$ac_cv_berkdb4" = xyes; then
+    AC_MSG_RESULT([Using Berkley DB])
+else
+    AC_MSG_RESULT([Not using Berkley DB])
 fi
 AC_MSG_RESULT()
