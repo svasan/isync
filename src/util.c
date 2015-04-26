@@ -727,12 +727,12 @@ conf_wakeup( wakeup_t *tmr, int to )
 		if (tmr->links.next)
 			list_unlink( &tmr->links );
 	} else {
-		time_t timeout = get_now() + to;
-		tmr->timeout = timeout;
+		time_t timeout = to;
 		if (!to) {
 			/* We always prepend null timers, to cluster related events. */
 			succ = timers.next;
 		} else {
+			timeout += get_now();
 			/* We start at the end in the expectation that the newest timer is likely to fire last
 			 * (which will be true only if all timeouts are equal, but it's an as good guess as any). */
 			for (succ = &timers; (head = succ->prev) != &timers; succ = head) {
@@ -741,6 +741,7 @@ conf_wakeup( wakeup_t *tmr, int to )
 			}
 			assert( head != &tmr->links );
 		}
+		tmr->timeout = timeout;
 		if (succ != &tmr->links) {
 			if (tmr->links.next)
 				list_unlink( &tmr->links );
@@ -766,13 +767,13 @@ event_wait( void )
 	nowvalid = 0;
 	if ((head = timers.next) != &timers) {
 		wakeup_t *tmr = (wakeup_t *)head;
-		int delta = tmr->timeout - get_now();
-		if (delta <= 0) {
+		time_t delta = tmr->timeout;
+		if (!delta || (delta -= get_now()) <= 0) {
 			list_unlink( head );
 			tmr->cb( tmr->aux );
 			return;
 		}
-		timeout = delta * 1000;
+		timeout = (int)delta * 1000;
 	}
 	switch (poll( pollfds, npolls, timeout )) {
 	case 0:
@@ -803,8 +804,8 @@ event_wait( void )
 	nowvalid = 0;
 	if ((head = timers.next) != &timers) {
 		wakeup_t *tmr = (wakeup_t *)head;
-		int delta = tmr->timeout - get_now();
-		if (delta <= 0) {
+		time_t delta = tmr->timeout;
+		if (!delta || (delta -= get_now()) <= 0) {
 			list_unlink( head );
 			tmr->cb( tmr->aux );
 			return;
