@@ -688,17 +688,10 @@ wipe_notifier( notifier_t *sn )
 #endif
 }
 
-static int nowvalid;
-static time_t now;
-
 static time_t
 get_now( void )
 {
-	if (!nowvalid) {
-		nowvalid = 1;
-		return time( &now );
-	}
-	return now;
+	return time( 0 );
 }
 
 static list_head_t timers = { &timers, &timers };
@@ -764,7 +757,6 @@ event_wait( void )
 
 #ifdef HAVE_SYS_POLL_H
 	int timeout = -1;
-	nowvalid = 0;
 	if ((head = timers.next) != &timers) {
 		wakeup_t *tmr = (wakeup_t *)head;
 		time_t delta = tmr->timeout;
@@ -801,7 +793,6 @@ event_wait( void )
 	fd_set rfds, wfds, efds;
 	int fd;
 
-	nowvalid = 0;
 	if ((head = timers.next) != &timers) {
 		wakeup_t *tmr = (wakeup_t *)head;
 		time_t delta = tmr->timeout;
