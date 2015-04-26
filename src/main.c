@@ -448,7 +448,7 @@ main( int argc, char **argv )
 					else if (!strcmp( opt, "-net" ))
 						op = VERBOSE | DEBUG_NET;
 					else if (!strcmp( opt, "-net-all" ))
-						op = VERBOSE | DEBUG_NET_ALL;
+						op = VERBOSE | DEBUG_NET | DEBUG_NET_ALL;
 					else if (!strcmp( opt, "-sync" ))
 						op = VERBOSE | DEBUG_SYNC;
 					else
@@ -637,7 +637,7 @@ main( int argc, char **argv )
 					op |= DEBUG_NET | VERBOSE;
 					break;
 				case 'N':
-					op |= DEBUG_NET_ALL | VERBOSE;
+					op |= DEBUG_NET | DEBUG_NET_ALL | VERBOSE;
 					break;
 				case 's':
 					op |= DEBUG_SYNC | VERBOSE;
