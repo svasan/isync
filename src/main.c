@@ -448,7 +448,7 @@ main( int argc, char **argv )
 					else if (!strcmp( opt, "-net" ))
 						op = VERBOSE | DEBUG_NET;
 					else if (!strcmp( opt, "-net-all" ))
-						op = VERBOSE | DEBUG_NET_ALL;
+						op = VERBOSE | DEBUG_NET | DEBUG_NET_ALL;
 					else if (!strcmp( opt, "-sync" ))
 						op = VERBOSE | DEBUG_SYNC;
 					else
@@ -637,7 +637,7 @@ main( int argc, char **argv )
 					op |= DEBUG_NET | VERBOSE;
 					break;
 				case 'N':
-					op |= DEBUG_NET_ALL | VERBOSE;
+					op |= DEBUG_NET | DEBUG_NET_ALL | VERBOSE;
 					break;
 				case 's':
 					op |= DEBUG_SYNC | VERBOSE;
@@ -757,8 +757,10 @@ sync_chans( main_vars_t *mvars, int ent )
 		info( "Channel %s\n", mvars->chan->name );
 		mvars->skip = mvars->cben = 0;
 		for (t = 0; t < 2; t++) {
-			if (mvars->chan->stores[t]->failed != FAIL_TEMP) {
-				info( "Skipping due to failed %s store %s.\n", str_ms[t], mvars->chan->stores[t]->name );
+			int st = mvars->chan->stores[t]->driver->fail_state( mvars->chan->stores[t] );
+			if (st != FAIL_TEMP) {
+				info( "Skipping due to %sfailed %s store %s.\n",
+				      (st == FAIL_WAIT) ? "temporarily " : "", str_ms[t], mvars->chan->stores[t]->name );
 				mvars->skip = 1;
 			}
 		}

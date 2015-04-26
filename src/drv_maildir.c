@@ -57,6 +57,7 @@ typedef struct maildir_store_conf {
 	int alt_map;
 #endif /* USE_DB */
 	char info_delimiter;
+	char failed;
 	char *info_prefix, *info_stop; /* precalculated from info_delimiter */
 } maildir_store_conf_t;
 
@@ -141,12 +142,12 @@ maildir_validate_path( store_conf_t *conf )
 
 	if (!conf->path) {
 		error( "Maildir error: store '%s' has no Path\n", conf->name );
-		conf->failed = FAIL_FINAL;
+		((maildir_store_conf_t *)conf)->failed = FAIL_FINAL;
 		return -1;
 	}
 	if (stat( conf->path, &st ) || !S_ISDIR(st.st_mode)) {
 		error( "Maildir error: cannot open store '%s'\n", conf->path );
-		conf->failed = FAIL_FINAL;
+		((maildir_store_conf_t *)conf)->failed = FAIL_FINAL;
 		return -1;
 	}
 	return 0;
@@ -432,7 +433,7 @@ maildir_validate( const char *box, int create, maildir_store_t *ctx )
 			return DRV_BOX_BAD;
 		if (make_box_dir( buf, bl )) {
 			sys_error( "Maildir error: cannot create mailbox '%s'", box );
-			ctx->gen.conf->failed = FAIL_FINAL;
+			((maildir_store_conf_t *)ctx->gen.conf)->failed = FAIL_FINAL;
 			maildir_invoke_bad_callback( &ctx->gen );
 			return DRV_CANCELED;
 		}
@@ -1631,6 +1632,12 @@ maildir_memory_usage( store_t *gctx ATTR_UNUSED )
 }
 
 static int
+maildir_fail_state( store_conf_t *gconf )
+{
+	return ((maildir_store_conf_t *)gconf)->failed;
+}
+
+static int
 maildir_parse_store( conffile_t *cfg, store_conf_t **storep )
 {
 	maildir_store_conf_t *store;
@@ -1698,4 +1705,5 @@ struct driver maildir_driver = {
 	maildir_cancel_cmds,
 	maildir_commit_cmds,
 	maildir_memory_usage,
+	maildir_fail_state,
 };
