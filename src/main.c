@@ -757,8 +757,10 @@ sync_chans( main_vars_t *mvars, int ent )
 		info( "Channel %s\n", mvars->chan->name );
 		mvars->skip = mvars->cben = 0;
 		for (t = 0; t < 2; t++) {
-			if (mvars->chan->stores[t]->failed != FAIL_TEMP) {
-				info( "Skipping due to failed %s store %s.\n", str_ms[t], mvars->chan->stores[t]->name );
+			int st = mvars->chan->stores[t]->driver->fail_state( mvars->chan->stores[t] );
+			if (st != FAIL_TEMP) {
+				info( "Skipping due to %sfailed %s store %s.\n",
+				      (st == FAIL_WAIT) ? "temporarily " : "", str_ms[t], mvars->chan->stores[t]->name );
 				mvars->skip = 1;
 			}
 		}

@@ -41,7 +41,6 @@ typedef struct store_conf {
 	const char *trash;
 	uint max_size; /* off_t is overkill */
 	char trash_remote_new, trash_only_new;
-	char failed;
 } store_conf_t;
 
 /* For message->flags */
@@ -249,6 +248,9 @@ struct driver {
 
 	/* Get approximate amount of memory occupied by the driver. */
 	int (*memory_usage)( store_t *ctx );
+
+	/* Get the FAIL_* state of the driver. */
+	int (*fail_state)( store_conf_t *conf );
 };
 
 void free_generic_messages( message_t * );

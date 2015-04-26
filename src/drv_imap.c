@@ -57,6 +57,7 @@ typedef struct imap_server_conf {
 #ifdef HAVE_LIBSSL
 	char ssl_type;
 #endif
+	char failed;
 } imap_server_conf_t;
 
 typedef struct imap_store_conf {
@@ -2156,7 +2157,7 @@ imap_open_store_bail( imap_store_t *ctx, int failed )
 {
 	void (*cb)( store_t *srv, void *aux ) = ctx->callbacks.imap_open;
 	void *aux = ctx->callback_aux;
-	ctx->gen.conf->failed = failed;
+	((imap_store_conf_t *)ctx->gen.conf)->server->failed = failed;
 	imap_cancel_store( &ctx->gen );
 	cb( 0, aux );
 }
@@ -2658,6 +2659,14 @@ imap_memory_usage( store_t *gctx )
 	return ctx->buffer_mem + ctx->conn.buffer_mem;
 }
 
+/******************* imap_fail_state *******************/
+
+static int
+imap_fail_state( store_conf_t *gconf )
+{
+	return ((imap_store_conf_t *)gconf)->server->failed;
+}
+
 /******************* imap_parse_store *******************/
 
 imap_server_conf_t *servers, **serverapp = &servers;
@@ -2937,4 +2946,5 @@ struct driver imap_driver = {
 	imap_cancel_cmds,
 	imap_commit_cmds,
 	imap_memory_usage,
+	imap_fail_state,
 };
