@@ -139,7 +139,7 @@ if test "x$ob_cv_with_sasl" != xno; then
 fi
 AC_SUBST(SASL_LIBS)
 
-AC_CACHE_CHECK([for Berkley DB >= 4.1], ac_cv_berkdb4,
+AC_CACHE_CHECK([for Berkeley DB >= 4.1], ac_cv_berkdb4,
   [ac_cv_berkdb4=no
     sav_LDFLAGS=$LDFLAGS
     LDFLAGS="$LDFLAGS -ldb"
@@ -153,7 +153,7 @@ AC_CACHE_CHECK([for Berkley DB >= 4.1], ac_cv_berkdb4,
   ])
 if test "x$ac_cv_berkdb4" = xyes; then
   AC_SUBST([DB_LIBS], ["-ldb"])
-  AC_DEFINE(USE_DB, 1, [if Berkley DB should be used])
+  AC_DEFINE(USE_DB, 1, [if Berkeley DB should be used])
 fi
 
 have_zlib=
@@ -194,8 +194,8 @@ else
     AC_MSG_RESULT([Not using zlib])
 fi
 if test "x$ac_cv_berkdb4" = xyes; then
-    AC_MSG_RESULT([Using Berkley DB])
+    AC_MSG_RESULT([Using Berkeley DB])
 else
-    AC_MSG_RESULT([Not using Berkley DB])
+    AC_MSG_RESULT([Not using Berkeley DB])
 fi
 AC_MSG_RESULT()
