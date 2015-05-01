@@ -2,6 +2,8 @@
 
 Network timeout handling has been added.
 
+A Maildir sub-folder naming style without extra dots has been added.
+
 [1.2.0]
 
 The 'isync' compatibility wrapper is now deprecated.

@@ -87,6 +87,7 @@ TrashRemoteNew yes
 
 MaildirStore mirror
 Path ~/Maildir/
+SubFolders Verbatim
 
 Channel o2o
 Master :server:

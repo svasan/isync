@@ -967,6 +967,7 @@ sync_boxes( store_t *ctx[], const char *names[], int present[], channel_conf_t *
 			svars->box_name[t] = nfstrdup( svars->orig_name[t] );
 		} else if (map_name( svars->orig_name[t], &svars->box_name[t], 0, "/", ctx[t]->conf->flat_delim ) < 0) {
 			error( "Error: canonical mailbox name '%s' contains flattened hierarchy delimiter\n", svars->orig_name[t] );
+		  bail3:
 			svars->ret = SYNC_FAIL;
 			sync_bail3( svars );
 			return;
@@ -978,9 +979,12 @@ sync_boxes( store_t *ctx[], const char *names[], int present[], channel_conf_t *
 	/* Both boxes must be fully set up at this point, so that error exit paths
 	 * don't run into uninitialized variables. */
 	for (t = 0; t < 2; t++) {
-		if (svars->drv[t]->select_box( ctx[t], svars->box_name[t] ) == DRV_CANCELED) {
+		switch (svars->drv[t]->select_box( ctx[t], svars->box_name[t] )) {
+		case DRV_CANCELED:
 			store_bad( AUX );
 			return;
+		case DRV_BOX_BAD:
+			goto bail3;
 		}
 	}
 

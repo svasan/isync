@@ -256,6 +256,26 @@ The Maildir standard defines this to be the colon, but this is incompatible
 with DOS/Windows file systems.
 (Default: the value of \fBFieldDelimiter\fR)
 ..
+.TP
+\fBSubFolders\fR \fBVerbatim\fR|\fBMaildir++\fR|\fBLegacy\fR
+The on-disk folder naming style used for hierarchical mailboxes.
+This has option has no effect when \fBFlatten\fR is used.
+.br
+Suppose a mailbox with the canonical path \fItop/sub/subsub\fR,
+the styles will yield the following on-disk paths:
+.br
+\fBVerbatim\fR - \fItop/sub/subsub\fR
+(this is the style you probably want to use)
+.br
+\fBMaildir++\fR - \fItop/.sub.subsub\fR
+(this style is compatible with Courier and Dovecot - but note that
+the mailbox metadata format is \fInot\fR compatible)
+.br
+\fBLegacy\fR - \fItop/.sub/.subsub\fR
+(this is \fBmbsync\fR's historical style)
+.br
+(Default: unset; will error out when sub-folders are encountered)
+..
 .SS IMAP4 Accounts
 .TP
 \fBIMAPAccount\fR \fIname\fR

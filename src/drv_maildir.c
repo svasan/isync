@@ -50,6 +50,11 @@
 #include <db.h>
 #endif /* USE_DB */
 
+#define SUB_UNSET      0
+#define SUB_VERBATIM   1
+#define SUB_MAILDIRPP  2
+#define SUB_LEGACY     3
+
 typedef struct maildir_store_conf {
 	store_conf_t gen;
 	char *inbox;
@@ -57,6 +62,7 @@ typedef struct maildir_store_conf {
 	int alt_map;
 #endif /* USE_DB */
 	char info_delimiter;
+	char sub_style;
 	char failed;
 	char *info_prefix, *info_stop; /* precalculated from info_delimiter */
 } maildir_store_conf_t;
@@ -113,23 +119,50 @@ maildir_parse_flags( const char *info_prefix, const char *base )
 }
 
 static char *
-maildir_join_path( const char *prefix, const char *box )
+maildir_join_path( maildir_store_conf_t *conf, const char *prefix, const char *box )
 {
 	char *out, *p;
-	int pl, bl, n;
+	int pl, bl, n, sub = 0;
 	char c;
 
 	pl = strlen( prefix );
 	for (bl = 0, n = 0; (c = box[bl]); bl++)
-		if (c == '/')
+		if (c == '/') {
+			if (conf->sub_style == SUB_UNSET) {
+				error( "Maildir error: accessing subfolder '%s', but store '%s' does not specify SubFolders style\n",
+				       box, conf->gen.name );
+				return 0;
+			}
 			n++;
+		} else if (c == '.' && conf->sub_style == SUB_MAILDIRPP) {
+			error( "Maildir error: store '%s', folder '%s': SubFolders style Maildir++ does not support dots in mailbox names\n",
+			       conf->gen.name, box );
+			return 0;
+		}
 	out = nfmalloc( pl + bl + n + 1 );
 	memcpy( out, prefix, pl );
 	p = out + pl;
 	while ((c = *box++)) {
-		*p++ = c;
-		if (c == '/')
-			*p++ = '.';
+		if (c == '/') {
+			switch (conf->sub_style) {
+			case SUB_VERBATIM:
+				*p++ = c;
+				break;
+			case SUB_MAILDIRPP:
+				if (!sub) {
+					sub = 1;
+					*p++ = c;
+				}
+				*p++ = '.';
+				break;
+			case SUB_LEGACY:
+				*p++ = c;
+				*p++ = '.';
+				break;
+			}
+		} else {
+			*p++ = c;
+		}
 	}
 	*p = 0;
 	return out;
@@ -172,7 +205,11 @@ maildir_open_store( store_conf_t *gconf, const char *label ATTR_UNUSED,
 			cb( 0, aux );
 			return;
 		}
-		ctx->trash = maildir_join_path( gconf->path, gconf->trash );
+		if (!(ctx->trash = maildir_join_path( conf, gconf->path, gconf->trash ))) {
+			free( ctx );
+			cb( 0, aux );
+			return;
+		}
 	}
 	cb( &ctx->gen, aux );
 }
@@ -239,7 +276,8 @@ maildir_list_recurse( store_t *gctx, int isBox, int flags,
                       char *path, int pathLen, char *name, int nameLen )
 {
 	DIR *dir;
-	int pl, nl;
+	int style = ((maildir_store_conf_t *)gctx->conf)->sub_style;
+	int pl, nl, i;
 	struct dirent *de;
 	struct stat st;
 
@@ -249,9 +287,20 @@ maildir_list_recurse( store_t *gctx, int isBox, int flags,
 		sys_error( "Maildir error: cannot list %s", path );
 		return -1;
 	}
+	if (isBox > 1 && style == SUB_UNSET) {
+		error( "Maildir error: found subfolder '%.*s', but store '%s' does not specify SubFolders style\n",
+		       nameLen - 1, name, gctx->conf->name );
+		closedir( dir );
+		return -1;
+	}
 	while ((de = readdir( dir ))) {
 		const char *ent = de->d_name;
-		pl = pathLen + nfsnprintf( path + pathLen, _POSIX_PATH_MAX - pathLen, "%s", ent );
+		if (ent[0] == '.' && (!ent[1] || (ent[1] == '.' && !ent[2])))
+			continue;
+		pl = nfsnprintf( path + pathLen, _POSIX_PATH_MAX - pathLen, "%s", ent );
+		if (pl == 3 && (!memcmp( ent, "cur", 3 ) || !memcmp( ent, "new", 3 ) || !memcmp( ent, "tmp", 3 )))
+			continue;
+		pl += pathLen;
 		if (inbox && equals( path, pl, inbox, inboxLen )) {
 			/* Inbox nested into Path. List now if it won't be listed separately anyway. */
 			if (!(flags & LIST_INBOX) && maildir_list_inbox( gctx, flags, 0 ) < 0) {
@@ -265,29 +314,39 @@ maildir_list_recurse( store_t *gctx, int isBox, int flags,
 				return -1;
 			}
 		} else {
-			if (*ent == '.') {
-				if (!isBox)
-					continue;
-				if (!ent[1] || ent[1] == '.')
-					continue;
-				ent++;
-			} else {
-				if (isBox)
-					continue;
-				if (!nameLen && equals( ent, -1, "INBOX", 5 )) {
-					path[pathLen] = 0;
-					warn( "Maildir warning: ignoring INBOX in %s\n", path );
-					continue;
+			if (style == SUB_MAILDIRPP || style == SUB_LEGACY) {
+				if (*ent == '.') {
+					if (!isBox)
+						continue;
+					ent++;
+				} else {
+					if (isBox)
+						continue;
 				}
 			}
 			nl = nameLen + nfsnprintf( name + nameLen, _POSIX_PATH_MAX - nameLen, "%s", ent );
+			if (style == SUB_MAILDIRPP && isBox) {
+				for (i = nameLen; i < nl; i++) {
+					if (name[i] == '.')
+						name[i] = '/';
+				}
+			}
+			if (!nameLen && equals( name, nl, "INBOX", 5 ) && (!name[5] || name[5] == '/')) {
+				path[pathLen] = 0;
+				warn( "Maildir warning: ignoring INBOX in %s\n", path );
+				continue;
+			}
 			path[pl++] = '/';
 			nfsnprintf( path + pl, _POSIX_PATH_MAX - pl, "cur" );
 			if (!stat( path, &st ) && S_ISDIR(st.st_mode))
 				add_string_list( &gctx->boxes, name );
+			if (style == SUB_MAILDIRPP && isBox) {
+				/* Maildir++ subfolder - don't recurse further. */
+				continue;
+			}
 			path[pl] = 0;
 			name[nl++] = '/';
-			if (maildir_list_recurse( gctx, 1, flags, inbox, inboxLen, basePath, basePathLen, path, pl, name, nl ) < 0) {
+			if (maildir_list_recurse( gctx, isBox + 1, flags, inbox, inboxLen, basePath, basePathLen, path, pl, name, nl ) < 0) {
 				closedir( dir );
 				return -1;
 			}
@@ -404,10 +463,6 @@ make_box_dir( char *buf, int bl )
 	if (!mkdir( buf, 0700 ) || errno == EEXIST)
 		return 0;
 	p = memrchr( buf, '/', bl - 1 );
-	if (*(p + 1) != '.') {
-		errno = ENOENT;
-		return -1;
-	}
 	*p = 0;
 	if (make_box_dir( buf, (int)(p - buf) ))
 		return -1;
@@ -1055,17 +1110,17 @@ maildir_select_box( store_t *gctx, const char *name )
 #endif /* USE_DB */
 	ctx->fresh[0] = ctx->fresh[1] = 0;
 	if (starts_with( name, -1, "INBOX", 5 ) && (!name[5] || name[5] == '/')) {
-		gctx->path = maildir_join_path( conf->inbox, name + 5 );
+		gctx->path = maildir_join_path( conf, conf->inbox, name + 5 );
 		ctx->is_inbox = !name[5];
 	} else {
 		if (maildir_validate_path( conf ) < 0) {
 			gctx->path = 0;
 			return DRV_CANCELED;
 		}
-		gctx->path = maildir_join_path( gctx->conf->path, name );
+		gctx->path = maildir_join_path( conf, conf->gen.path, name );
 		ctx->is_inbox = 0;
 	}
-	return DRV_OK;
+	return gctx->path ? DRV_OK : DRV_BOX_BAD;
 }
 
 static void
@@ -1669,6 +1724,17 @@ maildir_parse_store( conffile_t *cfg, store_conf_t **storep )
 				error( "%s:%d: Info delimiter must be a punctuation character\n", cfg->file, cfg->line );
 				cfg->err = 1;
 				continue;
+			}
+		} else if (!strcasecmp( "SubFolders", cfg->cmd )) {
+			if (!strcasecmp( "Verbatim", cfg->val )) {
+				store->sub_style = SUB_VERBATIM;
+			} else if (!strcasecmp( "Maildir++", cfg->val )) {
+				store->sub_style = SUB_MAILDIRPP;
+			} else if (!strcasecmp( "Legacy", cfg->val )) {
+				store->sub_style = SUB_LEGACY;
+			} else {
+				error( "%s:%d: Unrecognized SubFolders style\n", cfg->file, cfg->line );
+				cfg->err = 1;
 			}
 		} else
 			parse_generic_store( &store->gen, cfg );
