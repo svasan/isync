@@ -139,7 +139,7 @@ if test "x$ob_cv_with_sasl" != xno; then
 fi
 AC_SUBST(SASL_LIBS)
 
-AC_CACHE_CHECK([for Berkley DB >= 4.2], ac_cv_berkdb4,
+AC_CACHE_CHECK([for Berkley DB >= 4.1], ac_cv_berkdb4,
   [ac_cv_berkdb4=no
     sav_LDFLAGS=$LDFLAGS
     LDFLAGS="$LDFLAGS -ldb"

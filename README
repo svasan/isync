@@ -61,7 +61,7 @@ isync executable still exists; it is a compatibility wrapper around mbsync.
 
 * Requirements
 
-    Berkley DB 4.2+ (optional)
+    Berkley DB 4.1+ (optional)
     OpenSSL for TLS/SSL support (optional)
 
 * Installation
