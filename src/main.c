@@ -900,7 +900,7 @@ store_opened( store_t *ctx, void *aux )
 {
 	MVARS(aux)
 	string_list_t *cpat;
-	int flags;
+	int cflags;
 
 	if (!ctx) {
 		mvars->ret = mvars->skip = 1;
@@ -910,11 +910,12 @@ store_opened( store_t *ctx, void *aux )
 	}
 	mvars->ctx[t] = ctx;
 	if (!mvars->skip && !mvars->chanptr->boxlist && mvars->chan->patterns && !ctx->listed) {
-		for (flags = 0, cpat = mvars->chan->patterns; cpat; cpat = cpat->next) {
+		for (cflags = 0, cpat = mvars->chan->patterns; cpat; cpat = cpat->next) {
 			const char *pat = cpat->string;
 			if (*pat != '!') {
 				char buf[8];
 				int bufl = snprintf( buf, sizeof(buf), "%s%s", nz( mvars->chan->boxes[t], "" ), pat );
+				int flags = 0;
 				/* Partial matches like "INB*" or even "*" are not considered,
 				 * except implicity when the INBOX lives under Path. */
 				if (starts_with( buf, bufl, "INBOX", 5 )) {
@@ -941,10 +942,11 @@ store_opened( store_t *ctx, void *aux )
 				}
 				debug( "pattern '%s' (effective '%s'): %sPath, %sINBOX\n",
 				       pat, buf, (flags & LIST_PATH) ? "" : "no ",  (flags & LIST_INBOX) ? "" : "no ");
+				cflags |= flags;
 			}
 		}
 		set_bad_callback( ctx, store_bad, AUX );
-		mvars->drv[t]->list_store( ctx, flags, store_listed, AUX );
+		mvars->drv[t]->list_store( ctx, cflags, store_listed, AUX );
 	} else {
 		mvars->state[t] = ST_OPEN;
 		sync_chans( mvars, E_OPEN );
