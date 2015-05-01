@@ -141,11 +141,16 @@ AC_SUBST(SASL_LIBS)
 
 AC_CACHE_CHECK([for Berkley DB >= 4.2], ac_cv_berkdb4,
   [ac_cv_berkdb4=no
+    sav_LDFLAGS=$LDFLAGS
+    LDFLAGS="$LDFLAGS -ldb"
    AC_TRY_LINK([#include <db.h>],
                [DB *db;
+	        db_create(&db, 0, 0);
 	        db->truncate(db, 0, 0, 0);
 	        db->open(db, 0, "foo", "foo", DB_HASH, DB_CREATE, 0)],
-	       [ac_cv_berkdb4=yes])])
+	       [ac_cv_berkdb4=yes])
+    LDFLAGS=$sav_LDFLAGS
+  ])
 if test "x$ac_cv_berkdb4" = xyes; then
   AC_SUBST([DB_LIBS], ["-ldb"])
   AC_DEFINE(USE_DB, 1, [if Berkley DB should be used])
