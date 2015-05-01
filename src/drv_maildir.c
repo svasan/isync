@@ -136,18 +136,18 @@ maildir_join_path( const char *prefix, const char *box )
 }
 
 static int
-maildir_validate_path( store_conf_t *conf )
+maildir_validate_path( maildir_store_conf_t *conf )
 {
 	struct stat st;
 
-	if (!conf->path) {
-		error( "Maildir error: store '%s' has no Path\n", conf->name );
-		((maildir_store_conf_t *)conf)->failed = FAIL_FINAL;
+	if (!conf->gen.path) {
+		error( "Maildir error: store '%s' has no Path\n", conf->gen.name );
+		conf->failed = FAIL_FINAL;
 		return -1;
 	}
-	if (stat( conf->path, &st ) || !S_ISDIR(st.st_mode)) {
-		error( "Maildir error: cannot open store '%s'\n", conf->path );
-		((maildir_store_conf_t *)conf)->failed = FAIL_FINAL;
+	if (stat( conf->gen.path, &st ) || !S_ISDIR(st.st_mode)) {
+		error( "Maildir error: cannot open store '%s'\n", conf->gen.path );
+		conf->failed = FAIL_FINAL;
 		return -1;
 	}
 	return 0;
@@ -156,22 +156,23 @@ maildir_validate_path( store_conf_t *conf )
 static void lcktmr_timeout( void *aux );
 
 static void
-maildir_open_store( store_conf_t *conf, const char *label ATTR_UNUSED,
+maildir_open_store( store_conf_t *gconf, const char *label ATTR_UNUSED,
                     void (*cb)( store_t *ctx, void *aux ), void *aux )
 {
+	maildir_store_conf_t *conf = (maildir_store_conf_t *)gconf;
 	maildir_store_t *ctx;
 
 	ctx = nfcalloc( sizeof(*ctx) );
-	ctx->gen.conf = conf;
+	ctx->gen.conf = gconf;
 	ctx->uvfd = -1;
 	init_wakeup( &ctx->lcktmr, lcktmr_timeout, ctx );
-	if (conf->trash) {
+	if (gconf->trash) {
 		if (maildir_validate_path( conf ) < 0) {
 			free( ctx );
 			cb( 0, aux );
 			return;
 		}
-		ctx->trash = maildir_join_path( conf->path, conf->trash );
+		ctx->trash = maildir_join_path( gconf->path, gconf->trash );
 	}
 	cb( &ctx->gen, aux );
 }
@@ -315,7 +316,7 @@ maildir_list_path( store_t *gctx, int flags, const char *inbox )
 {
 	char path[_POSIX_PATH_MAX], name[_POSIX_PATH_MAX];
 
-	if (maildir_validate_path( gctx->conf ) < 0)
+	if (maildir_validate_path( (maildir_store_conf_t *)gctx->conf ) < 0)
 		return -1;
 	return maildir_list_recurse(
 	        gctx, 0, flags, inbox, inbox ? strlen( inbox ) : 0, 0, 0,
@@ -1043,6 +1044,7 @@ maildir_app_msg( maildir_store_t *ctx, message_t ***msgapp, msg_t *entry )
 static int
 maildir_select_box( store_t *gctx, const char *name )
 {
+	maildir_store_conf_t *conf = (maildir_store_conf_t *)gctx->conf;
 	maildir_store_t *ctx = (maildir_store_t *)gctx;
 
 	maildir_cleanup( gctx );
@@ -1055,10 +1057,10 @@ maildir_select_box( store_t *gctx, const char *name )
 #endif /* USE_DB */
 	ctx->fresh[0] = ctx->fresh[1] = 0;
 	if (starts_with( name, -1, "INBOX", 5 ) && (!name[5] || name[5] == '/')) {
-		gctx->path = maildir_join_path( ((maildir_store_conf_t *)gctx->conf)->inbox, name + 5 );
+		gctx->path = maildir_join_path( conf->inbox, name + 5 );
 		ctx->is_inbox = !name[5];
 	} else {
-		if (maildir_validate_path( gctx->conf ) < 0) {
+		if (maildir_validate_path( conf ) < 0) {
 			gctx->path = 0;
 			return DRV_CANCELED;
 		}
