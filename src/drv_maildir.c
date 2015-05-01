@@ -243,15 +243,6 @@ maildir_list_recurse( store_t *gctx, int isBox, int flags,
 	struct dirent *de;
 	struct stat st;
 
-	if (isBox) {
-		path[pathLen++] = '/';
-		if (isBox > 1 ||
-		    (nfsnprintf( path + pathLen, _POSIX_PATH_MAX - pathLen, "cur" ),
-		     !stat( path, &st ) && S_ISDIR(st.st_mode)))
-			add_string_list( &gctx->boxes, name );
-		path[pathLen] = 0;
-		name[nameLen++] = '/';
-	}
 	if (!(dir = opendir( path ))) {
 		if (isBox && (errno == ENOENT || errno == ENOTDIR))
 			return 0;
@@ -290,6 +281,12 @@ maildir_list_recurse( store_t *gctx, int isBox, int flags,
 				}
 			}
 			nl = nameLen + nfsnprintf( name + nameLen, _POSIX_PATH_MAX - nameLen, "%s", ent );
+			path[pl++] = '/';
+			nfsnprintf( path + pl, _POSIX_PATH_MAX - pl, "cur" );
+			if (!stat( path, &st ) && S_ISDIR(st.st_mode))
+				add_string_list( &gctx->boxes, name );
+			path[pl] = 0;
+			name[nl++] = '/';
 			if (maildir_list_recurse( gctx, 1, flags, inbox, inboxLen, basePath, basePathLen, path, pl, name, nl ) < 0) {
 				closedir( dir );
 				return -1;
@@ -305,10 +302,11 @@ maildir_list_inbox( store_t *gctx, int flags, const char *basePath )
 {
 	char path[_POSIX_PATH_MAX], name[_POSIX_PATH_MAX];
 
+	add_string_list( &gctx->boxes, "INBOX" );
 	return maildir_list_recurse(
-	        gctx, 2, flags, 0, 0, basePath, basePath ? strlen( basePath ) - 1 : 0,
-	        path, nfsnprintf( path, _POSIX_PATH_MAX, "%s", ((maildir_store_conf_t *)gctx->conf)->inbox ),
-	        name, nfsnprintf( name, _POSIX_PATH_MAX, "INBOX" ) );
+	        gctx, 1, flags, 0, 0, basePath, basePath ? strlen( basePath ) - 1 : 0,
+	        path, nfsnprintf( path, _POSIX_PATH_MAX, "%s/", ((maildir_store_conf_t *)gctx->conf)->inbox ),
+	        name, nfsnprintf( name, _POSIX_PATH_MAX, "INBOX/" ) );
 }
 
 static int
