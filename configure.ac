@@ -157,13 +157,18 @@ if test "x$ac_cv_berkdb4" = xyes; then
 fi
 
 have_zlib=
-AC_CHECK_LIB([z], [deflate],
-    [AC_CHECK_HEADER(zlib.h,
-        [have_zlib=1
-         AC_SUBST([Z_LIBS], ["-lz"])
-         AC_DEFINE([HAVE_LIBZ], 1, [if you have the zlib library])]
-     )]
-)
+AC_ARG_WITH(zlib,
+  AS_HELP_STRING([--with-zlib], [use zlib [detect]]),
+  [ob_cv_with_zlib=$withval])
+if test "x$ob_cv_with_zlib" != xno; then
+  AC_CHECK_LIB([z], [deflate],
+      [AC_CHECK_HEADER(zlib.h,
+          [have_zlib=1
+           AC_SUBST([Z_LIBS], ["-lz"])
+           AC_DEFINE([HAVE_LIBZ], 1, [if you have the zlib library])]
+       )]
+  )
+fi
 
 AC_ARG_ENABLE(compat,
   AC_HELP_STRING([--disable-compat], [don't include isync compatibility wrapper [no]]),
