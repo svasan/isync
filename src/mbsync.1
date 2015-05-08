@@ -384,6 +384,13 @@ Setting this to \fI1\fR disables pipelining.
 This is mostly a debugging only option.
 (Default: \fIunlimited\fR)
 ..
+.TP
+\fBDisableExtension\fR[\fBs\fR] \fIextension\fR ...
+Disable the use of specific IMAP extensions.
+This can be used to work around bugs in servers
+(and possibly \fBmbsync\fR itself).
+(Default: empty)
+..
 .SS IMAP Stores
 The reference point for relative \fBPath\fRs is whatever the server likes it
 to be; probably the user's $HOME or $HOME/Mail on that server. The location
@@ -679,6 +686,9 @@ If your server supports auto-trashing (as Gmail does), it is probably a
 good idea to rely on that instead of \fBmbsync\fR's trash functionality.
 If you do that, and intend to synchronize the trash like other mailboxes,
 you should not use \fBmbsync\fR's \fBTrash\fR option at all.
+.P
+Use of the \fBTrash\fR option with M$ Exchange 2013 requires the use of
+\fBDisableExtension MOVE\fR due to a server bug.
 ..
 .SH INHERENT PROBLEMS
 Changes done after \fBmbsync\fR has retrieved the message list will not be

@@ -53,6 +53,7 @@ typedef struct imap_server_conf {
 	char *pass;
 	char *pass_cmd;
 	int max_in_progress;
+	int cap_mask;
 	string_list_t *auth_mechs;
 #ifdef HAVE_LIBSSL
 	char ssl_type;
@@ -1043,6 +1044,7 @@ parse_capability( imap_store_t *ctx, char *cmd )
 					ctx->caps |= 1 << i;
 		}
 	}
+	ctx->caps &= ~((imap_store_conf_t *)ctx->gen.conf)->server->cap_mask;
 	if (!CAP(NOLOGIN))
 		add_string_list( &ctx->auth_mechs, "LOGIN" );
 }
@@ -2687,6 +2689,7 @@ imap_parse_store( conffile_t *cfg, store_conf_t **storep )
 	imap_store_conf_t *store;
 	imap_server_conf_t *server, *srv, sserver;
 	const char *type, *name, *arg;
+	unsigned u;
 	int acc_opt = 0;
 #ifdef HAVE_LIBSSL
 	/* Legacy SSL options */
@@ -2756,6 +2759,20 @@ imap_parse_store( conffile_t *cfg, store_conf_t **storep )
 				error( "%s:%d: PipelineDepth must be at least 1\n", cfg->file, cfg->line );
 				cfg->err = 1;
 			}
+		} else if (!strcasecmp( "DisableExtension", cfg->cmd ) ||
+		           !strcasecmp( "DisableExtensions", cfg->cmd )) {
+			arg = cfg->val;
+			do {
+				for (u = 0; u < as(cap_list); u++) {
+					if (!strcasecmp( cap_list[u], arg )) {
+						server->cap_mask |= 1 << u;
+						goto gotcap;
+					}
+				}
+				error( "%s:%d: Unrecognized IMAP extension '%s'\n", cfg->file, cfg->line, arg );
+				cfg->err = 1;
+			  gotcap: ;
+			} while ((arg = get_arg( cfg, ARG_OPTIONAL, 0 )));
 		}
 #ifdef HAVE_LIBSSL
 		else if (!strcasecmp( "CertificateFile", cfg->cmd )) {
