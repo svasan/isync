@@ -2686,8 +2686,9 @@ imap_parse_store( conffile_t *cfg, store_conf_t **storep )
 	/* Legacy SSL options */
 	int require_ssl = -1, use_imaps = -1;
 	int use_sslv2 = -1, use_sslv3 = -1, use_tlsv1 = -1, use_tlsv11 = -1, use_tlsv12 = -1;
-	int require_cram = -1;
 #endif
+	/* Legacy SASL option */
+	int require_cram = -1;
 
 	if (!strcasecmp( "IMAPAccount", cfg->cmd )) {
 		server = nfcalloc( sizeof(*server) );
@@ -2803,6 +2804,7 @@ imap_parse_store( conffile_t *cfg, store_conf_t **storep )
 			use_tlsv11 = parse_bool( cfg );
 		else if (!strcasecmp( "UseTLSv1.2", cfg->cmd ))
 			use_tlsv12 = parse_bool( cfg );
+#endif
 		else if (!strcasecmp( "AuthMech", cfg->cmd ) ||
 		         !strcasecmp( "AuthMechs", cfg->cmd )) {
 			arg = cfg->val;
@@ -2811,7 +2813,6 @@ imap_parse_store( conffile_t *cfg, store_conf_t **storep )
 			while ((arg = get_arg( cfg, ARG_OPTIONAL, 0 )));
 		} else if (!strcasecmp( "RequireCRAM", cfg->cmd ))
 			require_cram = parse_bool( cfg );
-#endif
 		else if (!strcasecmp( "Tunnel", cfg->cmd ))
 			server->sconf.tunnel = nfstrdup( cfg->val );
 		else if (store) {
@@ -2891,7 +2892,6 @@ imap_parse_store( conffile_t *cfg, store_conf_t **storep )
 				server->ssl_type = server->sconf.tunnel ? SSL_None : SSL_STARTTLS;
 		}
 #endif
-#ifdef HAVE_LIBSSL
 		if (require_cram >= 0) {
 			if (server->auth_mechs) {
 				error( "%s '%s': The deprecated RequireCRAM option is mutually exlusive with AuthMech.\n", type, name );
@@ -2902,7 +2902,6 @@ imap_parse_store( conffile_t *cfg, store_conf_t **storep )
 			if (require_cram)
 				add_string_list(&server->auth_mechs, "CRAM-MD5");
 		}
-#endif
 		if (!server->auth_mechs)
 			add_string_list( &server->auth_mechs, "*" );
 		if (!server->sconf.port)
