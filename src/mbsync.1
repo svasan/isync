@@ -192,17 +192,17 @@ See \fBRECOMMENDATIONS\fR and \fBINHERENT PROBLEMS\fR below.
 (Default: none)
 ..
 .TP
-\fBTrashNewOnly\fR \fIyes\fR|\fIno\fR
+\fBTrashNewOnly\fR \fByes\fR|\fBno\fR
 When trashing, copy only not yet propagated messages. This makes sense if the
-remote Store has a \fBTrash\fR as well (with \fBTrashNewOnly\fR \fIno\fR).
-(Default: \fIno\fR)
+remote Store has a \fBTrash\fR as well (with \fBTrashNewOnly\fR \fBno\fR).
+(Default: \fBno\fR)
 ..
 .TP
-\fBTrashRemoteNew\fR \fIyes\fR|\fIno\fR
+\fBTrashRemoteNew\fR \fByes\fR|\fBno\fR
 When expunging the remote Store, copy not yet propagated messages to this
 Store's \fBTrash\fR. When using this, the remote Store does not need an own
 \fBTrash\fR at all, yet all messages are archived.
-(Default: \fIno\fR)
+(Default: \fBno\fR)
 ..
 .SS Maildir Stores
 The reference point for relative \fBPath\fRs is the current working directory.
@@ -237,11 +237,11 @@ Use \fBmdconvert\fR to convert mailboxes from one scheme to the other.
 Define the Maildir Store \fIname\fR, opening a section for its parameters.
 ..
 .TP
-\fBAltMap\fR \fIyes\fR|\fIno\fR
+\fBAltMap\fR \fByes\fR|\fBno\fR
 Use the \fBalternative\fR UID storage scheme for mailboxes in this Store.
 This does not affect mailboxes that do already have a UID storage scheme;
 use \fBmdconvert\fR to change it.
-(Default: \fIno\fR)
+(Default: \fBno\fR)
 ..
 .TP
 \fBInbox\fR \fIpath\fR
@@ -286,7 +286,7 @@ Define the IMAP4 Account \fIname\fR, opening a section for its parameters.
 Specify the DNS name or IP address of the IMAP server.
 .br
 If \fBTunnel\fR is used, this setting is needed only if \fBSSLType\fR is
-not \fINone\fR and \fBCertificateFile\fR is not used,
+not \fBNone\fR and \fBCertificateFile\fR is not used,
 in which case the host name is used for certificate subject verification.
 ..
 .TP
@@ -309,7 +309,7 @@ Specify the login name on the IMAP server.
 .TP
 \fBPass\fR \fIpassword\fR
 Specify the password for \fIusername\fR on the IMAP server.
-Note that this option is \fBNOT\fR required.
+Note that this option is \fInot\fR required.
 If neither a password nor a password command is specified in the
 configuration file, \fBmbsync\fR will prompt you for a password.
 ..
@@ -341,21 +341,21 @@ of this list, the list supplied by the server, and the installed SASL modules.
 (Default: \fB*\fR)
 ..
 .TP
-\fBSSLType\fR {\fINone\fR|\fISTARTTLS\fR|\fIIMAPS\fR}
+\fBSSLType\fR {\fBNone\fR|\fBSTARTTLS\fR|\fBIMAPS\fR}
 Select the connection security/encryption method:
 .br
-\fINone\fR - no security.
+\fBNone\fR - no security.
 This is the default when \fBTunnel\fR is set, as tunnels are usually secure.
 .br
-\fISTARTTLS\fR - security is established via the STARTTLS extension
+\fBSTARTTLS\fR - security is established via the STARTTLS extension
 after connecting the regular IMAP port 143. Most servers support this,
 so it is the default (unless a tunnel is used).
 .br
-\fIIMAPS\fR - security is established by starting SSL/TLS negotiation
+\fBIMAPS\fR - security is established by starting SSL/TLS negotiation
 right after connecting the secure IMAP port 993.
 ..
 .TP
-\fBSSLVersions\fR [\fISSLv2\fR] [\fISSLv3\fR] [\fITLSv1\fR] [\fITLSv1.1\fR] [\fITLSv1.2\fR]
+\fBSSLVersions\fR [\fBSSLv2\fR] [\fBSSLv3\fR] [\fBTLSv1\fR] [\fBTLSv1.1\fR] [\fBTLSv1.2\fR]
 Select the acceptable SSL/TLS versions.
 Use of SSLv2 is strongly discouraged for security reasons, but might be the
 only option on some very old servers.
@@ -363,9 +363,9 @@ Generally, the newest TLS version is recommended, but as this confuses some
 servers, \fBTLSv1\fR is the default.
 ..
 .TP
-\fBSystemCertificates\fR \fIyes\fR|\fIno\fR
+\fBSystemCertificates\fR \fByes\fR|\fBno\fR
 Whether the system's default root cerificate store should be loaded.
-(Default: \fIyes\fR)
+(Default: \fByes\fR)
 ..
 .TP
 \fBCertificateFile\fR \fIpath\fR
@@ -407,18 +407,18 @@ directly in the Store's section - this makes sense if an Account is used for
 one Store only anyway.
 ..
 .TP
-\fBUseNamespace\fR \fIyes\fR|\fIno\fR
+\fBUseNamespace\fR \fByes\fR|\fBno\fR
 Selects whether the server's first "personal" NAMESPACE should be prefixed to
 mailbox names. Disabling this makes sense for some broken IMAP servers.
 This option is meaningless if a \fBPath\fR was specified.
-(Default: \fIyes\fR)
+(Default: \fByes\fR)
 ..
 .TP
 \fBPathDelimiter\fR \fIdelim\fR
 Specify the server's hierarchy delimiter.
 (Default: taken from the server's first "personal" NAMESPACE)
 .br
-Do \fBNOT\fR abuse this to re-interpret the hierarchy.
+Do \fInot\fR abuse this to re-interpret the hierarchy.
 Use \fBFlatten\fR instead.
 ..
 .SS Channels
@@ -471,56 +471,56 @@ If \fIcount\fR is 0, the maximum number of messages is \fBunlimited\fR
 (Default: \fI0\fR).
 ..
 .TP
-\fBExpireUnread\fR \fIyes\fR|\fIno\fR
+\fBExpireUnread\fR \fByes\fR|\fBno\fR
 Selects whether unread messages should be affected by \fBMaxMessages\fR.
 Normally, unread messages are considered important and thus never expired.
 This ensures that you never miss new messages even after an extended absence.
 However, if your archive contains large amounts of unread messages by design,
 treating them as important would practically defeat \fBMaxMessages\fR. In this
 case you need to enable this option.
-(Default: \fIno\fR).
+(Default: \fBno\fR).
 ..
 .TP
-\fBSync\fR {\fINone\fR|[\fIPull\fR] [\fIPush\fR] [\fINew\fR] [\fIReNew\fR] [\fIDelete\fR] [\fIFlags\fR]|\fIAll\fR}
+\fBSync\fR {\fBNone\fR|[\fBPull\fR] [\fBPush\fR] [\fBNew\fR] [\fBReNew\fR] [\fBDelete\fR] [\fBFlags\fR]|\fBAll\fR}
 Select the synchronization operation(s) to perform:
 .br
-\fIPull\fR - propagate changes from Master to Slave.
+\fBPull\fR - propagate changes from Master to Slave.
 .br
-\fIPush\fR - propagate changes from Slave to Master.
+\fBPush\fR - propagate changes from Slave to Master.
 .br
-\fINew\fR - propagate newly appeared messages.
+\fBNew\fR - propagate newly appeared messages.
 .br
-\fIReNew\fR - previously refused messages are re-evaluated for propagation.
+\fBReNew\fR - previously refused messages are re-evaluated for propagation.
 Useful after flagging affected messages in the source Store or enlarging
 MaxSize in the destination Store.
 .br
-\fIDelete\fR - propagate message deletions. This applies only to messages that
+\fBDelete\fR - propagate message deletions. This applies only to messages that
 are actually gone, i.e., were expunged. The affected messages in the remote
 Store are marked as deleted only, i.e., they won't be really deleted until
 that Store is expunged.
 .br
-\fIFlags\fR - propagate flag changes. Note that Deleted/Trashed is a flag as
+\fBFlags\fR - propagate flag changes. Note that Deleted/Trashed is a flag as
 well; this is particularly interesting if you use \fBmutt\fR with the
 maildir_trash option.
 .br
-\fIAll\fR (\fB--full\fR on the command line) - all of the above.
+\fBAll\fR (\fB--full\fR on the command line) - all of the above.
 This is the global default.
 .br
-\fINone\fR (\fB--noop\fR on the command line) - don't propagate anything.
+\fBNone\fR (\fB--noop\fR on the command line) - don't propagate anything.
 Useful if you want to expunge only.
 .IP
-\fIPull\fR and \fIPush\fR are direction flags, while \fINew\fR, \fIReNew\fR,
-\fIDelete\fR and \fIFlags\fR are type flags. The two flag classes make up a
+\fBPull\fR and \fBPush\fR are direction flags, while \fBNew\fR, \fBReNew\fR,
+\fBDelete\fR and \fBFlags\fR are type flags. The two flag classes make up a
 two-dimensional matrix (a table). Its cells are the individual actions to
 perform. There are two styles of asserting the cells:
 .br
 In the first style, the flags select entire rows/colums in the matrix. Only
 the cells which are selected both horizontally and vertically are asserted.
 Specifying no flags from a class is like specifying all flags from this class.
-For example, "\fBSync\fR\ \fIPull\fR\ \fINew\fR\ \fIFlags\fR" will propagate
+For example, "\fBSync\fR\ \fBPull\fR\ \fBNew\fR\ \fBFlags\fR" will propagate
 new messages and flag changes from the Master to the Slave,
-"\fBSync\fR\ \fINew\fR\ \fIDelete\fR" will propagate message arrivals and
-deletions both ways, and "\fBSync\fR\ \fIPush\fR" will propagate all changes
+"\fBSync\fR\ \fBNew\fR\ \fBDelete\fR" will propagate message arrivals and
+deletions both ways, and "\fBSync\fR\ \fBPush\fR" will propagate all changes
 from the Slave to the Master.
 .br
 In the second style, direction flags are concatenated with type flags; every
@@ -528,22 +528,22 @@ compound flag immediately asserts a cell in the matrix. In addition to at least
 one compound flag, the individual flags can be used as well, but as opposed to
 the first style, they immediately assert all cells in their respective
 row/column. For example,
-"\fBSync\fR\ \fIPullNew\fR\ \fIPullDelete\fR\ \fIPush\fR" will propagate
+"\fBSync\fR\ \fBPullNew\fR\ \fBPullDelete\fR\ \fBPush\fR" will propagate
 message arrivals and deletions from the Master to the Slave and any changes
 from the Slave to the Master.
 Note that it is not allowed to assert a cell in two ways, e.g.
-"\fBSync\fR\ \fIPullNew\fR\ \fIPull\fR" and
-"\fBSync\fR\ \fIPullNew\fR\ \fIDelete\fR\ \fIPush\fR" induce error messages.
+"\fBSync\fR\ \fBPullNew\fR\ \fBPull\fR" and
+"\fBSync\fR\ \fBPullNew\fR\ \fBDelete\fR\ \fBPush\fR" induce error messages.
 ..
 .TP
-\fBCreate\fR {\fINone\fR|\fIMaster\fR|\fISlave\fR|\fIBoth\fR}
+\fBCreate\fR {\fBNone\fR|\fBMaster\fR|\fBSlave\fR|\fBBoth\fR}
 Automatically create missing mailboxes [on the Master/Slave].
 Otherwise print an error message and skip that mailbox pair if a mailbox
 and the corresponding sync state does not exist.
-(Global default: \fINone\fR)
+(Global default: \fBNone\fR)
 ..
 .TP
-\fBRemove\fR {\fINone\fR|\fIMaster\fR|\fISlave\fR|\fIBoth\fR}
+\fBRemove\fR {\fBNone\fR|\fBMaster\fR|\fBSlave\fR|\fBBoth\fR}
 Propagate mailbox deletions [to the Master/Slave].
 Otherwise print an error message and skip that mailbox pair if a mailbox
 does not exist but the corresponding sync state does.
@@ -553,23 +553,23 @@ mark them as deleted. This ensures compatibility with \fBSyncState *\fR.
 .br
 Note that for safety, non-empty mailboxes are never deleted.
 .br
-(Global default: \fINone\fR)
+(Global default: \fBNone\fR)
 ..
 .TP
-\fBExpunge\fR {\fINone\fR|\fIMaster\fR|\fISlave\fR|\fIBoth\fR}
+\fBExpunge\fR {\fBNone\fR|\fBMaster\fR|\fBSlave\fR|\fBBoth\fR}
 Permanently remove all messages [on the Master/Slave] marked for deletion.
 See \fBRECOMMENDATIONS\fR below.
-(Global default: \fINone\fR)
+(Global default: \fBNone\fR)
 ..
 .TP
-\fBCopyArrivalDate\fR {\fIyes\fR|\fIno\fR}
+\fBCopyArrivalDate\fR {\fByes\fR|\fBno\fR}
 Selects whether their arrival time should be propagated together with
 the messages.
 Enabling this makes sense in order to keep the time stamp based message
 sorting intact.
 Note that IMAP does not guarantee that the time stamp (termed \fBinternal
 date\fR) is actually the arrival time, but it is usually close enough.
-(Default: \fIno\fR)
+(Default: \fBno\fR)
 ..
 .P
 \fBSync\fR, \fBCreate\fR, \fBRemove\fR, \fBExpunge\fR,
@@ -615,7 +615,7 @@ times within a Group.
 ..
 .SS Global Options
 .TP
-\fBFSync\fR \fIyes\fR|\fIno\fR
+\fBFSync\fR \fByes\fR|\fBno\fR
 .br
 Selects whether \fBmbsync\fR performs forced flushing, which determines
 the level of data safety after system crashes and power outages.
@@ -624,7 +624,7 @@ data=ordered mode.
 Enabling it is a wise choice for file systems mounted with data=writeback,
 in particular modern systems like ext4, btrfs and xfs. The performance impact
 on older file systems may be disproportionate.
-(Default: \fIyes\fR)
+(Default: \fByes\fR)
 ..
 .TP
 \fBFieldDelimiter\fR \fIdelim\fR

@@ -139,26 +139,36 @@ if test "x$ob_cv_with_sasl" != xno; then
 fi
 AC_SUBST(SASL_LIBS)
 
-AC_CACHE_CHECK([for Berkley DB >= 4.2], ac_cv_berkdb4,
+AC_CACHE_CHECK([for Berkeley DB >= 4.1], ac_cv_berkdb4,
   [ac_cv_berkdb4=no
+    sav_LDFLAGS=$LDFLAGS
+    LDFLAGS="$LDFLAGS -ldb"
    AC_TRY_LINK([#include <db.h>],
                [DB *db;
+	        db_create(&db, 0, 0);
 	        db->truncate(db, 0, 0, 0);
 	        db->open(db, 0, "foo", "foo", DB_HASH, DB_CREATE, 0)],
-	       [ac_cv_berkdb4=yes])])
+	       [ac_cv_berkdb4=yes])
+    LDFLAGS=$sav_LDFLAGS
+  ])
 if test "x$ac_cv_berkdb4" = xyes; then
   AC_SUBST([DB_LIBS], ["-ldb"])
-  AC_DEFINE(USE_DB, 1, [if Berkley DB should be used])
+  AC_DEFINE(USE_DB, 1, [if Berkeley DB should be used])
 fi
 
 have_zlib=
-AC_CHECK_LIB([z], [deflate],
-    [AC_CHECK_HEADER(zlib.h,
-        [have_zlib=1
-         AC_SUBST([Z_LIBS], ["-lz"])
-         AC_DEFINE([HAVE_LIBZ], 1, [if you have the zlib library])]
-     )]
-)
+AC_ARG_WITH(zlib,
+  AS_HELP_STRING([--with-zlib], [use zlib [detect]]),
+  [ob_cv_with_zlib=$withval])
+if test "x$ob_cv_with_zlib" != xno; then
+  AC_CHECK_LIB([z], [deflate],
+      [AC_CHECK_HEADER(zlib.h,
+          [have_zlib=1
+           AC_SUBST([Z_LIBS], ["-lz"])
+           AC_DEFINE([HAVE_LIBZ], 1, [if you have the zlib library])]
+       )]
+  )
+fi
 
 AC_ARG_ENABLE(compat,
   AC_HELP_STRING([--disable-compat], [don't include isync compatibility wrapper [no]]),
@@ -189,8 +199,8 @@ else
     AC_MSG_RESULT([Not using zlib])
 fi
 if test "x$ac_cv_berkdb4" = xyes; then
-    AC_MSG_RESULT([Using Berkley DB])
+    AC_MSG_RESULT([Using Berkeley DB])
 else
-    AC_MSG_RESULT([Not using Berkley DB])
+    AC_MSG_RESULT([Not using Berkeley DB])
 fi
 AC_MSG_RESULT()

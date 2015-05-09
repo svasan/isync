@@ -84,11 +84,12 @@ typedef struct {
 #ifdef HAVE_LIBZ
 	z_streamp in_z, out_z;
 	wakeup_t z_fake;
+	int z_written;
 #endif
 
 	void (*bad_callback)( void *aux ); /* async fail while sending or listening */
 	void (*read_callback)( void *aux ); /* data available for reading */
-	int (*write_callback)( void *aux ); /* all *queued* data was sent */
+	void (*write_callback)( void *aux ); /* all *queued* data was sent */
 	union {
 		void (*connect)( int ok, void *aux );
 		void (*starttls)( int ok, void *aux );
@@ -102,6 +103,7 @@ typedef struct {
 	/* writing */
 	buff_chunk_t *append_buf; /* accumulating buffer */
 	buff_chunk_t *write_buf, **write_buf_append; /* buffer head & tail */
+	int writing;
 #ifdef HAVE_LIBZ
 	int append_avail; /* space left in accumulating buffer */
 #endif
@@ -123,7 +125,7 @@ static INLINE void socket_init( conn_t *conn,
                                 const server_conf_t *conf,
                                 void (*bad_callback)( void *aux ),
                                 void (*read_callback)( void *aux ),
-                                int (*write_callback)( void *aux ),
+                                void (*write_callback)( void *aux ),
                                 void *aux )
 {
 	conn->conf = conf;
@@ -148,6 +150,6 @@ typedef struct conn_iovec {
 	int len;
 	ownership_t takeOwn;
 } conn_iovec_t;
-int socket_write( conn_t *sock, conn_iovec_t *iov, int iovcnt );
+void socket_write( conn_t *sock, conn_iovec_t *iov, int iovcnt );
 
 #endif
