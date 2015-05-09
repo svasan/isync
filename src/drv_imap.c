@@ -335,7 +335,7 @@ cmd_submittable( imap_store_t *ctx, struct imap_cmd *cmd )
 	       ctx->num_in_progress < ((imap_store_conf_t *)ctx->gen.conf)->server->max_in_progress;
 }
 
-static int
+static void
 flush_imap_cmds( imap_store_t *ctx )
 {
 	struct imap_cmd *cmd;
@@ -345,7 +345,6 @@ flush_imap_cmds( imap_store_t *ctx )
 			ctx->pending_append = &ctx->pending;
 		send_imap_cmd( ctx, cmd );
 	}
-	return 0;
 }
 
 static void
@@ -1589,7 +1588,7 @@ imap_open_store( store_conf_t *conf, const char *label,
 
 	socket_init( &ctx->conn, &srvc->sconf,
 	             (void (*)( void * ))imap_invoke_bad_callback,
-	             imap_socket_read, (int (*)(void *))flush_imap_cmds, ctx );
+	             imap_socket_read, (void (*)(void *))flush_imap_cmds, ctx );
 	socket_connect( &ctx->conn, imap_open_store_connected );
 }
 

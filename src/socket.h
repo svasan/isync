@@ -88,7 +88,7 @@ typedef struct {
 
 	void (*bad_callback)( void *aux ); /* async fail while sending or listening */
 	void (*read_callback)( void *aux ); /* data available for reading */
-	int (*write_callback)( void *aux ); /* all *queued* data was sent */
+	void (*write_callback)( void *aux ); /* all *queued* data was sent */
 	union {
 		void (*connect)( int ok, void *aux );
 		void (*starttls)( int ok, void *aux );
@@ -123,7 +123,7 @@ static INLINE void socket_init( conn_t *conn,
                                 const server_conf_t *conf,
                                 void (*bad_callback)( void *aux ),
                                 void (*read_callback)( void *aux ),
-                                int (*write_callback)( void *aux ),
+                                void (*write_callback)( void *aux ),
                                 void *aux )
 {
 	conn->conf = conf;

@@ -80,7 +80,7 @@ ssl_return( const char *func, conn_t *conn, int ret )
 				/* Callers take the short path out, so signal higher layers from here. */
 				conn->state = SCK_EOF;
 				conn->read_callback( conn->callback_aux );
-				return 0;
+				return -1;
 			}
 			sys_error( "Socket error: secure %s %s", func, conn->name );
 		} else {
@@ -766,7 +766,8 @@ do_queued_write( conn_t *conn )
 		conf_wakeup( &conn->ssl_fake, 0 );
 #endif
 	conn->writing = 0;
-	return conn->write_callback( conn->callback_aux );
+	conn->write_callback( conn->callback_aux );
+	return -1;
 }
 
 static void
