@@ -83,6 +83,7 @@ typedef struct {
 #ifdef HAVE_LIBZ
 	z_streamp in_z, out_z;
 	wakeup_t z_fake;
+	int z_written;
 #endif
 
 	void (*bad_callback)( void *aux ); /* async fail while sending or listening */
@@ -100,6 +101,7 @@ typedef struct {
 	/* writing */
 	buff_chunk_t *append_buf; /* accumulating buffer */
 	buff_chunk_t *write_buf, **write_buf_append; /* buffer head & tail */
+	int writing;
 #ifdef HAVE_LIBZ
 	int append_avail; /* space left in accumulating buffer */
 #endif
@@ -145,6 +147,6 @@ typedef struct conn_iovec {
 	int len;
 	ownership_t takeOwn;
 } conn_iovec_t;
-int socket_write( conn_t *sock, conn_iovec_t *iov, int iovcnt );
+void socket_write( conn_t *sock, conn_iovec_t *iov, int iovcnt );
 
 #endif

@@ -755,6 +755,7 @@ do_queued_write( conn_t *conn )
 			return -1;
 		if (n != len) {
 			conn->write_offset += n;
+			conn->writing = 1;
 			return 0;
 		}
 		conn->write_offset = 0;
@@ -764,6 +765,7 @@ do_queued_write( conn_t *conn )
 	if (conn->ssl && SSL_pending( conn->ssl ))
 		conf_wakeup( &conn->ssl_fake, 0 );
 #endif
+	conn->writing = 0;
 	return conn->write_callback( conn->callback_aux );
 }
 
@@ -787,6 +789,8 @@ do_flush( conn_t *conn )
 #ifdef HAVE_LIBZ
 	if (conn->out_z) {
 		int buf_avail = conn->append_avail;
+		if (!conn->z_written)
+			return;
 		do {
 			if (!bc) {
 				buf_avail = WRITE_CHUNK_SIZE;
@@ -812,6 +816,7 @@ do_flush( conn_t *conn )
 		} while (!conn->out_z->avail_out);
 		conn->append_buf = bc;
 		conn->append_avail = buf_avail;
+		conn->z_written = 0;
 	} else
 #endif
 	if (bc) {
@@ -823,15 +828,15 @@ do_flush( conn_t *conn )
 	}
 }
 
-int
+void
 socket_write( conn_t *conn, conn_iovec_t *iov, int iovcnt )
 {
 	int i, buf_avail, len, offset = 0, total = 0;
-	buff_chunk_t *bc, *exwb = conn->write_buf;
+	buff_chunk_t *bc;
 
 	for (i = 0; i < iovcnt; i++)
 		total += iov[i].len;
-	if (total >= WRITE_CHUNK_SIZE && pending_wakeup( &conn->fd_fake )) {
+	if (total >= WRITE_CHUNK_SIZE) {
 		/* If the new data is too big, queue the pending buffer to avoid latency. */
 		do_flush( conn );
 	}
@@ -870,6 +875,7 @@ socket_write( conn_t *conn, conn_iovec_t *iov, int iovcnt )
 				bc->len = (char *)conn->out_z->next_out - bc->data;
 				buf_avail = conn->out_z->avail_out;
 				len -= conn->out_z->avail_in;
+				conn->z_written = 1;
 			} else
 #endif
 			{
@@ -898,17 +904,7 @@ socket_write( conn_t *conn, conn_iovec_t *iov, int iovcnt )
 #ifdef HAVE_LIBZ
 	conn->append_avail = buf_avail;
 #endif
-	/* Queue the pending write once the main loop goes idle. */
-	conf_wakeup( &conn->fd_fake,
-#ifdef HAVE_LIBZ
-	             /* Always give zlib a chance to flush its internal buffer. */
-	             conn->out_z ||
-#endif
-	             bc ? 0 : -1 );
-	/* If no writes were queued before, ensure that flushing commences. */
-	if (!exwb)
-		return do_queued_write( conn );
-	return 0;
+	conf_wakeup( &conn->fd_fake, 0 );
 }
 
 static void
@@ -963,10 +959,10 @@ socket_fake_cb( void *aux )
 {
 	conn_t *conn = (conn_t *)aux;
 
-	buff_chunk_t *exwb = conn->write_buf;
+	/* Ensure that a pending write gets queued. */
 	do_flush( conn );
-	/* If no writes were queued before, ensure that flushing commences. */
-	if (!exwb)
+	/* If no writes are ongoing, start writing now. */
+	if (!conn->writing)
 		do_queued_write( conn );
 }
 
