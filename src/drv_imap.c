@@ -322,7 +322,7 @@ send_imap_cmd( imap_store_t *ctx, struct imap_cmd *cmd )
 }
 
 static int
-cmd_submittable( imap_store_t *ctx, struct imap_cmd *cmd )
+cmd_sendable( imap_store_t *ctx, struct imap_cmd *cmd )
 {
 	struct imap_cmd *cmdp;
 
@@ -340,7 +340,7 @@ flush_imap_cmds( imap_store_t *ctx )
 {
 	struct imap_cmd *cmd;
 
-	if ((cmd = ctx->pending) && cmd_submittable( ctx, cmd )) {
+	if ((cmd = ctx->pending) && cmd_sendable( ctx, cmd )) {
 		if (!(ctx->pending = cmd->next))
 			ctx->pending_append = &ctx->pending;
 		send_imap_cmd( ctx, cmd );
@@ -360,7 +360,7 @@ cancel_pending_imap_cmds( imap_store_t *ctx )
 }
 
 static void
-cancel_submitted_imap_cmds( imap_store_t *ctx )
+cancel_sent_imap_cmds( imap_store_t *ctx )
 {
 	struct imap_cmd *cmd;
 
@@ -379,7 +379,7 @@ submit_imap_cmd( imap_store_t *ctx, struct imap_cmd *cmd )
 	assert( cmd );
 	assert( cmd->param.done );
 
-	if ((ctx->pending && !cmd->param.high_prio) || !cmd_submittable( ctx, cmd )) {
+	if ((ctx->pending && !cmd->param.high_prio) || !cmd_sendable( ctx, cmd )) {
 		if (ctx->pending && cmd->param.high_prio) {
 			cmd->next = ctx->pending;
 			ctx->pending = cmd;
@@ -1425,7 +1425,7 @@ imap_cancel_store( store_t *gctx )
 	sasl_dispose( &ctx->sasl );
 #endif
 	socket_close( &ctx->conn );
-	cancel_submitted_imap_cmds( ctx );
+	cancel_sent_imap_cmds( ctx );
 	cancel_pending_imap_cmds( ctx );
 	free_generic_messages( ctx->gen.msgs );
 	free_string_list( ctx->gen.boxes );
