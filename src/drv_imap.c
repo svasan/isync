@@ -1380,7 +1380,11 @@ imap_socket_read( void *aux )
 				} else /*if (!strcmp( "BAD", arg ))*/
 					resp = RESP_CANCEL;
 				error( "IMAP command '%s' returned an error: %s %s\n",
-				       !starts_with( cmdp->cmd, -1, "LOGIN", 5 ) ? cmdp->cmd : "LOGIN <user> <pass>",
+				       starts_with( cmdp->cmd, -1, "LOGIN", 5 ) ?
+				           "LOGIN <user> <pass>" :
+				           starts_with( cmdp->cmd, -1, "AUTHENTICATE PLAIN", 18 ) ?
+				               "AUTHENTICATE PLAIN <authdata>" :
+				                cmdp->cmd,
 				       arg, cmd ? cmd : "" );
 			}
 		  doresp:
