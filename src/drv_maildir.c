@@ -169,15 +169,21 @@ maildir_join_path( maildir_store_conf_t *conf, const char *prefix, const char *b
 }
 
 static int
-maildir_validate_path( maildir_store_conf_t *conf )
+maildir_ensure_path( maildir_store_conf_t *conf )
 {
-	struct stat st;
-
 	if (!conf->gen.path) {
 		error( "Maildir error: store '%s' has no Path\n", conf->gen.name );
 		conf->failed = FAIL_FINAL;
 		return -1;
 	}
+	return 0;
+}
+
+static int
+maildir_validate_path( maildir_store_conf_t *conf )
+{
+	struct stat st;
+
 	if (stat( conf->gen.path, &st ) || !S_ISDIR(st.st_mode)) {
 		error( "Maildir error: cannot open store '%s'\n", conf->gen.path );
 		conf->failed = FAIL_FINAL;
@@ -199,8 +205,13 @@ maildir_open_store( store_conf_t *gconf, const char *label ATTR_UNUSED,
 	ctx->gen.conf = gconf;
 	ctx->uvfd = -1;
 	init_wakeup( &ctx->lcktmr, lcktmr_timeout, ctx );
+	if (gconf->path && maildir_validate_path( conf ) < 0) {
+		free( ctx );
+		cb( 0, aux );
+		return;
+	}
 	if (gconf->trash) {
-		if (maildir_validate_path( conf ) < 0) {
+		if (maildir_ensure_path( conf ) < 0) {
 			free( ctx );
 			cb( 0, aux );
 			return;
@@ -373,7 +384,7 @@ maildir_list_path( store_t *gctx, int flags, const char *inbox )
 {
 	char path[_POSIX_PATH_MAX], name[_POSIX_PATH_MAX];
 
-	if (maildir_validate_path( (maildir_store_conf_t *)gctx->conf ) < 0)
+	if (maildir_ensure_path( (maildir_store_conf_t *)gctx->conf ) < 0)
 		return -1;
 	return maildir_list_recurse(
 	        gctx, 0, flags, inbox, inbox ? strlen( inbox ) : 0, 0, 0,
@@ -1113,7 +1124,7 @@ maildir_select_box( store_t *gctx, const char *name )
 		gctx->path = maildir_join_path( conf, conf->inbox, name + 5 );
 		ctx->is_inbox = !name[5];
 	} else {
-		if (maildir_validate_path( conf ) < 0) {
+		if (maildir_ensure_path( conf ) < 0) {
 			gctx->path = 0;
 			return DRV_CANCELED;
 		}
