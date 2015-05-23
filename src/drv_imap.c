@@ -64,7 +64,7 @@ typedef struct imap_server_conf {
 typedef struct imap_store_conf {
 	store_conf_t gen;
 	imap_server_conf_t *server;
-	char *delimiter;
+	char delimiter;
 	char use_namespace;
 } imap_store_conf_t;
 
@@ -104,7 +104,7 @@ typedef struct imap_store {
 	/* trash folder's existence is not confirmed yet */
 	enum { TrashUnknown, TrashChecking, TrashKnown } trashnc;
 	uint got_namespace:1;
-	char *delimiter; /* hierarchy delimiter */
+	char delimiter[2]; /* hierarchy delimiter */
 	list_t *ns_personal, *ns_other, *ns_shared; /* NAMESPACE info */
 	message_t **msgapp; /* FETCH results */
 	uint caps; /* CAPABILITY results */
@@ -1112,23 +1112,18 @@ parse_list_rsp( imap_store_t *ctx, list_t *list, char *cmd )
 	free_list( list );
 	if (!(arg = next_arg( &cmd )))
 		goto bad_list;
-	if (!ctx->delimiter)
-		ctx->delimiter = nfstrdup( arg );
+	if (!ctx->delimiter[0])
+		ctx->delimiter[0] = arg[0];
 	return parse_list( ctx, cmd, parse_list_rsp_p2 );
 }
 
 static int
 is_inbox( imap_store_t *ctx, const char *arg, int argl )
 {
-	int i;
-	char c;
-
 	if (!starts_with( arg, argl, "INBOX", 5 ))
 		return 0;
-	if (arg[5])
-		for (i = 0; (c = ctx->delimiter[i]); i++)
-			if (arg[i + 5] != c)
-				return 0;
+	if (arg[5] && arg[5] != ctx->delimiter[0])
+		return 0;
 	return 1;
 }
 
@@ -1430,7 +1425,6 @@ imap_cleanup_store( imap_store_t *ctx )
 {
 	free_generic_messages( ctx->gen.msgs );
 	free_string_list( ctx->gen.boxes );
-	free( ctx->delimiter );
 }
 
 static void
@@ -2104,7 +2098,7 @@ imap_open_store_namespace( imap_store_t *ctx )
 
 	ctx->state = SST_HALF;
 	ctx->prefix = cfg->gen.path;
-	ctx->delimiter = cfg->delimiter ? nfstrdup( cfg->delimiter ) : 0;
+	ctx->delimiter[0] = cfg->delimiter ? cfg->delimiter : 0;
 	if (((!ctx->prefix && cfg->use_namespace) || !cfg->delimiter) && CAP(NAMESPACE)) {
 		/* get NAMESPACE info */
 		if (!ctx->got_namespace)
@@ -2141,8 +2135,8 @@ imap_open_store_namespace2( imap_store_t *ctx )
 	{
 		if (!ctx->prefix && cfg->use_namespace)
 			ctx->prefix = nsp_1st_ns->val;
-		if (!ctx->delimiter)
-			ctx->delimiter = nfstrdup( nsp_1st_dl->val );
+		if (!ctx->delimiter[0])
+			ctx->delimiter[0] = nsp_1st_dl->val[0];
 		imap_open_store_finalize( ctx );
 	} else {
 		imap_open_store_bail( ctx, FAIL_FINAL );
@@ -2855,9 +2849,14 @@ imap_parse_store( conffile_t *cfg, store_conf_t **storep )
 				store->use_namespace = parse_bool( cfg );
 			else if (!strcasecmp( "Path", cfg->cmd ))
 				store->gen.path = nfstrdup( cfg->val );
-			else if (!strcasecmp( "PathDelimiter", cfg->cmd ))
-				store->delimiter = nfstrdup( cfg->val );
-			else
+			else if (!strcasecmp( "PathDelimiter", cfg->cmd )) {
+				if (strlen( cfg->val ) != 1) {
+					error( "%s:%d: Path delimiter must be exactly one character long\n", cfg->file, cfg->line );
+					cfg->err = 1;
+					continue;
+				}
+				store->delimiter = cfg->val[0];
+			} else
 				parse_generic_store( &store->gen, cfg );
 			continue;
 		} else {
