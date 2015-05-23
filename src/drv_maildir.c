@@ -325,7 +325,7 @@ maildir_list_recurse( store_t *gctx, int isBox, int flags,
 			}
 		} else if (basePath && equals( path, pl, basePath, basePathLen )) {
 			/* Path nested into Inbox. List now if it won't be listed separately anyway. */
-			if (!(flags & LIST_PATH) && maildir_list_path( gctx, flags, 0 ) < 0) {
+			if (!(flags & (LIST_PATH | LIST_PATH_MAYBE)) && maildir_list_path( gctx, flags, 0 ) < 0) {
 				closedir( dir );
 				return -1;
 			}
@@ -401,7 +401,8 @@ static void
 maildir_list_store( store_t *gctx, int flags,
                     void (*cb)( int sts, void *aux ), void *aux )
 {
-	if (((flags & LIST_PATH) && maildir_list_path( gctx, flags, ((maildir_store_conf_t *)gctx->conf)->inbox ) < 0) ||
+	if ((((flags & LIST_PATH) || ((flags & LIST_PATH_MAYBE) && gctx->conf->path))
+	     && maildir_list_path( gctx, flags, ((maildir_store_conf_t *)gctx->conf)->inbox ) < 0) ||
 	    ((flags & LIST_INBOX) && maildir_list_inbox( gctx, flags, gctx->conf->path ) < 0)) {
 		maildir_invoke_bad_callback( gctx );
 		cb( DRV_CANCELED, aux );

@@ -139,8 +139,9 @@ typedef struct {
 */
 #define DRV_VERBOSE     2
 
-#define LIST_PATH       1
-#define LIST_INBOX      2
+#define LIST_INBOX      1
+#define LIST_PATH       2
+#define LIST_PATH_MAYBE 4
 
 struct driver {
 	int flags;

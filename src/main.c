@@ -945,13 +945,12 @@ store_connected( int sts, void *aux )
 								flags |= LIST_PATH;
 							else
 								flags |= LIST_INBOX;
+						} else if (c == '*' || c == '%') {
+							/* It can be both INBOX and Path, but don't require Path to be configured. */
+							flags |= LIST_INBOX | LIST_PATH_MAYBE;
 						} else {
-							/* User may not want the INBOX after all ... */
+							/* It's definitely not the INBOX. */
 							flags |= LIST_PATH;
-							/* ... but maybe he does.
-							 * The flattened sub-folder case is implicitly covered by the previous line. */
-							if (c == '*' || c == '%')
-								flags |= LIST_INBOX;
 						}
 					} else {
 						flags |= LIST_PATH;

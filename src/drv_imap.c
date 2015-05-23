@@ -2620,10 +2620,10 @@ imap_list_store( store_t *gctx, int flags,
 	imap_store_t *ctx = (imap_store_t *)gctx;
 	struct imap_cmd_refcounted_state *sts = imap_refcounted_new_state( cb, aux );
 
-	if ((flags & LIST_PATH) && (!(flags & LIST_INBOX) || !is_inbox( ctx, ctx->prefix, -1 )))
+	if ((flags & (LIST_PATH | LIST_PATH_MAYBE)) && (!(flags & LIST_INBOX) || !is_inbox( ctx, ctx->prefix, -1 )))
 		imap_exec( ctx, imap_refcounted_new_cmd( sts ), imap_refcounted_done_box,
 		           "LIST \"\" \"%\\s*\"", ctx->prefix );
-	if ((flags & LIST_INBOX) && (!(flags & LIST_PATH) || *ctx->prefix))
+	if ((flags & LIST_INBOX) && (!(flags & (LIST_PATH | LIST_PATH_MAYBE)) || *ctx->prefix))
 		imap_exec( ctx, imap_refcounted_new_cmd( sts ), imap_refcounted_done_box,
 		           "LIST \"\" INBOX*" );
 	imap_refcounted_done( sts );
