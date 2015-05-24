@@ -54,6 +54,9 @@ isync executable still exists; it is a compatibility wrapper around mbsync.
     delete all messages in the affected mailbox - not that this ever
     happened to me).
 
+    M$ Exchange (2013 at least) needs DisableExtension MOVE to be compatible
+    with the Trash functionality.
+
 * Platforms
 
     At some point, ``isync'' has successfully run on:
