@@ -121,8 +121,10 @@ typedef struct {
 #define DRV_MSG_BAD     1
 /* Something is wrong with the current mailbox - probably it is somehow inaccessible. */
 #define DRV_BOX_BAD     2
+/* Failed to connect store. */
+#define DRV_STORE_BAD   3
 /* The command has been cancel()ed or cancel_store()d. */
-#define DRV_CANCELED    3
+#define DRV_CANCELED    4
 
 /* All memory belongs to the driver's user, unless stated otherwise. */
 
@@ -146,16 +148,19 @@ struct driver {
 	/* Parse configuration. */
 	int (*parse_store)( conffile_t *cfg, store_conf_t **storep );
 
-	/* Close remaining server connections. All stores must be disowned first. */
+	/* Close remaining server connections. All stores must be discarded first. */
 	void (*cleanup)( void );
 
-	/* Open a store with the given configuration. This may recycle existing
-	 * server connections. Upon failure, a null store is passed to the callback. */
-	void (*open_store)( store_conf_t *conf, const char *label,
-	                    void (*cb)( store_t *ctx, void *aux ), void *aux );
+	/* Allocate a store with the given configuration. This is expected to
+	 * return quickly, and must not fail. */
+	store_t *(*alloc_store)( store_conf_t *conf, const char *label );
 
-	/* Mark the store as available for recycling. Server connection may be kept alive. */
-	void (*disown_store)( store_t *ctx );
+	/* Open/connect the store. This may recycle existing server connections. */
+	void (*connect_store)( store_t *ctx,
+	                       void (*cb)( int sts, void *aux ), void *aux );
+
+	/* Discard the store. Underlying server connection may be kept alive. */
+	void (*free_store)( store_t *ctx );
 
 	/* Discard the store after a bad_callback. The server connections will be closed.
 	 * Pending commands will have their callbacks synchronously invoked with DRV_CANCELED. */

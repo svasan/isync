@@ -194,35 +194,40 @@ maildir_validate_path( maildir_store_conf_t *conf )
 
 static void lcktmr_timeout( void *aux );
 
-static void
-maildir_open_store( store_conf_t *gconf, const char *label ATTR_UNUSED,
-                    void (*cb)( store_t *ctx, void *aux ), void *aux )
+static store_t *
+maildir_alloc_store( store_conf_t *gconf, const char *label ATTR_UNUSED )
 {
-	maildir_store_conf_t *conf = (maildir_store_conf_t *)gconf;
 	maildir_store_t *ctx;
 
 	ctx = nfcalloc( sizeof(*ctx) );
 	ctx->gen.conf = gconf;
 	ctx->uvfd = -1;
 	init_wakeup( &ctx->lcktmr, lcktmr_timeout, ctx );
-	if (gconf->path && maildir_validate_path( conf ) < 0) {
-		free( ctx );
-		cb( 0, aux );
+	return &ctx->gen;
+}
+
+static void
+maildir_connect_store( store_t *gctx,
+                       void (*cb)( int sts, void *aux ), void *aux )
+{
+	maildir_store_t *ctx = (maildir_store_t *)gctx;
+	maildir_store_conf_t *conf = (maildir_store_conf_t *)ctx->gen.conf;
+
+	if (conf->gen.path && maildir_validate_path( conf ) < 0) {
+		cb( DRV_STORE_BAD, aux );
 		return;
 	}
-	if (gconf->trash) {
+	if (conf->gen.trash) {
 		if (maildir_ensure_path( conf ) < 0) {
-			free( ctx );
-			cb( 0, aux );
+			cb( DRV_STORE_BAD, aux );
 			return;
 		}
-		if (!(ctx->trash = maildir_join_path( conf, gconf->path, gconf->trash ))) {
-			free( ctx );
-			cb( 0, aux );
+		if (!(ctx->trash = maildir_join_path( conf, conf->gen.path, conf->gen.trash ))) {
+			cb( DRV_STORE_BAD, aux );
 			return;
 		}
 	}
-	cb( &ctx->gen, aux );
+	cb( DRV_OK, aux );
 }
 
 static void
@@ -256,7 +261,7 @@ maildir_cleanup( store_t *gctx )
 }
 
 static void
-maildir_disown_store( store_t *gctx )
+maildir_free_store( store_t *gctx )
 {
 	maildir_store_t *ctx = (maildir_store_t *)gctx;
 
@@ -1761,9 +1766,10 @@ struct driver maildir_driver = {
 	0, /* XXX DRV_CRLF? */
 	maildir_parse_store,
 	maildir_cleanup_drv,
-	maildir_open_store,
-	maildir_disown_store,
-	maildir_disown_store, /* _cancel_, but it's the same */
+	maildir_alloc_store,
+	maildir_connect_store,
+	maildir_free_store,
+	maildir_free_store, /* _cancel_, but it's the same */
 	maildir_list_store,
 	maildir_select_box,
 	maildir_create_box,

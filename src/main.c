@@ -727,10 +727,33 @@ main( int argc, char **argv )
 }
 
 #define ST_FRESH     0
-#define ST_OPEN      1
-#define ST_CLOSED    2
+#define ST_CONNECTED 1
+#define ST_OPEN      2
+#define ST_CANCELING 3
+#define ST_CLOSED    4
 
-static void store_opened( store_t *ctx, void *aux );
+static void
+cancel_prep_done( void *aux )
+{
+	MVARS(aux)
+
+	mvars->drv[t]->free_store( mvars->ctx[t] );
+	mvars->state[t] = ST_CLOSED;
+	sync_chans( mvars, E_OPEN );
+}
+
+static void
+store_bad( void *aux )
+{
+	MVARS(aux)
+
+	mvars->drv[t]->cancel_store( mvars->ctx[t] );
+	mvars->state[t] = ST_CLOSED;
+	mvars->ret = mvars->skip = 1;
+	sync_chans( mvars, E_OPEN );
+}
+
+static void store_connected( int sts, void *aux );
 static void store_listed( int sts, void *aux );
 static int sync_listed_boxes( main_vars_t *mvars, box_ent_t *mbox );
 static void done_sync_2_dyn( int sts, void *aux );
@@ -771,17 +794,18 @@ sync_chans( main_vars_t *mvars, int ent )
 			labels[M] = "M: ", labels[S] = "S: ";
 		else
 			labels[M] = labels[S] = "";
+		for (t = 0; t < 2; t++) {
+			mvars->drv[t] = mvars->chan->stores[t]->driver;
+			mvars->ctx[t] = mvars->drv[t]->alloc_store( mvars->chan->stores[t], labels[t] );
+			set_bad_callback( mvars->ctx[t], store_bad, AUX );
+		}
 		for (t = 0; ; t++) {
 			info( "Opening %s store %s...\n", str_ms[t], mvars->chan->stores[t]->name );
-			mvars->drv[t] = mvars->chan->stores[t]->driver;
-			mvars->drv[t]->open_store( mvars->chan->stores[t], labels[t], store_opened, AUX );
-			if (t)
+			mvars->drv[t]->connect_store( mvars->ctx[t], store_connected, AUX );
+			if (t || mvars->skip)
 				break;
-			if (mvars->skip) {
-				mvars->state[1] = ST_CLOSED;
-				break;
-			}
 		}
+
 		mvars->cben = 1;
 	  opened:
 		if (mvars->skip)
@@ -856,13 +880,19 @@ sync_chans( main_vars_t *mvars, int ent )
 		}
 
 	  next:
+		mvars->cben = 0;
 		for (t = 0; t < 2; t++)
-			if (mvars->state[t] == ST_OPEN) {
-				mvars->drv[t]->disown_store( mvars->ctx[t] );
+			if (mvars->state[t] == ST_FRESH) {
+				/* An unconnected store may be only cancelled. */
 				mvars->state[t] = ST_CLOSED;
+				mvars->drv[t]->cancel_store( mvars->ctx[t] );
+			} else if (mvars->state[t] == ST_CONNECTED || mvars->state[t] == ST_OPEN) {
+				mvars->state[t] = ST_CANCELING;
+				mvars->drv[t]->cancel_cmds( mvars->ctx[t], cancel_prep_done, AUX );
 			}
+		mvars->cben = 1;
 		if (mvars->state[M] != ST_CLOSED || mvars->state[S] != ST_CLOSED) {
-			mvars->skip = mvars->cben = 1;
+			mvars->skip = 1;
 			return;
 		}
 		if (mvars->chanptr->boxlist == 2) {
@@ -885,72 +915,64 @@ sync_chans( main_vars_t *mvars, int ent )
 }
 
 static void
-store_bad( void *aux )
-{
-	MVARS(aux)
-
-	mvars->drv[t]->cancel_store( mvars->ctx[t] );
-	mvars->ret = mvars->skip = 1;
-	mvars->state[t] = ST_CLOSED;
-	sync_chans( mvars, E_OPEN );
-}
-
-static void
-store_opened( store_t *ctx, void *aux )
+store_connected( int sts, void *aux )
 {
 	MVARS(aux)
 	string_list_t *cpat;
 	int cflags;
 
-	if (!ctx) {
-		mvars->ret = mvars->skip = 1;
-		mvars->state[t] = ST_CLOSED;
-		sync_chans( mvars, E_OPEN );
+	switch (sts) {
+	case DRV_CANCELED:
 		return;
-	}
-	mvars->ctx[t] = ctx;
-	if (!mvars->skip && !mvars->chanptr->boxlist && mvars->chan->patterns && !ctx->listed) {
-		for (cflags = 0, cpat = mvars->chan->patterns; cpat; cpat = cpat->next) {
-			const char *pat = cpat->string;
-			if (*pat != '!') {
-				char buf[8];
-				int bufl = snprintf( buf, sizeof(buf), "%s%s", nz( mvars->chan->boxes[t], "" ), pat );
-				int flags = 0;
-				/* Partial matches like "INB*" or even "*" are not considered,
-				 * except implicity when the INBOX lives under Path. */
-				if (starts_with( buf, bufl, "INBOX", 5 )) {
-					char c = buf[5];
-					if (!c) {
-						/* User really wants the INBOX. */
-						flags |= LIST_INBOX;
-					} else if (c == '/') {
-						/* Flattened sub-folders of INBOX actually end up in Path. */
-						if (ctx->conf->flat_delim)
+	case DRV_OK:
+		if (!mvars->skip && !mvars->chanptr->boxlist && mvars->chan->patterns && !mvars->ctx[t]->listed) {
+			for (cflags = 0, cpat = mvars->chan->patterns; cpat; cpat = cpat->next) {
+				const char *pat = cpat->string;
+				if (*pat != '!') {
+					char buf[8];
+					int bufl = snprintf( buf, sizeof(buf), "%s%s", nz( mvars->chan->boxes[t], "" ), pat );
+					int flags = 0;
+					/* Partial matches like "INB*" or even "*" are not considered,
+					 * except implicity when the INBOX lives under Path. */
+					if (starts_with( buf, bufl, "INBOX", 5 )) {
+						char c = buf[5];
+						if (!c) {
+							/* User really wants the INBOX. */
+							flags |= LIST_INBOX;
+						} else if (c == '/') {
+							/* Flattened sub-folders of INBOX actually end up in Path. */
+							if (mvars->ctx[t]->conf->flat_delim)
+								flags |= LIST_PATH;
+							else
+								flags |= LIST_INBOX;
+						} else {
+							/* User may not want the INBOX after all ... */
 							flags |= LIST_PATH;
-						else
-							flags |= LIST_INBOX;
+							/* ... but maybe he does.
+							 * The flattened sub-folder case is implicitly covered by the previous line. */
+							if (c == '*' || c == '%')
+								flags |= LIST_INBOX;
+						}
 					} else {
-						/* User may not want the INBOX after all ... */
 						flags |= LIST_PATH;
-						/* ... but maybe he does.
-						 * The flattened sub-folder case is implicitly covered by the previous line. */
-						if (c == '*' || c == '%')
-							flags |= LIST_INBOX;
 					}
-				} else {
-					flags |= LIST_PATH;
+					debug( "pattern '%s' (effective '%s'): %sPath, %sINBOX\n",
+					       pat, buf, (flags & LIST_PATH) ? "" : "no ",  (flags & LIST_INBOX) ? "" : "no ");
+					cflags |= flags;
 				}
-				debug( "pattern '%s' (effective '%s'): %sPath, %sINBOX\n",
-				       pat, buf, (flags & LIST_PATH) ? "" : "no ",  (flags & LIST_INBOX) ? "" : "no ");
-				cflags |= flags;
 			}
+			mvars->state[t] = ST_CONNECTED;
+			mvars->drv[t]->list_store( mvars->ctx[t], cflags, store_listed, AUX );
+			return;
 		}
-		set_bad_callback( ctx, store_bad, AUX );
-		mvars->drv[t]->list_store( ctx, cflags, store_listed, AUX );
-	} else {
 		mvars->state[t] = ST_OPEN;
-		sync_chans( mvars, E_OPEN );
+		break;
+	default:
+		mvars->ret = mvars->skip = 1;
+		mvars->state[t] = ST_OPEN;
+		break;
 	}
+	sync_chans( mvars, E_OPEN );
 }
 
 static void

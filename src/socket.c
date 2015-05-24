@@ -516,6 +516,7 @@ socket_connected( conn_t *conn )
 {
 #ifdef HAVE_IPV6
 	freeaddrinfo( conn->addrs );
+	conn->addrs = 0;
 #endif
 	conf_notifier( &conn->notify, 0, POLLIN );
 	socket_expect_read( conn, 0 );
@@ -528,6 +529,7 @@ socket_connect_bail( conn_t *conn )
 {
 #ifdef HAVE_IPV6
 	freeaddrinfo( conn->addrs );
+	conn->addrs = 0;
 #endif
 	free( conn->name );
 	conn->name = 0;
@@ -543,6 +545,12 @@ socket_close( conn_t *sock )
 		socket_close_internal( sock );
 	free( sock->name );
 	sock->name = 0;
+#ifdef HAVE_IPV6
+	if (sock->addrs) {
+		freeaddrinfo( sock->addrs );
+		sock->addrs = 0;
+	}
+#endif
 #ifdef HAVE_LIBSSL
 	if (sock->ssl) {
 		SSL_free( sock->ssl );

@@ -100,6 +100,7 @@ typedef struct imap_store {
 	const char *prefix;
 	const char *name;
 	int ref_count;
+	enum { SST_BAD, SST_HALF, SST_GOOD } state;
 	/* trash folder's existence is not confirmed yet */
 	enum { TrashUnknown, TrashChecking, TrashKnown } trashnc;
 	uint got_namespace:1;
@@ -121,7 +122,7 @@ typedef struct imap_store {
 	int expectEOF; /* received LOGOUT's OK or unsolicited BYE */
 	int canceling; /* imap_cancel() is in progress */
 	union {
-		void (*imap_open)( store_t *srv, void *aux );
+		void (*imap_open)( int sts, void *aux );
 		void (*imap_cancel)( void *aux );
 	} callbacks;
 	void *callback_aux;
@@ -1423,6 +1424,15 @@ get_cmd_result_p2( imap_store_t *ctx, struct imap_cmd *cmd, int response )
 
 /******************* imap_cancel_store *******************/
 
+
+static void
+imap_cleanup_store( imap_store_t *ctx )
+{
+	free_generic_messages( ctx->gen.msgs );
+	free_string_list( ctx->gen.boxes );
+	free( ctx->delimiter );
+}
+
 static void
 imap_cancel_store( store_t *gctx )
 {
@@ -1434,13 +1444,11 @@ imap_cancel_store( store_t *gctx )
 	socket_close( &ctx->conn );
 	cancel_sent_imap_cmds( ctx );
 	cancel_pending_imap_cmds( ctx );
-	free_generic_messages( ctx->gen.msgs );
-	free_string_list( ctx->gen.boxes );
 	free_list( ctx->ns_personal );
 	free_list( ctx->ns_other );
 	free_list( ctx->ns_shared );
 	free_string_list( ctx->auth_mechs );
-	free( ctx->delimiter );
+	imap_cleanup_store( ctx );
 	imap_deref( ctx );
 }
 
@@ -1460,7 +1468,7 @@ imap_invoke_bad_callback( imap_store_t *ctx )
 	ctx->gen.bad_callback( ctx->gen.bad_callback_aux );
 }
 
-/******************* imap_disown_store *******************/
+/******************* imap_free_store *******************/
 
 static store_t *unowned;
 
@@ -1478,7 +1486,7 @@ imap_cancel_unowned( void *gctx )
 }
 
 static void
-imap_disown_store( store_t *gctx )
+imap_free_store( store_t *gctx )
 {
 	free_generic_messages( gctx->msgs );
 	gctx->msgs = 0;
@@ -1542,61 +1550,64 @@ static void imap_open_store_ssl_bail( imap_store_t * );
 #endif
 static void imap_open_store_bail( imap_store_t *, int );
 
-static void
-imap_open_store_bad( void *aux )
-{
-	imap_open_store_bail( (imap_store_t *)aux, FAIL_TEMP );
-}
-
-static void
-imap_open_store( store_conf_t *conf, const char *label,
-                 void (*cb)( store_t *srv, void *aux ), void *aux )
+static store_t *
+imap_alloc_store( store_conf_t *conf, const char *label )
 {
 	imap_store_conf_t *cfg = (imap_store_conf_t *)conf;
 	imap_server_conf_t *srvc = cfg->server;
 	imap_store_t *ctx;
 	store_t **ctxp;
 
+	/* First try to recycle a whole store. */
 	for (ctxp = &unowned; (ctx = (imap_store_t *)*ctxp); ctxp = &ctx->gen.next)
-		if (ctx->gen.conf == conf) {
+		if (ctx->state == SST_GOOD && ctx->gen.conf == conf) {
 			*ctxp = ctx->gen.next;
 			ctx->label = label;
-			cb( &ctx->gen, aux );
-			return;
+			return &ctx->gen;
 		}
+
+	/* Then try to recycle a server connection. */
 	for (ctxp = &unowned; (ctx = (imap_store_t *)*ctxp); ctxp = &ctx->gen.next)
-		if (((imap_store_conf_t *)ctx->gen.conf)->server == srvc) {
+		if (ctx->state != SST_BAD && ((imap_store_conf_t *)ctx->gen.conf)->server == srvc) {
 			*ctxp = ctx->gen.next;
-			ctx->label = label;
+			imap_cleanup_store( ctx );
 			/* One could ping the server here, but given that the idle timeout
 			 * is at least 30 minutes, this sounds pretty pointless. */
-			free_string_list( ctx->gen.boxes );
-			ctx->gen.boxes = 0;
-			ctx->gen.listed = 0;
-			ctx->gen.conf = conf;
-			free( ctx->delimiter );
-			ctx->delimiter = 0;
-			ctx->callbacks.imap_open = cb;
-			ctx->callback_aux = aux;
-			set_bad_callback( &ctx->gen, imap_open_store_bad, ctx );
-			imap_open_store_namespace( ctx );
-			return;
+			ctx->state = SST_HALF;
+			goto gotsrv;
 		}
 
+	/* Finally, schedule opening a new server connection. */
 	ctx = nfcalloc( sizeof(*ctx) );
-	ctx->gen.conf = conf;
-	ctx->label = label;
-	ctx->ref_count = 1;
-	ctx->callbacks.imap_open = cb;
-	ctx->callback_aux = aux;
-	set_bad_callback( &ctx->gen, imap_open_store_bad, ctx );
-	ctx->in_progress_append = &ctx->in_progress;
-	ctx->pending_append = &ctx->pending;
-
 	socket_init( &ctx->conn, &srvc->sconf,
 	             (void (*)( void * ))imap_invoke_bad_callback,
 	             imap_socket_read, (void (*)(void *))flush_imap_cmds, ctx );
-	socket_connect( &ctx->conn, imap_open_store_connected );
+	ctx->in_progress_append = &ctx->in_progress;
+	ctx->pending_append = &ctx->pending;
+
+  gotsrv:
+	ctx->gen.conf = conf;
+	ctx->label = label;
+	ctx->ref_count = 1;
+	return &ctx->gen;
+}
+
+static void
+imap_connect_store( store_t *gctx,
+                    void (*cb)( int sts, void *aux ), void *aux )
+{
+	imap_store_t *ctx = (imap_store_t *)gctx;
+
+	if (ctx->state == SST_GOOD) {
+		cb( DRV_OK, aux );
+	} else {
+		ctx->callbacks.imap_open = cb;
+		ctx->callback_aux = aux;
+		if (ctx->state == SST_HALF)
+			imap_open_store_namespace( ctx );
+		else
+			socket_connect( &ctx->conn, imap_open_store_connected );
+	}
 }
 
 static void
@@ -2091,6 +2102,7 @@ imap_open_store_namespace( imap_store_t *ctx )
 {
 	imap_store_conf_t *cfg = (imap_store_conf_t *)ctx->gen.conf;
 
+	ctx->state = SST_HALF;
 	ctx->prefix = cfg->gen.path;
 	ctx->delimiter = cfg->delimiter ? nfstrdup( cfg->delimiter ) : 0;
 	if (((!ctx->prefix && cfg->use_namespace) || !cfg->delimiter) && CAP(NAMESPACE)) {
@@ -2140,11 +2152,11 @@ imap_open_store_namespace2( imap_store_t *ctx )
 static void
 imap_open_store_finalize( imap_store_t *ctx )
 {
-	set_bad_callback( &ctx->gen, 0, 0 );
+	ctx->state = SST_GOOD;
 	if (!ctx->prefix)
 		ctx->prefix = "";
 	ctx->trashnc = TrashUnknown;
-	ctx->callbacks.imap_open( &ctx->gen, ctx->callback_aux );
+	ctx->callbacks.imap_open( DRV_OK, ctx->callback_aux );
 }
 
 #ifdef HAVE_LIBSSL
@@ -2160,11 +2172,8 @@ imap_open_store_ssl_bail( imap_store_t *ctx )
 static void
 imap_open_store_bail( imap_store_t *ctx, int failed )
 {
-	void (*cb)( store_t *srv, void *aux ) = ctx->callbacks.imap_open;
-	void *aux = ctx->callback_aux;
 	((imap_store_conf_t *)ctx->gen.conf)->server->failed = failed;
-	imap_cancel_store( &ctx->gen );
-	cb( 0, aux );
+	ctx->callbacks.imap_open( DRV_STORE_BAD, ctx->callback_aux );
 }
 
 /******************* imap_open_box *******************/
@@ -2945,8 +2954,9 @@ struct driver imap_driver = {
 	DRV_CRLF | DRV_VERBOSE,
 	imap_parse_store,
 	imap_cleanup,
-	imap_open_store,
-	imap_disown_store,
+	imap_alloc_store,
+	imap_connect_store,
+	imap_free_store,
 	imap_cancel_store,
 	imap_list_store,
 	imap_select_box,
