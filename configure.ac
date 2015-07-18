@@ -36,10 +36,10 @@ AC_CHECK_LIB(nsl, inet_ntoa, [SOCK_LIBS="$SOCK_LIBS -lnsl"])
 AC_SUBST(SOCK_LIBS)
 
 have_ipv6=true
-sav_LDFLAGS=$LDFLAGS
-LDFLAGS="$LDFLAGS $SOCK_LIBS"
+sav_LIBS=$LIBS
+LIBS="$LIBS $SOCK_LIBS"
 AC_CHECK_FUNCS(getaddrinfo inet_ntop, , [have_ipv6=false])
-LDFLAGS=$sav_LDFLAGS
+LIBS=$sav_LIBS
 if $have_ipv6; then
     AC_DEFINE(HAVE_IPV6, 1, [if your libc has IPv6 support])
 fi
@@ -141,15 +141,15 @@ AC_SUBST(SASL_LIBS)
 
 AC_CACHE_CHECK([for Berkeley DB >= 4.1], ac_cv_berkdb4,
   [ac_cv_berkdb4=no
-    sav_LDFLAGS=$LDFLAGS
-    LDFLAGS="$LDFLAGS -ldb"
+    sav_LIBS=$LIBS
+    LIBS="$LIBS -ldb"
    AC_TRY_LINK([#include <db.h>],
                [DB *db;
 	        db_create(&db, 0, 0);
 	        db->truncate(db, 0, 0, 0);
 	        db->open(db, 0, "foo", "foo", DB_HASH, DB_CREATE, 0)],
 	       [ac_cv_berkdb4=yes])
-    LDFLAGS=$sav_LDFLAGS
+    LIBS=$sav_LIBS
   ])
 if test "x$ac_cv_berkdb4" = xyes; then
   AC_SUBST([DB_LIBS], ["-ldb"])
