@@ -50,6 +50,8 @@ typedef struct server_conf {
 	int timeout;
 #ifdef HAVE_LIBSSL
 	char *cert_file;
+	char *client_certfile;
+	char *client_keyfile;
 	char system_certs;
 	char ssl_versions;
 

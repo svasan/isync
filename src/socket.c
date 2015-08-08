@@ -230,6 +230,17 @@ init_ssl_ctx( const server_conf_t *conf )
 
 	SSL_CTX_set_verify( mconf->SSLContext, SSL_VERIFY_NONE, NULL );
 
+	if (conf->client_certfile && !SSL_CTX_use_certificate_chain_file( mconf->SSLContext, conf->client_certfile)) {
+		error( "Error while loading client certificate file '%s': %s\n",
+		       conf->client_certfile, ERR_error_string( ERR_get_error(), 0 ) );
+		return 0;
+	}
+	if (conf->client_keyfile && !SSL_CTX_use_PrivateKey_file( mconf->SSLContext, conf->client_keyfile, SSL_FILETYPE_PEM)) {
+		error( "Error while loading client private key '%s': %s\n",
+		       conf->client_keyfile, ERR_error_string( ERR_get_error(), 0 ) );
+		return 0;
+	}
+
 	mconf->ssl_ctx_valid = 1;
 	return 1;
 }

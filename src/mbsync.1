@@ -378,6 +378,18 @@ Note that the system's default certificate store is always used
 and should not be specified here.
 ..
 .TP
+\fBClientCertificate\fR \fIpath\fR
+File containing a client certificate to send to the server.
+\fBClientKey\fR should also be specified.
+.br
+Note that client certificate verification is usually not required,
+so it is unlikely that you need this option.
+..
+.TP
+\fBClientKey\fR \fIpath\fR
+File containing the private key corresponding to \fBClientCertificate\fR.
+..
+.TP
 \fBPipelineDepth\fR \fIdepth\fR
 Maximum number of IMAP commands which can be simultaneously in flight.
 Setting this to \fI1\fR disables pipelining.

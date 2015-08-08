@@ -2779,6 +2779,20 @@ imap_parse_store( conffile_t *cfg, store_conf_t **storep )
 			}
 		} else if (!strcasecmp( "SystemCertificates", cfg->cmd )) {
 			server->sconf.system_certs = parse_bool( cfg );
+		} else if (!strcasecmp( "ClientCertificate", cfg->cmd )) {
+			server->sconf.client_certfile = expand_strdup( cfg->val );
+			if (access( server->sconf.client_certfile, R_OK )) {
+				sys_error( "%s:%d: ClientCertificate '%s'",
+				           cfg->file, cfg->line, server->sconf.client_certfile );
+				cfg->err = 1;
+			}
+		} else if (!strcasecmp( "ClientKey", cfg->cmd )) {
+			server->sconf.client_keyfile = expand_strdup( cfg->val );
+			if (access( server->sconf.client_keyfile, R_OK )) {
+				sys_error( "%s:%d: ClientKey '%s'",
+				           cfg->file, cfg->line, server->sconf.client_keyfile );
+				cfg->err = 1;
+			}
 		} else if (!strcasecmp( "SSLType", cfg->cmd )) {
 			if (!strcasecmp( "None", cfg->val )) {
 				server->ssl_type = SSL_None;
