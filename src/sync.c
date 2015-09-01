@@ -338,7 +338,7 @@ msg_fetched( int sts, void *aux )
 					if (c == '\r')
 						lcrs++;
 					else if (c == '\n') {
-						if (starts_with( fmap + start, len - start, "X-TUID: ", 8 )) {
+						if (starts_with_upper( fmap + start, len - start, "X-TUID: ", 8 )) {
 							extra = (sbreak = start) - (ebreak = i);
 							goto oke;
 						}
