@@ -1501,8 +1501,12 @@ imap_cleanup( void )
 	for (ctx = unowned; ctx; ctx = nctx) {
 		nctx = ctx->next;
 		set_bad_callback( ctx, (void (*)(void *))imap_cancel_store, ctx );
-		((imap_store_t *)ctx)->expectBYE = 1;
-		imap_exec( (imap_store_t *)ctx, 0, imap_cleanup_p2, "LOGOUT" );
+		if (((imap_store_t *)ctx)->state != SST_BAD) {
+			((imap_store_t *)ctx)->expectBYE = 1;
+			imap_exec( (imap_store_t *)ctx, 0, imap_cleanup_p2, "LOGOUT" );
+		} else {
+			imap_cancel_store( ctx );
+		}
 	}
 }
 
