@@ -536,14 +536,22 @@ socket_connected( conn_t *conn )
 }
 
 static void
-socket_connect_bail( conn_t *conn )
+socket_cleanup_names( conn_t *conn )
 {
 #ifdef HAVE_IPV6
-	freeaddrinfo( conn->addrs );
-	conn->addrs = 0;
+	if (conn->addrs) {
+		freeaddrinfo( conn->addrs );
+		conn->addrs = 0;
+	}
 #endif
 	free( conn->name );
 	conn->name = 0;
+}
+
+static void
+socket_connect_bail( conn_t *conn )
+{
+	socket_cleanup_names( conn );
 	conn->callbacks.connect( 0, conn->callback_aux );
 }
 
@@ -554,14 +562,7 @@ socket_close( conn_t *sock )
 {
 	if (sock->fd >= 0)
 		socket_close_internal( sock );
-	free( sock->name );
-	sock->name = 0;
-#ifdef HAVE_IPV6
-	if (sock->addrs) {
-		freeaddrinfo( sock->addrs );
-		sock->addrs = 0;
-	}
-#endif
+	socket_cleanup_names( sock );
 #ifdef HAVE_LIBSSL
 	if (sock->ssl) {
 		SSL_free( sock->ssl );
