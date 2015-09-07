@@ -14,11 +14,13 @@ currently Maildir and IMAP4 mailboxes are supported. New messages, message
 deletions and flag changes can be propagated both ways.
 ``mbsync'' is suitable for use in IMAP-disconnected mode.
 
-Synchronization is based on unique message identifiers (UIDs), so no
-identification conflicts can occur (as opposed to some other mail
+Synchronization is based on unique message identifiers (UIDs), so
+no identification conflicts can occur (unlike with some other mail
 synchronizers).
 Synchronization state is kept in one local text file per mailbox pair;
-multiple replicas of a mailbox can be maintained.
+these files are protected against concurrent ``mbsync'' processes.
+Mailboxes can be safely modified while ``mbsync'' operates.
+Multiple replicas of each mailbox can be maintained.
 
 isync is the project name, while mbsync is the current executable name; this
 change was necessary because of massive changes in the user interface. An

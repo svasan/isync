@@ -35,11 +35,14 @@ New messages, message deletions and flag changes can be propagated both ways;
 the operation set can be selected in a fine-grained manner.
 .br
 Synchronization is based on unique message identifiers (UIDs), so no
-identification conflicts can occur (as opposed to some other mail synchronizers).
+identification conflicts can occur (unlike with some other mail synchronizers).
 OTOH, \fBmbsync\fR is susceptible to UID validity changes (that \fIshould\fR
 never happen, but see "Compatibility" in the README).
 Synchronization state is kept in one local text file per mailbox pair;
-multiple replicas of a mailbox can be maintained.
+these files are protected against concurrent \fBmbsync\fR processes.
+Mailboxes can be safely modified while \fBmbsync\fR operates
+(see \fBINHERENT PROBLEMS\fR below for a minor exception).
+Multiple replicas of each mailbox can be maintained.
 ..
 .SH OPTIONS
 .TP
