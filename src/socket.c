@@ -520,7 +520,10 @@ static void
 socket_connect_bail( conn_t *conn )
 {
 #ifdef HAVE_IPV6
-	freeaddrinfo( conn->addrs );
+	if (conn->addrs) {
+		freeaddrinfo( conn->addrs );
+		conn->addrs = 0;
+	}
 #endif
 	free( conn->name );
 	conn->name = 0;
