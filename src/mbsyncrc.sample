@@ -26,7 +26,6 @@ Pass xxxxxxxx
 #  "Account Name" USERNAME
 #  "Password" PASSWORD
 #PassCmd "/usr/bin/security find-internet-password -w -a USERNAME -s IMAPSERVER ~/Library/Keychains/login.keychain"
-CertificateFile /etc/ssl/certs/ca-certificates.crt
 
 Channel work
 Master :work:
