@@ -1,7 +1,7 @@
-.deps
-Makefile
-Makefile.in
-mbsync
-mdconvert
-tmp
+/mbsync
+/mdconvert
+/tst_timers
+/tmp/
+
+.deps/
 *.o
