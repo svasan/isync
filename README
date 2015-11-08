@@ -14,11 +14,13 @@ currently Maildir and IMAP4 mailboxes are supported. New messages, message
 deletions and flag changes can be propagated both ways.
 ``mbsync'' is suitable for use in IMAP-disconnected mode.
 
-Synchronization is based on unique message identifiers (UIDs), so no
-identification conflicts can occur (as opposed to some other mail
+Synchronization is based on unique message identifiers (UIDs), so
+no identification conflicts can occur (unlike with some other mail
 synchronizers).
 Synchronization state is kept in one local text file per mailbox pair;
-multiple replicas of a mailbox can be maintained.
+these files are protected against concurrent ``mbsync'' processes.
+Mailboxes can be safely modified while ``mbsync'' operates.
+Multiple replicas of each mailbox can be maintained.
 
 isync is the project name, while mbsync is the current executable name; this
 change was necessary because of massive changes in the user interface. An
@@ -31,9 +33,8 @@ isync executable still exists; it is a compatibility wrapper around mbsync.
     * Partial mirrors possible: keep only the latest messages locally
     * Trash functionality: backup messages before removing them
     * IMAP features:
-	* Supports TLS/SSL via imaps: (port 993) and STARTTLS (RFC2595)
-	* Supports SASL (RFC4422) for authentication
-	* Supports NAMESPACE (RFC2342) for simplified configuration
+	* Supports TLS/SSL via imaps: (port 993) and STARTTLS
+	* Supports SASL for authentication
 	* Pipelining for maximum speed
 
 * Compatibility
@@ -66,6 +67,8 @@ isync executable still exists; it is a compatibility wrapper around mbsync.
 
     Berkeley DB 4.1+ (optional)
     OpenSSL for TLS/SSL support (optional)
+    Cyrus SASL (optional)
+    zlib (optional)
 
 * Installation
 

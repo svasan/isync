@@ -116,6 +116,7 @@ void *memrchr( const void *s, int c, size_t n );
 #endif
 
 int starts_with( const char *str, int strl, const char *cmp, int cmpl );
+int starts_with_upper( const char *str, int strl, const char *cmp, int cmpl );
 int equals( const char *str, int strl, const char *cmp, int cmpl );
 
 #ifndef HAVE_TIMEGM

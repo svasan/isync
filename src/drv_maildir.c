@@ -33,14 +33,9 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <sys/stat.h>
-#include <sys/file.h>
 #include <errno.h>
 #include <time.h>
 #include <utime.h>
-
-#ifdef __linux__
-# define LEGACY_FLOCK 1
-#endif
 
 #if !defined(_POSIX_SYNCHRONIZED_IO) || _POSIX_SYNCHRONIZED_IO <= 0
 # define fdatasync fsync
@@ -621,13 +616,6 @@ maildir_uidval_lock( maildir_store_t *ctx )
 		/* The unlock timer is active, so we are obviously already locked. */
 		return DRV_OK;
 	}
-#ifdef LEGACY_FLOCK
-	/* This is legacy only */
-	if (flock( ctx->uvfd, LOCK_EX ) < 0) {
-		error( "Maildir error: cannot flock UIDVALIDITY.\n" );
-		return DRV_BOX_BAD;
-	}
-#endif
 	/* This (theoretically) works over NFS. Let's hope nobody else did
 	   the same in the opposite order, as we'd deadlock then. */
 #if SEEK_SET != 0
@@ -699,10 +687,6 @@ maildir_uidval_unlock( maildir_store_t *ctx )
 #endif /* USE_DB */
 	lck.l_type = F_UNLCK;
 	fcntl( ctx->uvfd, F_SETLK, &lck );
-#ifdef LEGACY_FLOCK
-	/* This is legacy only */
-	flock( ctx->uvfd, LOCK_UN );
-#endif
 }
 
 static void

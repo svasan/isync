@@ -259,7 +259,12 @@ established with the IMAP server.  (Default: \fIyes\fR)
 ..
 .TP
 \fBCertificateFile\fR \fIpath\fR
-File containing X.509 CA certificates used to verify server identities.
+File containing additional X.509 certificates used to verify server
+identities. Directly matched peer certificates are always trusted,
+regardless of validity.
+.br
+Note that the system's default certificate store is always used
+and should not be specified here.
 ..
 .TP
 \fBUseSSLv2\fR \fIyes\fR|\fIno\fR

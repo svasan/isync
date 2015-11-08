@@ -3,7 +3,7 @@
 #   doesn't specify it.
 
 # SSL server certificate file
-CertificateFile /etc/ssl/certs/ca-certificates.crt
+CertificateFile ~/.isync.certs
 
 # by default, expunge deleted messages (same as -e on command line)
 Expunge yes

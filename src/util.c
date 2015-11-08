@@ -27,6 +27,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <string.h>
+#include <ctype.h>
 #include <pwd.h>
 
 static int need_nl;
@@ -239,6 +240,21 @@ starts_with( const char *str, int strl, const char *cmp, int cmpl )
 	if (strl < 0)
 		strl = strnlen( str, cmpl + 1 );
 	return (strl >= cmpl) && !memcmp( str, cmp, cmpl );
+}
+
+int
+starts_with_upper( const char *str, int strl, const char *cmp, int cmpl )
+{
+	int i;
+
+	if (strl < 0)
+		strl = strnlen( str, cmpl + 1 );
+	if (strl < cmpl)
+		return 0;
+	for (i = 0; i < cmpl; i++)
+		if (str[i] != cmp[i] && toupper( str[i] ) != cmp[i])
+			return 0;
+	return 1;
 }
 
 int
