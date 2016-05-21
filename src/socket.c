@@ -178,7 +178,7 @@ verify_cert_host( const server_conf_t *conf, conn_t *sock )
 
 	err = SSL_get_verify_result( sock->ssl );
 	if (err != X509_V_OK) {
-		error( "SSL error connecting %s: %s\n", sock->name, ERR_error_string( err, NULL ) );
+		error( "SSL error connecting %s: %s\n", sock->name, X509_verify_cert_error_string( err ) );
 		return -1;
 	}
 
