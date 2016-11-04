@@ -1,8 +1,5 @@
 f{,data}sync() usage could be optimized by batching the calls.
 
-add some marker about message being already [remotely] trashed.
-real transactions would be certainly not particularly useful ...
-
 make SSL (connect) timeouts produce a bit more than "Unidentified socket error".
 
 uidvalidity lock timeout handling would be a good idea.
