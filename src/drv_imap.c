@@ -2305,7 +2305,6 @@ imap_load_box( store_t *gctx, int minuid, int maxuid, int newuid, int_array_t ex
 	} else {
 		struct imap_cmd_refcounted_state *sts = imap_refcounted_new_state( cb, aux );
 
-		sort_int_array( excs );
 		for (i = 0; i < excs.size; ) {
 			for (bl = 0; i < excs.size && bl < 960; i++) {
 				if (bl)

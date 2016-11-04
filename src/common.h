@@ -167,6 +167,7 @@ int map_name( const char *arg, char **result, int reserve, const char *in, const
 
 DEFINE_ARRAY_TYPE(int)
 void sort_int_array( int_array_t array );
+int find_int_array( const int_array_t array, int value );
 
 void arc4_init( void );
 uchar arc4_getbyte( void );

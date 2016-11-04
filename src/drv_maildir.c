@@ -831,7 +831,7 @@ maildir_scan( maildir_store_t *ctx, msg_t_array_alloc_t *msglist )
 	DBC *dbc;
 #endif /* USE_DB */
 	msg_t *entry;
-	int i, j, uid, bl, fnl, ret;
+	int i, uid, bl, fnl, ret;
 	time_t now, stamps[2];
 	struct stat st;
 	char buf[_POSIX_PATH_MAX], nbuf[_POSIX_PATH_MAX];
@@ -922,13 +922,8 @@ maildir_scan( maildir_store_t *ctx, msg_t_array_alloc_t *msglist )
 						uid = INT_MAX;
 				}
 				if (uid <= ctx->maxuid) {
-					if (uid < ctx->minuid) {
-						for (j = 0; j < ctx->excs.size; j++)
-							if (ctx->excs.data[j] == uid)
-								goto oke;
+					if (uid < ctx->minuid && !find_int_array( ctx->excs, uid ))
 						continue;
-					  oke: ;
-					}
 					entry = msg_t_array_append( msglist );
 					entry->base = nfstrdup( e->d_name );
 					entry->uid = uid;

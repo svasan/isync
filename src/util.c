@@ -545,6 +545,23 @@ sort_int_array( int_array_t array )
 	qsort( array.data, array.size, sizeof(int), compare_ints );
 }
 
+int
+find_int_array( int_array_t array, int value )
+{
+	int bot = 0, top = array.size - 1;
+	while (bot <= top) {
+		int i = (bot + top) / 2;
+		int elt = array.data[i];
+		if (elt == value)
+			return 1;
+		if (elt < value)
+			bot = i + 1;
+		else
+			top = i - 1;
+	}
+	return 0;
+}
+
 
 static struct {
 	uchar i, j, s[256];
