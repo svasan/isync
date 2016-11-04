@@ -2292,7 +2292,7 @@ imap_prepare_load_box( store_t *gctx, int opts )
 static void imap_submit_load( imap_store_t *, const char *, int, struct imap_cmd_refcounted_state * );
 
 static void
-imap_load_box( store_t *gctx, int minuid, int maxuid, int newuid, int *excs, int nexcs,
+imap_load_box( store_t *gctx, int minuid, int maxuid, int newuid, int_array_t excs,
                void (*cb)( int sts, void *aux ), void *aux )
 {
 	imap_store_t *ctx = (imap_store_t *)gctx;
@@ -2300,21 +2300,21 @@ imap_load_box( store_t *gctx, int minuid, int maxuid, int newuid, int *excs, int
 	char buf[1000];
 
 	if (!ctx->gen.count) {
-		free( excs );
+		free( excs.data );
 		cb( DRV_OK, aux );
 	} else {
 		struct imap_cmd_refcounted_state *sts = imap_refcounted_new_state( cb, aux );
 
-		sort_ints( excs, nexcs );
-		for (i = 0; i < nexcs; ) {
-			for (bl = 0; i < nexcs && bl < 960; i++) {
+		sort_int_array( excs );
+		for (i = 0; i < excs.size; ) {
+			for (bl = 0; i < excs.size && bl < 960; i++) {
 				if (bl)
 					buf[bl++] = ',';
-				bl += sprintf( buf + bl, "%d", excs[i] );
+				bl += sprintf( buf + bl, "%d", excs.data[i] );
 				j = i;
-				for (; i + 1 < nexcs && excs[i + 1] == excs[i] + 1; i++) {}
+				for (; i + 1 < excs.size && excs.data[i + 1] == excs.data[i] + 1; i++) {}
 				if (i != j)
-					bl += sprintf( buf + bl, ":%d", excs[i] );
+					bl += sprintf( buf + bl, ":%d", excs.data[i] );
 			}
 			imap_submit_load( ctx, buf, 0, sts );
 		}
@@ -2333,7 +2333,7 @@ imap_load_box( store_t *gctx, int minuid, int maxuid, int newuid, int *excs, int
 			imap_submit_load( ctx, buf, (ctx->gen.opts & OPEN_FIND), sts );
 		}
 	  done:
-		free( excs );
+		free( excs.data );
 		imap_refcounted_done( sts );
 	}
 }

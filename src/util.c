@@ -540,9 +540,9 @@ compare_ints( const void *l, const void *r )
 }
 
 void
-sort_ints( int *arr, int len )
+sort_int_array( int_array_t array )
 {
-	qsort( arr, len, sizeof(int), compare_ints );
+	qsort( array.data, array.size, sizeof(int), compare_ints );
 }
 
 

@@ -938,7 +938,7 @@ static void box_deleted( int sts, void *aux );
 static void box_created( int sts, void *aux );
 static void box_opened( int sts, void *aux );
 static void box_opened2( sync_vars_t *svars, int t );
-static void load_box( sync_vars_t *svars, int t, int minwuid, int *mexcs, int nmexcs );
+static void load_box( sync_vars_t *svars, int t, int minwuid, int_array_t mexcs );
 
 void
 sync_boxes( store_t *ctx[], const char *names[], int present[], channel_conf_t *chan,
@@ -1138,8 +1138,8 @@ box_opened2( sync_vars_t *svars, int t )
 	store_t *ctx[2];
 	channel_conf_t *chan;
 	sync_rec_t *srec;
-	int opts[2], fails;
-	int *mexcs, nmexcs, rmexcs, minwuid;
+	int_array_alloc_t mexcs;
+	int opts[2], fails, minwuid;
 
 	svars->state[t] |= ST_SELECTED;
 	if (!(svars->state[1-t] & ST_SELECTED))
@@ -1224,8 +1224,7 @@ box_opened2( sync_vars_t *svars, int t )
 	svars->drv[M]->prepare_load_box( ctx[M], opts[M] );
 	svars->drv[S]->prepare_load_box( ctx[S], opts[S] );
 
-	mexcs = 0;
-	nmexcs = rmexcs = 0;
+	ARRAY_INIT( &mexcs );
 	if (svars->ctx[M]->opts & OPEN_OLD) {
 		if (chan->max_messages) {
 			/* When messages have been expired on the slave, the master fetch is split into
@@ -1263,16 +1262,12 @@ box_opened2( sync_vars_t *svars, int t )
 				if (srec->uid[M] > 0 && srec->uid[S] > 0 && minwuid > srec->uid[M] &&
 				    (!(svars->ctx[M]->opts & OPEN_NEW) || svars->maxuid[M] >= srec->uid[M])) {
 					/* The pair is alive, but outside the bulk range. */
-					if (nmexcs == rmexcs) {
-						rmexcs = rmexcs * 2 + 100;
-						mexcs = nfrealloc( mexcs, rmexcs * sizeof(int) );
-					}
-					mexcs[nmexcs++] = srec->uid[M];
+					*int_array_append( &mexcs ) = srec->uid[M];
 				}
 			}
 			debugn( "  exception list is:" );
-			for (t = 0; t < nmexcs; t++)
-				debugn( " %d", mexcs[t] );
+			for (t = 0; t < mexcs.array.size; t++)
+				debugn( " %d", mexcs.array.data[t] );
 			debug( "\n" );
 		} else {
 			minwuid = 1;
@@ -1281,16 +1276,16 @@ box_opened2( sync_vars_t *svars, int t )
 		minwuid = INT_MAX;
 	}
 	sync_ref( svars );
-	load_box( svars, M, minwuid, mexcs, nmexcs );
+	load_box( svars, M, minwuid, mexcs.array );
 	if (!check_cancel( svars ))
-		load_box( svars, S, (ctx[S]->opts & OPEN_OLD) ? 1 : INT_MAX, 0, 0 );
+		load_box( svars, S, (ctx[S]->opts & OPEN_OLD) ? 1 : INT_MAX, (int_array_t){ 0, 0 } );
 	sync_deref( svars );
 }
 
 static void box_loaded( int sts, void *aux );
 
 static void
-load_box( sync_vars_t *svars, int t, int minwuid, int *mexcs, int nmexcs )
+load_box( sync_vars_t *svars, int t, int minwuid, int_array_t mexcs )
 {
 	sync_rec_t *srec;
 	int maxwuid;
@@ -1308,7 +1303,7 @@ load_box( sync_vars_t *svars, int t, int minwuid, int *mexcs, int nmexcs )
 		maxwuid = 0;
 	info( "Loading %s...\n", str_ms[t] );
 	debug( maxwuid == INT_MAX ? "loading %s [%d,inf]\n" : "loading %s [%d,%d]\n", str_ms[t], minwuid, maxwuid );
-	svars->drv[t]->load_box( svars->ctx[t], minwuid, maxwuid, svars->newuid[t], mexcs, nmexcs, box_loaded, AUX );
+	svars->drv[t]->load_box( svars->ctx[t], minwuid, maxwuid, svars->newuid[t], mexcs, box_loaded, AUX );
 }
 
 typedef struct {

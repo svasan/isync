@@ -4,9 +4,9 @@ AM_INIT_AUTOMAKE
 
 AM_MAINTAINER_MODE
 
-AC_PROG_CC
+AC_PROG_CC_C99
 if test "$GCC" = yes; then
-    CFLAGS="$CFLAGS -pipe -W -Wall -Wshadow -Wstrict-prototypes -ansi -pedantic -Wno-overlength-strings"
+    CFLAGS="$CFLAGS -pipe -W -Wall -Wshadow -Wstrict-prototypes -std=c99 -pedantic -Wno-overlength-strings"
 fi
 
 CPPFLAGS="$CPPFLAGS -D_GNU_SOURCE"

@@ -43,10 +43,12 @@ typedef unsigned int uint;
 # define ATTR_UNUSED __attribute__((unused))
 # define ATTR_NORETURN __attribute__((noreturn))
 # define ATTR_PRINTFLIKE(fmt,var) __attribute__((format(printf,fmt,var)))
+# define ATTR_PACKED(ref) __attribute__((packed,aligned(sizeof(ref))))
 #else
 # define ATTR_UNUSED
 # define ATTR_NORETURN
 # define ATTR_PRINTFLIKE(fmt,var)
+# define ATTR_PACKED(ref)
 #endif
 
 #ifdef __GNUC__
@@ -137,7 +139,34 @@ char *expand_strdup( const char *s );
 
 int map_name( const char *arg, char **result, int reserve, const char *in, const char *out );
 
-void sort_ints( int *arr, int len );
+#define DEFINE_ARRAY_TYPE(T) \
+	typedef struct T##_array { \
+		T *data; \
+		int size; \
+	} ATTR_PACKED(T *) T##_array_t; \
+	typedef struct T##_array_alloc { \
+		T##_array_t array; \
+		int alloc; \
+	} ATTR_PACKED(T *) T##_array_alloc_t; \
+	static INLINE T *T##_array_append( T##_array_alloc_t *arr ) \
+	{ \
+		if (arr->array.size == arr->alloc) { \
+			arr->alloc = arr->alloc * 2 + 100; \
+			arr->array.data = nfrealloc( arr->array.data, arr->alloc * sizeof(T) ); \
+		} \
+		return &arr->array.data[arr->array.size++]; \
+	}
+
+#define ARRAY_INIT(arr) \
+	do { (arr)->array.data = 0; (arr)->array.size = (arr)->alloc = 0; } while (0)
+
+#define ARRAY_SQUEEZE(arr) \
+	do { \
+		(arr)->data = nfrealloc( (arr)->data, (arr)->size * sizeof((arr)->data[0]) ); \
+	} while (0)
+
+DEFINE_ARRAY_TYPE(int)
+void sort_int_array( int_array_t array );
 
 void arc4_init( void );
 uchar arc4_getbyte( void );

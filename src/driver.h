@@ -207,7 +207,7 @@ struct driver {
 	 * and those named in the excs array (smaller than minuid).
 	 * The driver takes ownership of the excs array. Messages below newuid do not need
 	 * to have the TUID populated even if OPEN_FIND is set. */
-	void (*load_box)( store_t *ctx, int minuid, int maxuid, int newuid, int *excs, int nexcs,
+	void (*load_box)( store_t *ctx, int minuid, int maxuid, int newuid, int_array_t excs,
 	                  void (*cb)( int sts, void *aux ), void *aux );
 
 	/* Fetch the contents and flags of the given message from the current mailbox. */

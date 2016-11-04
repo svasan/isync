@@ -70,7 +70,8 @@ typedef struct maildir_message {
 typedef struct maildir_store {
 	store_t gen;
 	int uvfd, uvok, nuid, is_inbox, fresh[3];
-	int minuid, maxuid, newuid, nexcs, *excs;
+	int minuid, maxuid, newuid;
+	int_array_t excs;
 	char *trash;
 #ifdef USE_DB
 	DB *db;
@@ -262,7 +263,7 @@ maildir_cleanup( store_t *gctx )
 	free( ctx->usedb );
 #endif /* USE_DB */
 	free( gctx->path );
-	free( ctx->excs );
+	free( ctx->excs.data );
 	if (ctx->uvfd >= 0)
 		close( ctx->uvfd );
 	conf_wakeup( &ctx->lcktmr, -1 );
@@ -446,20 +447,17 @@ typedef struct {
 	char tuid[TUIDL];
 } msg_t;
 
-typedef struct {
-	msg_t *ents;
-	int nents, nalloc;
-} msglist_t;
+DEFINE_ARRAY_TYPE(msg_t)
 
 static void
-maildir_free_scan( msglist_t *msglist )
+maildir_free_scan( msg_t_array_alloc_t *msglist )
 {
 	int i;
 
-	if (msglist->ents) {
-		for (i = 0; i < msglist->nents; i++)
-			free( msglist->ents[i].base );
-		free( msglist->ents );
+	if (msglist->array.data) {
+		for (i = 0; i < msglist->array.size; i++)
+			free( msglist->array.data[i].base );
+		free( msglist->array.data );
 	}
 }
 
@@ -821,7 +819,7 @@ maildir_compare( const void *l, const void *r )
 }
 
 static int
-maildir_scan( maildir_store_t *ctx, msglist_t *msglist )
+maildir_scan( maildir_store_t *ctx, msg_t_array_alloc_t *msglist )
 {
 	maildir_store_conf_t *conf = (maildir_store_conf_t *)ctx->gen.conf;
 	DIR *d;
@@ -839,8 +837,7 @@ maildir_scan( maildir_store_t *ctx, msglist_t *msglist )
 	char buf[_POSIX_PATH_MAX], nbuf[_POSIX_PATH_MAX];
 
   again:
-	msglist->ents = 0;
-	msglist->nents = msglist->nalloc = 0;
+	ARRAY_INIT( msglist );
 	ctx->gen.count = ctx->gen.recent = 0;
 	if (ctx->uvok || ctx->maxuid == INT_MAX) {
 #ifdef USE_DB
@@ -926,17 +923,13 @@ maildir_scan( maildir_store_t *ctx, msglist_t *msglist )
 				}
 				if (uid <= ctx->maxuid) {
 					if (uid < ctx->minuid) {
-						for (j = 0; j < ctx->nexcs; j++)
-							if (ctx->excs[j] == uid)
+						for (j = 0; j < ctx->excs.size; j++)
+							if (ctx->excs.data[j] == uid)
 								goto oke;
 						continue;
 					  oke: ;
 					}
-					if (msglist->nalloc == msglist->nents) {
-						msglist->nalloc = msglist->nalloc * 2 + 100;
-						msglist->ents = nfrealloc( msglist->ents, msglist->nalloc * sizeof(msg_t) );
-					}
-					entry = &msglist->ents[msglist->nents++];
+					entry = msg_t_array_append( msglist );
 					entry->base = nfstrdup( e->d_name );
 					entry->uid = uid;
 					entry->recent = i;
@@ -992,9 +985,9 @@ maildir_scan( maildir_store_t *ctx, msglist_t *msglist )
 			tdb->close( tdb, 0 );
 		}
 #endif /* USE_DB */
-		qsort( msglist->ents, msglist->nents, sizeof(msg_t), maildir_compare );
-		for (uid = i = 0; i < msglist->nents; i++) {
-			entry = &msglist->ents[i];
+		qsort( msglist->array.data, msglist->array.size, sizeof(msg_t), maildir_compare );
+		for (uid = i = 0; i < msglist->array.size; i++) {
+			entry = &msglist->array.data[i];
 			if (entry->uid != INT_MAX) {
 				if (uid == entry->uid) {
 #if 1
@@ -1134,7 +1127,7 @@ maildir_select_box( store_t *gctx, const char *name )
 
 	maildir_cleanup( gctx );
 	gctx->msgs = 0;
-	ctx->excs = 0;
+	ctx->excs.data = 0;
 	ctx->uvfd = -1;
 #ifdef USE_DB
 	ctx->db = 0;
@@ -1215,9 +1208,9 @@ static int
 maildir_confirm_box_empty( store_t *gctx )
 {
 	maildir_store_t *ctx = (maildir_store_t *)gctx;
-	msglist_t msglist;
+	msg_t_array_alloc_t msglist;
 
-	ctx->nexcs = ctx->minuid = ctx->maxuid = ctx->newuid = 0;
+	ctx->excs.size = ctx->minuid = ctx->maxuid = ctx->newuid = 0;
 
 	if (maildir_scan( ctx, &msglist ) != DRV_OK)
 		return DRV_BOX_BAD;
@@ -1289,27 +1282,27 @@ maildir_prepare_load_box( store_t *gctx, int opts )
 }
 
 static void
-maildir_load_box( store_t *gctx, int minuid, int maxuid, int newuid, int *excs, int nexcs,
+maildir_load_box( store_t *gctx, int minuid, int maxuid, int newuid, int_array_t excs,
                   void (*cb)( int sts, void *aux ), void *aux )
 {
 	maildir_store_t *ctx = (maildir_store_t *)gctx;
 	message_t **msgapp;
-	msglist_t msglist;
+	msg_t_array_alloc_t msglist;
 	int i;
 
 	ctx->minuid = minuid;
 	ctx->maxuid = maxuid;
 	ctx->newuid = newuid;
-	ctx->excs = nfrealloc( excs, nexcs * sizeof(int) );
-	ctx->nexcs = nexcs;
+	ARRAY_SQUEEZE( &excs );
+	ctx->excs = excs;
 
 	if (maildir_scan( ctx, &msglist ) != DRV_OK) {
 		cb( DRV_BOX_BAD, aux );
 		return;
 	}
 	msgapp = &ctx->gen.msgs;
-	for (i = 0; i < msglist.nents; i++)
-		maildir_app_msg( ctx, &msgapp, msglist.ents + i );
+	for (i = 0; i < msglist.array.size; i++)
+		maildir_app_msg( ctx, &msgapp, msglist.array.data + i );
 	maildir_free_scan( &msglist );
 
 	cb( DRV_OK, aux );
@@ -1320,37 +1313,37 @@ maildir_rescan( maildir_store_t *ctx )
 {
 	message_t **msgapp;
 	maildir_message_t *msg;
-	msglist_t msglist;
+	msg_t_array_alloc_t msglist;
 	int i;
 
 	ctx->fresh[0] = ctx->fresh[1] = 0;
 	if (maildir_scan( ctx, &msglist ) != DRV_OK)
 		return DRV_BOX_BAD;
 	for (msgapp = &ctx->gen.msgs, i = 0;
-	     (msg = (maildir_message_t *)*msgapp) || i < msglist.nents; )
+	     (msg = (maildir_message_t *)*msgapp) || i < msglist.array.size; )
 	{
 		if (!msg) {
 #if 0
-			debug( "adding new message %d\n", msglist.ents[i].uid );
-			maildir_app_msg( ctx, &msgapp, msglist.ents + i );
+			debug( "adding new message %d\n", msglist.array.data[i].uid );
+			maildir_app_msg( ctx, &msgapp, msglist.array.data + i );
 #else
-			debug( "ignoring new message %d\n", msglist.ents[i].uid );
+			debug( "ignoring new message %d\n", msglist.array.data[i].uid );
 #endif
 			i++;
-		} else if (i >= msglist.nents) {
+		} else if (i >= msglist.array.size) {
 			debug( "purging deleted message %d\n", msg->gen.uid );
 			msg->gen.status = M_DEAD;
 			msgapp = &msg->gen.next;
-		} else if (msglist.ents[i].uid < msg->gen.uid) {
+		} else if (msglist.array.data[i].uid < msg->gen.uid) {
 			/* this should not happen, actually */
 #if 0
-			debug( "adding new message %d\n", msglist.ents[i].uid );
-			maildir_app_msg( ctx, &msgapp, msglist.ents + i );
+			debug( "adding new message %d\n", msglist.array.data[i].uid );
+			maildir_app_msg( ctx, &msgapp, msglist.array.data + i );
 #else
-			debug( "ignoring new message %d\n", msglist.ents[i].uid );
+			debug( "ignoring new message %d\n", msglist.array.data[i].uid );
 #endif
 			i++;
-		} else if (msglist.ents[i].uid > msg->gen.uid) {
+		} else if (msglist.array.data[i].uid > msg->gen.uid) {
 			debug( "purging deleted message %d\n", msg->gen.uid );
 			msg->gen.status = M_DEAD;
 			msgapp = &msg->gen.next;
@@ -1358,7 +1351,7 @@ maildir_rescan( maildir_store_t *ctx )
 			debug( "updating message %d\n", msg->gen.uid );
 			msg->gen.status &= ~(M_FLAGS|M_RECENT);
 			free( msg->base );
-			maildir_init_msg( ctx, msg, msglist.ents + i );
+			maildir_init_msg( ctx, msg, msglist.array.data + i );
 			i++, msgapp = &msg->gen.next;
 		}
 	}
