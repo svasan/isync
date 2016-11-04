@@ -264,17 +264,18 @@ with DOS/Windows file systems.
 The on-disk folder naming style used for hierarchical mailboxes.
 This has option has no effect when \fBFlatten\fR is used.
 .br
-Suppose a mailbox with the canonical path \fItop/sub/subsub\fR,
-the styles will yield the following on-disk paths:
+Suppose mailboxes with the canonical paths \fBtop/sub/subsub\fR and
+\fBINBOX/sub/subsub\fR, the styles will yield the following on-disk paths:
 .br
-\fBVerbatim\fR - \fItop/sub/subsub\fR
+\fBVerbatim\fR - \fIPath\fB/top/sub/subsub\fR and \fIInbox\fB/sub/subsub\fR
 (this is the style you probably want to use)
 .br
-\fBMaildir++\fR - \fItop/.sub.subsub\fR
+\fBMaildir++\fR - \fIInbox\fB/.top.sub.subsub\fR and \fIInbox\fB/..sub.subsub\fR
 (this style is compatible with Courier and Dovecot - but note that
-the mailbox metadata format is \fInot\fR compatible)
+the mailbox metadata format is \fInot\fR compatible).
+Note that attempts to set \fBPath\fR are rejected in this mode.
 .br
-\fBLegacy\fR - \fItop/.sub/.subsub\fR
+\fBLegacy\fR - \fIPath\fB/top/.sub/.subsub\fR and \fIInbox\fB/.sub/.subsub\fR
 (this is \fBmbsync\fR's historical style)
 .br
 (Default: unset; will error out when sub-folders are encountered)
