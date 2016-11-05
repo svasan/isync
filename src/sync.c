@@ -331,15 +331,81 @@ copy_msg_bytes( char **out_ptr, const char *in_buf, int *in_idx, int in_len, int
 	*in_idx = idx;
 }
 
+static int
+copy_msg_convert( int in_cr, int out_cr, copy_vars_t *vars )
+{
+	char *in_buf = vars->data.data;
+	int in_len = vars->data.len;
+	int idx = 0, sbreak = 0, ebreak = 0;
+	int lines = 0, hdr_crs = 0, bdy_crs = 0, extra = 0;
+	if (vars->srec) {
+	  nloop: ;
+		int start = idx;
+		int line_crs = 0;
+		while (idx < in_len) {
+			char c = in_buf[idx++];
+			if (c == '\r') {
+				line_crs++;
+			} else if (c == '\n') {
+				if (starts_with_upper( in_buf + start, in_len - start, "X-TUID: ", 8 )) {
+					extra = (sbreak = start) - (ebreak = idx);
+					goto oke;
+				}
+				lines++;
+				hdr_crs += line_crs;
+				if (idx - line_crs - 1 == start) {
+					sbreak = ebreak = start;
+					goto oke;
+				}
+				goto nloop;
+			}
+		}
+		/* invalid message */
+		free( in_buf );
+		return 0;
+	  oke:
+		extra += 8 + TUIDL + 1 + (out_cr && (!in_cr || hdr_crs));
+	}
+	if (out_cr != in_cr) {
+		for (; idx < in_len; idx++) {
+			char c = in_buf[idx];
+			if (c == '\r')
+				bdy_crs++;
+			else if (c == '\n')
+				lines++;
+		}
+		extra -= hdr_crs + bdy_crs;
+		if (out_cr)
+			extra += lines;
+	}
+
+	vars->data.len = in_len + extra;
+	char *out_buf = vars->data.data = nfmalloc( vars->data.len );
+	idx = 0;
+	if (vars->srec) {
+		copy_msg_bytes( &out_buf, in_buf, &idx, sbreak, in_cr, out_cr );
+
+		memcpy( out_buf, "X-TUID: ", 8 );
+		out_buf += 8;
+		memcpy( out_buf, vars->srec->tuid, TUIDL );
+		out_buf += TUIDL;
+		if (out_cr && (!in_cr || hdr_crs))
+			*out_buf++ = '\r';
+		*out_buf++ = '\n';
+		idx = ebreak;
+	}
+	copy_msg_bytes( &out_buf, in_buf, &idx, in_len, in_cr, out_cr );
+
+	free( in_buf );
+	return 1;
+}
+
 static void
 msg_fetched( int sts, void *aux )
 {
 	copy_vars_t *vars = (copy_vars_t *)aux;
 	DECL_SVARS;
-	char *fmap, *buf;
-	int i, len, extra, scr, tcr, lcrs, hcrs, bcrs, lines;
-	int start, sbreak = 0, ebreak = 0;
-	char c;
+	int scr, tcr;
 
 	switch (sts) {
 	case DRV_OK:
@@ -355,71 +421,12 @@ msg_fetched( int sts, void *aux )
 		scr = (svars->drv[1-t]->flags / DRV_CRLF) & 1;
 		tcr = (svars->drv[t]->flags / DRV_CRLF) & 1;
 		if (vars->srec || scr != tcr) {
-			fmap = vars->data.data;
-			len = vars->data.len;
-			extra = lines = hcrs = bcrs = i = 0;
-			if (vars->srec) {
-			  nloop:
-				start = i;
-				lcrs = 0;
-				while (i < len) {
-					c = fmap[i++];
-					if (c == '\r')
-						lcrs++;
-					else if (c == '\n') {
-						if (starts_with_upper( fmap + start, len - start, "X-TUID: ", 8 )) {
-							extra = (sbreak = start) - (ebreak = i);
-							goto oke;
-						}
-						lines++;
-						hcrs += lcrs;
-						if (i - lcrs - 1 == start) {
-							sbreak = ebreak = start;
-							goto oke;
-						}
-						goto nloop;
-					}
-				}
-				/* invalid message */
+			if (!copy_msg_convert( scr, tcr, vars )) {
 				warn( "Warning: message %d from %s has incomplete header.\n",
 				      vars->msg->uid, str_ms[1-t] );
-				free( fmap );
 				vars->cb( SYNC_NOGOOD, 0, vars );
 				return;
-			  oke:
-				extra += 8 + TUIDL + 1 + (tcr && (!scr || hcrs));
 			}
-			if (tcr != scr) {
-				for (; i < len; i++) {
-					c = fmap[i];
-					if (c == '\r')
-						bcrs++;
-					else if (c == '\n')
-						lines++;
-				}
-				extra -= hcrs + bcrs;
-				if (tcr)
-					extra += lines;
-			}
-
-			vars->data.len = len + extra;
-			buf = vars->data.data = nfmalloc( vars->data.len );
-			i = 0;
-			if (vars->srec) {
-				copy_msg_bytes( &buf, fmap, &i, sbreak, scr, tcr );
-
-				memcpy( buf, "X-TUID: ", 8 );
-				buf += 8;
-				memcpy( buf, vars->srec->tuid, TUIDL );
-				buf += TUIDL;
-				if (tcr && (!scr || hcrs))
-					*buf++ = '\r';
-				*buf++ = '\n';
-				i = ebreak;
-			}
-			copy_msg_bytes( &buf, fmap, &i, len, scr, tcr );
-
-			free( fmap );
 		}
 
 		svars->drv[t]->store_msg( svars->ctx[t], &vars->data, !vars->srec, msg_stored, vars );
