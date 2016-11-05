@@ -302,6 +302,36 @@ copy_msg( copy_vars_t *vars )
 static void msg_stored( int sts, int uid, void *aux );
 
 static void
+copy_msg_bytes( char **out_ptr, const char *in_buf, int *in_idx, int in_len, int in_cr, int out_cr )
+{
+	char *out = *out_ptr;
+	int idx = *in_idx;
+	if (out_cr != in_cr) {
+		char c;
+		if (out_cr) {
+			for (; idx < in_len; idx++) {
+				if ((c = in_buf[idx]) != '\r') {
+					if (c == '\n')
+						*out++ = '\r';
+					*out++ = c;
+				}
+			}
+		} else {
+			for (; idx < in_len; idx++) {
+				if ((c = in_buf[idx]) != '\r')
+					*out++ = c;
+			}
+		}
+	} else {
+		memcpy( out, in_buf + idx, in_len - idx );
+		out += in_len - idx;
+		idx = in_len;
+	}
+	*out_ptr = out;
+	*in_idx = idx;
+}
+
+static void
 msg_fetched( int sts, void *aux )
 {
 	copy_vars_t *vars = (copy_vars_t *)aux;
@@ -376,23 +406,7 @@ msg_fetched( int sts, void *aux )
 			buf = vars->data.data = nfmalloc( vars->data.len );
 			i = 0;
 			if (vars->srec) {
-				if (tcr != scr) {
-					if (tcr) {
-						for (; i < sbreak; i++)
-							if ((c = fmap[i]) != '\r') {
-								if (c == '\n')
-									*buf++ = '\r';
-								*buf++ = c;
-							}
-					} else {
-						for (; i < sbreak; i++)
-							if ((c = fmap[i]) != '\r')
-								*buf++ = c;
-					}
-				} else {
-					memcpy( buf, fmap, sbreak );
-					buf += sbreak;
-				}
+				copy_msg_bytes( &buf, fmap, &i, sbreak, scr, tcr );
 
 				memcpy( buf, "X-TUID: ", 8 );
 				buf += 8;
@@ -403,21 +417,7 @@ msg_fetched( int sts, void *aux )
 				*buf++ = '\n';
 				i = ebreak;
 			}
-			if (tcr != scr) {
-				if (tcr) {
-					for (; i < len; i++)
-						if ((c = fmap[i]) != '\r') {
-							if (c == '\n')
-								*buf++ = '\r';
-							*buf++ = c;
-						}
-				} else {
-					for (; i < len; i++)
-						if ((c = fmap[i]) != '\r')
-							*buf++ = c;
-				}
-			} else
-				memcpy( buf, fmap + i, len - i );
+			copy_msg_bytes( &buf, fmap, &i, len, scr, tcr );
 
 			free( fmap );
 		}
