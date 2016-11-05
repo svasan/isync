@@ -682,6 +682,7 @@ load_state( sync_vars_t *svars )
 	char *s;
 	FILE *jfp;
 	int line, t, t1, t2, t3;
+	char c;
 	struct stat st;
 	char fbuf[16]; /* enlarge when support for keywords is added */
 	char buf[128], buf1[64], buf2[64];
@@ -796,31 +797,31 @@ load_state( sync_vars_t *svars )
 					error( "Error: incomplete journal entry at %s:%d\n", svars->jname, line );
 					goto jbail;
 				}
-				if (buf[0] == '#' ?
+				if ((c = buf[0]) == '#' ?
 				      (t3 = 0, (sscanf( buf + 2, "%d %d %n", &t1, &t2, &t3 ) < 2) || !t3 || (t - t3 != TUIDL + 3)) :
-				      buf[0] == '(' || buf[0] == ')' || buf[0] == '{' || buf[0] == '}' || buf[0] == '!' ?
+				      c == '(' || c == ')' || c == '{' || c == '}' || c == '!' ?
 				        (sscanf( buf + 2, "%d", &t1 ) != 1) :
-				        buf[0] == '+' || buf[0] == '&' || buf[0] == '-' || buf[0] == '|' || buf[0] == '/' || buf[0] == '\\' ?
+				        c == '+' || c == '&' || c == '-' || c == '|' || c == '/' || c == '\\' ?
 				          (sscanf( buf + 2, "%d %d", &t1, &t2 ) != 2) :
 				          (sscanf( buf + 2, "%d %d %d", &t1, &t2, &t3 ) != 3))
 				{
 					error( "Error: malformed journal entry at %s:%d\n", svars->jname, line );
 					goto jbail;
 				}
-				if (buf[0] == '(')
+				if (c == '(')
 					svars->maxuid[M] = t1;
-				else if (buf[0] == ')')
+				else if (c == ')')
 					svars->maxuid[S] = t1;
-				else if (buf[0] == '{')
+				else if (c == '{')
 					svars->newuid[M] = t1;
-				else if (buf[0] == '}')
+				else if (c == '}')
 					svars->newuid[S] = t1;
-				else if (buf[0] == '!')
+				else if (c == '!')
 					svars->smaxxuid = t1;
-				else if (buf[0] == '|') {
+				else if (c == '|') {
 					svars->uidval[M] = t1;
 					svars->uidval[S] = t2;
-				} else if (buf[0] == '+') {
+				} else if (c == '+') {
 					srec = nfmalloc( sizeof(*srec) );
 					srec->uid[M] = t1;
 					srec->uid[S] = t2;
@@ -848,7 +849,7 @@ load_state( sync_vars_t *svars )
 					goto jbail;
 				  syncfnd:
 					debugn( "  entry(%d,%d,%u) ", srec->uid[M], srec->uid[S], srec->flags );
-					switch (buf[0]) {
+					switch (c) {
 					case '-':
 						debug( "killed\n" );
 						if (srec->msg[M])
