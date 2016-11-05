@@ -337,7 +337,7 @@ copy_msg_convert( int in_cr, int out_cr, copy_vars_t *vars )
 	char *in_buf = vars->data.data;
 	int in_len = vars->data.len;
 	int idx = 0, sbreak = 0, ebreak = 0;
-	int lines = 0, hdr_crs = 0, bdy_crs = 0, extra = 0;
+	int lines = 0, hdr_crs = 0, bdy_crs = 0, app_cr = 0, extra = 0;
 	if (vars->srec) {
 	  nloop: ;
 		int start = idx;
@@ -364,7 +364,8 @@ copy_msg_convert( int in_cr, int out_cr, copy_vars_t *vars )
 		free( in_buf );
 		return 0;
 	  oke:
-		extra += 8 + TUIDL + 1 + (out_cr && (!in_cr || hdr_crs));
+		app_cr = out_cr && (!in_cr || hdr_crs);
+		extra += 8 + TUIDL + app_cr + 1;
 	}
 	if (out_cr != in_cr) {
 		for (; idx < in_len; idx++) {
@@ -389,7 +390,7 @@ copy_msg_convert( int in_cr, int out_cr, copy_vars_t *vars )
 		out_buf += 8;
 		memcpy( out_buf, vars->srec->tuid, TUIDL );
 		out_buf += TUIDL;
-		if (out_cr && (!in_cr || hdr_crs))
+		if (app_cr)
 			*out_buf++ = '\r';
 		*out_buf++ = '\n';
 		idx = ebreak;
