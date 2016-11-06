@@ -110,7 +110,7 @@ void flushn( void );
 typedef struct string_list {
 	struct string_list *next;
 	char string[1];
-} string_list_t;
+} ATTR_PACKED(void *) string_list_t;
 
 void add_string_list_n( string_list_t **list, const char *str, int len );
 void add_string_list( string_list_t **list, const char *str );
