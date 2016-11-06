@@ -1033,7 +1033,7 @@ maildir_scan( maildir_store_t *ctx, msg_t_array_alloc_t *msglist )
 				fnl = (u ?
 					nfsnprintf( buf + bl, sizeof(buf) - bl, "%s/%.*s,U=%d%s", subdirs[entry->recent], (int)(u - entry->base), entry->base, uid, ru ) :
 					nfsnprintf( buf + bl, sizeof(buf) - bl, "%s/%s,U=%d", subdirs[entry->recent], entry->base, uid ))
-					+ 1 - 4;
+					- 4;
 				memcpy( nbuf, buf, bl + 4 );
 				nfsnprintf( nbuf + bl + 4, sizeof(nbuf) - bl - 4, "%s", entry->base );
 				if (rename( nbuf, buf )) {
@@ -1048,8 +1048,7 @@ maildir_scan( maildir_store_t *ctx, msg_t_array_alloc_t *msglist )
 					goto again;
 				}
 				free( entry->base );
-				entry->base = nfmalloc( fnl );
-				memcpy( entry->base, buf + bl + 4, fnl );
+				entry->base = nfstrndup( buf + bl + 4, fnl );
 			}
 			if (ctx->gen.opts & OPEN_SIZE) {
 				if (stat( buf, &st )) {
@@ -1571,8 +1570,7 @@ maildir_set_msg_flags( store_t *gctx, message_t *gmsg, int uid ATTR_UNUSED, int 
 		}
 	}
 	free( msg->base );
-	msg->base = nfmalloc( tl + 1 );
-	memcpy( msg->base, nbuf + bl, tl + 1 );
+	msg->base = nfstrndup( nbuf + bl, tl );
 	msg->gen.flags |= add;
 	msg->gen.flags &= ~del;
 	gmsg->status &= ~M_RECENT;

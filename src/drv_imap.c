@@ -420,13 +420,8 @@ imap_vprintf( const char *fmt, va_list ap )
 				oob();
 			memcpy( d, s, l );
 			d += l;
-			if (!c) {
-				l = d - buf;
-				ed = nfmalloc( l + 1 );
-				memcpy( ed, buf, l );
-				ed[l] = 0;
-				return ed;
-			}
+			if (!c)
+				return nfstrndup( buf, d - buf );
 			maxlen = INT_MAX;
 			c = *++fmt;
 			if (c == '\\') {
@@ -773,9 +768,7 @@ parse_imap_list( imap_store_t *ctx, char **sp, parse_list_state_t *sts )
 				*d++ = c;
 			}
 			cur->len = d - p;
-			cur->val = nfmalloc( cur->len + 1 );
-			memcpy( cur->val, p, cur->len );
-			cur->val[cur->len] = 0;
+			cur->val = nfstrndup( p, cur->len );
 		} else {
 			/* atom */
 			p = s;
@@ -785,11 +778,8 @@ parse_imap_list( imap_store_t *ctx, char **sp, parse_list_state_t *sts )
 			cur->len = s - p;
 			if (equals( p, cur->len, "NIL", 3 ))
 				cur->val = NIL;
-			else {
-				cur->val = nfmalloc( cur->len + 1 );
-				memcpy( cur->val, p, cur->len );
-				cur->val[cur->len] = 0;
-			}
+			else
+				cur->val = nfstrndup( p, cur->len );
 		}
 
 	  next:
