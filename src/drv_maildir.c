@@ -1008,8 +1008,7 @@ maildir_scan( maildir_store_t *ctx, msg_t_array_alloc_t *msglist )
 					maildir_free_scan( msglist );
 					return DRV_BOX_BAD;
 				}
-				if ((ctx->gen.opts & OPEN_SIZE) || ((ctx->gen.opts & OPEN_FIND) && uid >= ctx->newuid))
-					nfsnprintf( buf + bl, sizeof(buf) - bl, "%s/%s", subdirs[entry->recent], entry->base );
+				fnl = 0;
 #ifdef USE_DB
 			} else if (ctx->usedb) {
 				if ((ret = maildir_set_uid( ctx, entry->base, &uid )) != DRV_OK) {
@@ -1017,8 +1016,7 @@ maildir_scan( maildir_store_t *ctx, msg_t_array_alloc_t *msglist )
 					return ret;
 				}
 				entry->uid = uid;
-				if ((ctx->gen.opts & OPEN_SIZE) || ((ctx->gen.opts & OPEN_FIND) && uid >= ctx->newuid))
-					nfsnprintf( buf + bl, sizeof(buf) - bl, "%s/%s", subdirs[entry->recent], entry->base );
+				fnl = 0;
 #endif /* USE_DB */
 			} else {
 				if ((ret = maildir_obtain_uid( ctx, &uid )) != DRV_OK) {
@@ -1050,7 +1048,13 @@ maildir_scan( maildir_store_t *ctx, msg_t_array_alloc_t *msglist )
 				free( entry->base );
 				entry->base = nfstrndup( buf + bl + 4, fnl );
 			}
-			if (ctx->gen.opts & OPEN_SIZE) {
+			int want_size = (ctx->gen.opts & OPEN_SIZE);
+			int want_tuid = ((ctx->gen.opts & OPEN_FIND) && uid >= ctx->newuid);
+			if (!want_size && !want_tuid)
+				continue;
+			if (!fnl)
+				nfsnprintf( buf + bl, sizeof(buf) - bl, "%s/%s", subdirs[entry->recent], entry->base );
+			if (want_size) {
 				if (stat( buf, &st )) {
 					if (errno != ENOENT) {
 						sys_error( "Maildir error: cannot stat %s", buf );
@@ -1060,7 +1064,7 @@ maildir_scan( maildir_store_t *ctx, msg_t_array_alloc_t *msglist )
 				}
 				entry->size = st.st_size;
 			}
-			if ((ctx->gen.opts & OPEN_FIND) && uid >= ctx->newuid) {
+			if (want_tuid) {
 				if (!(f = fopen( buf, "r" ))) {
 					if (errno != ENOENT) {
 						sys_error( "Maildir error: cannot open %s", buf );
