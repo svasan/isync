@@ -397,7 +397,9 @@ File containing the private key corresponding to \fBClientCertificate\fR.
 \fBPipelineDepth\fR \fIdepth\fR
 Maximum number of IMAP commands which can be simultaneously in flight.
 Setting this to \fI1\fR disables pipelining.
-This is mostly a debugging only option.
+This is mostly a debugging option, but may also be used to limit average
+bandwidth consumption (GMail may require this if you have a very fast
+connection), or to spare flaky servers like M$ Exchange.
 (Default: \fIunlimited\fR)
 ..
 .TP
