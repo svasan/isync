@@ -734,10 +734,11 @@ load_state( sync_vars_t *svars )
 	  gothdr:
 		while (fgets( buf, sizeof(buf), jfp )) {
 			line++;
-			if (!(t = strlen( buf )) || buf[t - 1] != '\n') {
+			if (!(t = strlen( buf )) || buf[--t] != '\n') {
 				error( "Error: incomplete sync state entry at %s:%d\n", svars->dname, line );
 				goto jbail;
 			}
+			buf[t] = 0;
 			fbuf[0] = 0;
 			if (sscanf( buf, "%d %d %15s", &t1, &t2, fbuf ) < 2) {
 				error( "Error: invalid sync state entry at %s:%d\n", svars->dname, line );
@@ -779,25 +780,27 @@ load_state( sync_vars_t *svars )
 			goto jbail;
 		if (!stat( svars->nname, &st ) && fgets( buf, sizeof(buf), jfp )) {
 			debug( "recovering journal ...\n" );
-			if (!(t = strlen( buf )) || buf[t - 1] != '\n') {
+			if (!(t = strlen( buf )) || buf[--t] != '\n') {
 				error( "Error: incomplete journal header in %s\n", svars->jname );
 				goto jbail;
 			}
-			if (!equals( buf, t, JOURNAL_VERSION "\n", strlen(JOURNAL_VERSION) + 1 )) {
+			buf[t] = 0;
+			if (!equals( buf, t, JOURNAL_VERSION, strlen(JOURNAL_VERSION) )) {
 				error( "Error: incompatible journal version "
-				                 "(got %.*s, expected " JOURNAL_VERSION ")\n", t - 1, buf );
+				                 "(got %s, expected " JOURNAL_VERSION ")\n", buf );
 				goto jbail;
 			}
 			srec = 0;
 			line = 1;
 			while (fgets( buf, sizeof(buf), jfp )) {
 				line++;
-				if (!(t = strlen( buf )) || buf[t - 1] != '\n') {
+				if (!(t = strlen( buf )) || buf[--t] != '\n') {
 					error( "Error: incomplete journal entry at %s:%d\n", svars->jname, line );
 					goto jbail;
 				}
+				buf[t] = 0;
 				if ((c = buf[0]) == '#' ?
-				      (t3 = 0, (sscanf( buf + 2, "%d %d %n", &t1, &t2, &t3 ) < 2) || !t3 || (t - t3 != TUIDL + 3)) :
+				      (t3 = 0, (sscanf( buf + 2, "%d %d %n", &t1, &t2, &t3 ) < 2) || !t3 || (t - t3 != TUIDL + 2)) :
 				      c == '(' || c == ')' || c == '{' || c == '}' || c == '[' || c == ']' || c == '!' ?
 				        (sscanf( buf + 2, "%d", &t1 ) != 1) :
 				        c == '+' || c == '&' || c == '-' || c == '|' || c == '/' || c == '\\' ?
