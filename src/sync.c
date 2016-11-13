@@ -863,8 +863,8 @@ load_state( sync_vars_t *svars )
 						srec->status = S_DEAD;
 						break;
 					case '#':
-						debug( "TUID now %." stringify(TUIDL) "s\n", buf + t3 + 2 );
 						memcpy( srec->tuid, buf + t3 + 2, TUIDL );
+						debug( "TUID now %." stringify(TUIDL) "s\n", srec->tuid );
 						break;
 					case '&':
 						debug( "TUID %." stringify(TUIDL) "s lost\n", srec->tuid );
