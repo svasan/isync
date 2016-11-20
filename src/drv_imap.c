@@ -2300,7 +2300,7 @@ imap_load_box( store_t *gctx, int minuid, int maxuid, int newuid, int *excs, int
 			imap_submit_load( ctx, buf, 0, sts );
 		}
 		if (maxuid == INT_MAX)
-			maxuid = ctx->gen.uidnext ? ctx->gen.uidnext - 1 : 1000000000;
+			maxuid = ctx->gen.uidnext ? ctx->gen.uidnext - 1 : 0x7fffffff;
 		if (maxuid >= minuid) {
 			if ((ctx->gen.opts & OPEN_FIND) && minuid < newuid) {
 				sprintf( buf, "%d:%d", minuid, newuid - 1 );
