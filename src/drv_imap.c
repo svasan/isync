@@ -1992,6 +1992,8 @@ imap_open_store_authenticate2( imap_store_t *ctx )
 
 		rc = sasl_client_new( "imap", srvc->sconf.host, NULL, NULL, NULL, 0, &ctx->sasl );
 		if (rc != SASL_OK) {
+			if (rc == SASL_NOMECH)
+				goto notsasl;
 			if (!ctx->sasl)
 				goto saslbail;
 			error( "Error: %s\n", sasl_errdetail( ctx->sasl ) );
@@ -1999,6 +2001,8 @@ imap_open_store_authenticate2( imap_store_t *ctx )
 		}
 
 		rc = sasl_client_start( ctx->sasl, saslmechs + 1, &interact, CAP(SASLIR) ? &out : NULL, &out_len, &gotmech );
+		if (rc == SASL_NOMECH)
+			goto notsasl;
 		if (gotmech)
 			info( "Authenticating with SASL mechanism %s...\n", gotmech );
 		/* Technically, we are supposed to loop over sasl_client_start(),
@@ -2017,6 +2021,8 @@ imap_open_store_authenticate2( imap_store_t *ctx )
 		imap_exec( ctx, cmd, done_sasl_auth, enc ? "AUTHENTICATE %s %s" : "AUTHENTICATE %s", gotmech, enc );
 		free( enc );
 		return;
+	  notsasl:
+		sasl_dispose( &ctx->sasl );
 	}
 #endif
 	if (auth_login) {
