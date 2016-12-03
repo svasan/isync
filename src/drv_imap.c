@@ -1956,6 +1956,8 @@ imap_open_store_authenticate2( imap_store_t *ctx )
 				if (!strcasecmp( cmech->string, "LOGIN" )) {
 #ifdef HAVE_LIBSSL
 					if (ctx->conn.ssl || !any)
+#else
+					if (!any)
 #endif
 						auth_login = 1;
 #ifdef HAVE_LIBSASL
