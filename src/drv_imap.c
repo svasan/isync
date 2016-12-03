@@ -1944,6 +1944,7 @@ imap_open_store_authenticate2( imap_store_t *ctx )
 	string_list_t *mech, *cmech;
 	int auth_login = 0;
 #ifdef HAVE_LIBSASL
+	const char *saslavail;
 	char saslmechs[1024], *saslend = saslmechs;
 #endif
 
@@ -2022,6 +2023,14 @@ imap_open_store_authenticate2( imap_store_t *ctx )
 		free( enc );
 		return;
 	  notsasl:
+		if (!ctx->sasl || sasl_listmech( ctx->sasl, NULL, "", "", "", &saslavail, NULL, NULL ) != SASL_OK)
+			saslavail = "(none)";  /* EXTERNAL is always there anyway. */
+		if (!auth_login) {
+			error( "IMAP error: selected SASL mechanism(s) not available;\n"
+			       "   selected:%s\n   available: %s\n", saslmechs, saslavail );
+			goto bail;
+		}
+		info( "NOT using available SASL mechanism(s): %s\n", saslavail );
 		sasl_dispose( &ctx->sasl );
 	}
 #endif
