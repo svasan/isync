@@ -1957,17 +1957,14 @@ imap_open_store_authenticate2( imap_store_t *ctx )
 					if (ctx->conn.ssl || !any)
 #endif
 						auth_login = 1;
-				} else {
 #ifdef HAVE_LIBSASL
+				} else {
 					int len = strlen( cmech->string );
 					if (saslend + len + 2 > saslmechs + sizeof(saslmechs))
 						oob();
 					*saslend++ = ' ';
 					memcpy( saslend, cmech->string, len + 1 );
 					saslend += len;
-#else
-					error( "IMAP error: authentication mechanism %s is not supported\n", cmech->string );
-					goto bail;
 #endif
 				}
 			}
