@@ -1943,6 +1943,7 @@ imap_open_store_authenticate2( imap_store_t *ctx )
 	imap_server_conf_t *srvc = cfg->server;
 	string_list_t *mech, *cmech;
 	int auth_login = 0;
+	int skipped_login = 0;
 #ifdef HAVE_LIBSASL
 	const char *saslavail;
 	char saslmechs[1024], *saslend = saslmechs;
@@ -1960,6 +1961,8 @@ imap_open_store_authenticate2( imap_store_t *ctx )
 					if (!any)
 #endif
 						auth_login = 1;
+					else
+						skipped_login = 1;
 #ifdef HAVE_LIBSASL
 				} else {
 					int len = strlen( cmech->string );
@@ -2030,7 +2033,7 @@ imap_open_store_authenticate2( imap_store_t *ctx )
 		if (!auth_login) {
 			error( "IMAP error: selected SASL mechanism(s) not available;\n"
 			       "   selected:%s\n   available: %s\n", saslmechs, saslavail );
-			goto bail;
+			goto skipnote;
 		}
 		info( "NOT using available SASL mechanism(s): %s\n", saslavail );
 		sasl_dispose( &ctx->sasl );
@@ -2048,6 +2051,12 @@ imap_open_store_authenticate2( imap_store_t *ctx )
 		return;
 	}
 	error( "IMAP error: server supports no acceptable authentication mechanism\n" );
+#ifdef HAVE_LIBSASL
+  skipnote:
+#endif
+	if (skipped_login)
+		error( "Note: not using LOGIN because connection is not encrypted;\n"
+		       "      use 'AuthMechs LOGIN' explicitly to force it.\n" );
 
   bail:
 	imap_open_store_bail( ctx, FAIL_FINAL );
