@@ -837,33 +837,50 @@ static int parse_namespace_rsp_p2( imap_store_t *, list_t *, char * );
 static int parse_namespace_rsp_p3( imap_store_t *, list_t *, char * );
 
 static int
-parse_namespace_rsp_fail( void )
+parse_namespace_check( list_t *list )
 {
+	if (!list)
+		goto bad;
+	if (list->val == NIL)
+		return 0;
+	if (list->val != LIST)
+		goto bad;
+	for (list = list->child; list; list = list->next) {
+		if (list->val != LIST)
+			goto bad;
+		if (!is_atom( list->child ))
+			goto bad;
+		if (!is_atom( list->child->next ))
+			goto bad;
+		/* Namespace response extensions may follow here; we don't care. */
+	}
+	return 0;
+  bad:
 	error( "IMAP error: malformed NAMESPACE response\n" );
-	return LIST_BAD;
+	return -1;
 }
 
 static int
 parse_namespace_rsp( imap_store_t *ctx, list_t *list, char *s )
 {
-	if (!(ctx->ns_personal = list))
-		return parse_namespace_rsp_fail();
+	if (parse_namespace_check( (ctx->ns_personal = list) ))
+		return LIST_BAD;
 	return parse_list( ctx, s, parse_namespace_rsp_p2 );
 }
 
 static int
 parse_namespace_rsp_p2( imap_store_t *ctx, list_t *list, char *s )
 {
-	if (!(ctx->ns_other = list))
-		return parse_namespace_rsp_fail();
+	if (parse_namespace_check( (ctx->ns_other = list) ))
+		return LIST_BAD;
 	return parse_list( ctx, s, parse_namespace_rsp_p3 );
 }
 
 static int
 parse_namespace_rsp_p3( imap_store_t *ctx, list_t *list, char *s ATTR_UNUSED )
 {
-	if (!(ctx->ns_shared = list))
-		return parse_namespace_rsp_fail();
+	if (parse_namespace_check( (ctx->ns_shared = list) ))
+		return LIST_BAD;
 	return LIST_OK;
 }
 
@@ -2142,10 +2159,8 @@ imap_open_store_namespace2( imap_store_t *ctx )
 			ctx->prefix = nsp_1st_ns->val;
 		if (!ctx->delimiter)
 			ctx->delimiter = nfstrdup( nsp_1st_dl->val );
-		imap_open_store_finalize( ctx );
-	} else {
-		imap_open_store_bail( ctx, FAIL_FINAL );
 	}
+	imap_open_store_finalize( ctx );
 }
 
 static void
