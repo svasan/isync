@@ -638,6 +638,12 @@ next_arg( char **ps )
 }
 
 static int
+is_opt_atom( list_t *list )
+{
+	return list && list->val && list->val != LIST;
+}
+
+static int
 is_atom( list_t *list )
 {
 	return list && list->val && list->val != NIL && list->val != LIST;
@@ -850,7 +856,7 @@ parse_namespace_check( list_t *list )
 			goto bad;
 		if (!is_atom( list->child ))
 			goto bad;
-		if (!is_atom( list->child->next ))
+		if (!is_opt_atom( list->child->next ))
 			goto bad;
 		/* Namespace response extensions may follow here; we don't care. */
 	}
@@ -2147,17 +2153,17 @@ static void
 imap_open_store_namespace2( imap_store_t *ctx )
 {
 	imap_store_conf_t *cfg = (imap_store_conf_t *)ctx->gen.conf;
-	list_t *nsp, *nsp_1st, *nsp_1st_ns, *nsp_1st_dl;
+	list_t *nsp, *nsp_1st;
 
 	/* XXX for now assume 1st personal namespace */
 	if (is_list( (nsp = ctx->ns_personal) ) &&
-	    is_list( (nsp_1st = nsp->child) ) &&
-	    is_atom( (nsp_1st_ns = nsp_1st->child) ) &&
-	    is_atom( (nsp_1st_dl = nsp_1st_ns->next) ))
+	    is_list( (nsp_1st = nsp->child) ))
 	{
+		list_t *nsp_1st_ns = nsp_1st->child;
+		list_t *nsp_1st_dl = nsp_1st_ns->next;
 		if (!ctx->prefix && cfg->use_namespace)
 			ctx->prefix = nsp_1st_ns->val;
-		if (!ctx->delimiter)
+		if (!ctx->delimiter && is_atom( nsp_1st_dl ))
 			ctx->delimiter = nfstrdup( nsp_1st_dl->val );
 	}
 	imap_open_store_finalize( ctx );
