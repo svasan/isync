@@ -642,6 +642,12 @@ next_arg( char **ps )
 }
 
 static int
+is_opt_atom( list_t *list )
+{
+	return list && list->val && list->val != LIST;
+}
+
+static int
 is_atom( list_t *list )
 {
 	return list && list->val && list->val != NIL && list->val != LIST;
@@ -841,33 +847,50 @@ static int parse_namespace_rsp_p2( imap_store_t *, list_t *, char * );
 static int parse_namespace_rsp_p3( imap_store_t *, list_t *, char * );
 
 static int
-parse_namespace_rsp_fail( void )
+parse_namespace_check( list_t *list )
 {
+	if (!list)
+		goto bad;
+	if (list->val == NIL)
+		return 0;
+	if (list->val != LIST)
+		goto bad;
+	for (list = list->child; list; list = list->next) {
+		if (list->val != LIST)
+			goto bad;
+		if (!is_atom( list->child ))
+			goto bad;
+		if (!is_opt_atom( list->child->next ))
+			goto bad;
+		/* Namespace response extensions may follow here; we don't care. */
+	}
+	return 0;
+  bad:
 	error( "IMAP error: malformed NAMESPACE response\n" );
-	return LIST_BAD;
+	return -1;
 }
 
 static int
 parse_namespace_rsp( imap_store_t *ctx, list_t *list, char *s )
 {
-	if (!(ctx->ns_personal = list))
-		return parse_namespace_rsp_fail();
+	if (parse_namespace_check( (ctx->ns_personal = list) ))
+		return LIST_BAD;
 	return parse_list( ctx, s, parse_namespace_rsp_p2 );
 }
 
 static int
 parse_namespace_rsp_p2( imap_store_t *ctx, list_t *list, char *s )
 {
-	if (!(ctx->ns_other = list))
-		return parse_namespace_rsp_fail();
+	if (parse_namespace_check( (ctx->ns_other = list) ))
+		return LIST_BAD;
 	return parse_list( ctx, s, parse_namespace_rsp_p3 );
 }
 
 static int
 parse_namespace_rsp_p3( imap_store_t *ctx, list_t *list, char *s ATTR_UNUSED )
 {
-	if (!(ctx->ns_shared = list))
-		return parse_namespace_rsp_fail();
+	if (parse_namespace_check( (ctx->ns_shared = list) ))
+		return LIST_BAD;
 	return LIST_OK;
 }
 
@@ -1964,7 +1987,9 @@ imap_open_store_authenticate2( imap_store_t *ctx )
 	imap_server_conf_t *srvc = cfg->server;
 	string_list_t *mech, *cmech;
 	int auth_login = 0;
+	int skipped_login = 0;
 #ifdef HAVE_LIBSASL
+	const char *saslavail;
 	char saslmechs[1024], *saslend = saslmechs;
 #endif
 
@@ -1976,19 +2001,20 @@ imap_open_store_authenticate2( imap_store_t *ctx )
 				if (!strcasecmp( cmech->string, "LOGIN" )) {
 #ifdef HAVE_LIBSSL
 					if (ctx->conn.ssl || !any)
+#else
+					if (!any)
 #endif
 						auth_login = 1;
-				} else {
+					else
+						skipped_login = 1;
 #ifdef HAVE_LIBSASL
+				} else {
 					int len = strlen( cmech->string );
 					if (saslend + len + 2 > saslmechs + sizeof(saslmechs))
 						oob();
 					*saslend++ = ' ';
 					memcpy( saslend, cmech->string, len + 1 );
 					saslend += len;
-#else
-					error( "IMAP error: authentication mechanism %s is not supported\n", cmech->string );
-					goto bail;
 #endif
 				}
 			}
@@ -2016,6 +2042,8 @@ imap_open_store_authenticate2( imap_store_t *ctx )
 
 		rc = sasl_client_new( "imap", srvc->sconf.host, NULL, NULL, NULL, 0, &ctx->sasl );
 		if (rc != SASL_OK) {
+			if (rc == SASL_NOMECH)
+				goto notsasl;
 			if (!ctx->sasl)
 				goto saslbail;
 			error( "Error: %s\n", sasl_errdetail( ctx->sasl ) );
@@ -2023,6 +2051,8 @@ imap_open_store_authenticate2( imap_store_t *ctx )
 		}
 
 		rc = sasl_client_start( ctx->sasl, saslmechs + 1, &interact, CAP(SASLIR) ? &out : NULL, &out_len, &gotmech );
+		if (rc == SASL_NOMECH)
+			goto notsasl;
 		if (gotmech)
 			info( "Authenticating with SASL mechanism %s...\n", gotmech );
 		/* Technically, we are supposed to loop over sasl_client_start(),
@@ -2041,6 +2071,16 @@ imap_open_store_authenticate2( imap_store_t *ctx )
 		imap_exec( ctx, cmd, done_sasl_auth, enc ? "AUTHENTICATE %s %s" : "AUTHENTICATE %s", gotmech, enc );
 		free( enc );
 		return;
+	  notsasl:
+		if (!ctx->sasl || sasl_listmech( ctx->sasl, NULL, "", "", "", &saslavail, NULL, NULL ) != SASL_OK)
+			saslavail = "(none)";  /* EXTERNAL is always there anyway. */
+		if (!auth_login) {
+			error( "IMAP error: selected SASL mechanism(s) not available;\n"
+			       "   selected:%s\n   available: %s\n", saslmechs, saslavail );
+			goto skipnote;
+		}
+		info( "NOT using available SASL mechanism(s): %s\n", saslavail );
+		sasl_dispose( &ctx->sasl );
 	}
 #endif
 	if (auth_login) {
@@ -2055,6 +2095,12 @@ imap_open_store_authenticate2( imap_store_t *ctx )
 		return;
 	}
 	error( "IMAP error: server supports no acceptable authentication mechanism\n" );
+#ifdef HAVE_LIBSASL
+  skipnote:
+#endif
+	if (skipped_login)
+		error( "Note: not using LOGIN because connection is not encrypted;\n"
+		       "      use 'AuthMechs LOGIN' explicitly to force it.\n" );
 
   bail:
 	imap_open_store_bail( ctx, FAIL_FINAL );
@@ -2129,22 +2175,20 @@ static void
 imap_open_store_namespace2( imap_store_t *ctx )
 {
 	imap_store_conf_t *cfg = (imap_store_conf_t *)ctx->gen.conf;
-	list_t *nsp, *nsp_1st, *nsp_1st_ns, *nsp_1st_dl;
+	list_t *nsp, *nsp_1st;
 
 	/* XXX for now assume 1st personal namespace */
 	if (is_list( (nsp = ctx->ns_personal) ) &&
-	    is_list( (nsp_1st = nsp->child) ) &&
-	    is_atom( (nsp_1st_ns = nsp_1st->child) ) &&
-	    is_atom( (nsp_1st_dl = nsp_1st_ns->next) ))
+	    is_list( (nsp_1st = nsp->child) ))
 	{
+		list_t *nsp_1st_ns = nsp_1st->child;
+		list_t *nsp_1st_dl = nsp_1st_ns->next;
 		if (!ctx->prefix && cfg->use_namespace)
 			ctx->prefix = nsp_1st_ns->val;
-		if (!ctx->delimiter[0])
+		if (!ctx->delimiter[0] && is_atom( nsp_1st_dl ))
 			ctx->delimiter[0] = nsp_1st_dl->val[0];
-		imap_open_store_finalize( ctx );
-	} else {
-		imap_open_store_bail( ctx, FAIL_FINAL );
 	}
+	imap_open_store_finalize( ctx );
 }
 
 static void
@@ -2318,7 +2362,7 @@ imap_load_box( store_t *gctx, int minuid, int maxuid, int newuid, int_array_t ex
 			imap_submit_load( ctx, buf, 0, sts );
 		}
 		if (maxuid == INT_MAX)
-			maxuid = ctx->gen.uidnext ? ctx->gen.uidnext - 1 : 1000000000;
+			maxuid = ctx->gen.uidnext ? ctx->gen.uidnext - 1 : 0x7fffffff;
 		if (maxuid >= minuid) {
 			if ((ctx->gen.opts & OPEN_FIND) && minuid < newuid) {
 				sprintf( buf, "%d:%d", minuid, newuid - 1 );
