@@ -2352,7 +2352,7 @@ imap_set_range( imap_range_t *ranges, int *nranges, int low_flags, int high_flag
 static void imap_submit_load( imap_store_t *, const char *, int, struct imap_cmd_refcounted_state * );
 
 static void
-imap_load_box( store_t *gctx, int minuid, int maxuid, int newuid, int_array_t excs,
+imap_load_box( store_t *gctx, int minuid, int maxuid, int newuid, int seenuid, int_array_t excs,
                void (*cb)( int sts, void *aux ), void *aux )
 {
 	imap_store_t *ctx = (imap_store_t *)gctx;
@@ -2380,11 +2380,14 @@ imap_load_box( store_t *gctx, int minuid, int maxuid, int newuid, int_array_t ex
 		if (maxuid == INT_MAX)
 			maxuid = ctx->gen.uidnext ? ctx->gen.uidnext - 1 : 0x7fffffff;
 		if (maxuid >= minuid) {
-			imap_range_t ranges[2];
+			imap_range_t ranges[3];
 			ranges[0].first = minuid;
 			ranges[0].last = maxuid;
-			ranges[0].flags = shifted_bit( ctx->gen.opts, OPEN_SIZE, WantSize);
+			ranges[0].flags = 0;
 			int nranges = 1;
+			if (ctx->gen.opts & (OPEN_OLD_SIZE | OPEN_NEW_SIZE))
+				imap_set_range( ranges, &nranges, shifted_bit( ctx->gen.opts, OPEN_OLD_SIZE, WantSize),
+				                                  shifted_bit( ctx->gen.opts, OPEN_NEW_SIZE, WantSize), seenuid );
 			if (ctx->gen.opts & OPEN_FIND)
 				imap_set_range( ranges, &nranges, 0, WantTuids, newuid - 1 );
 			for (int r = 0; r < nranges; r++) {

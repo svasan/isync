@@ -74,7 +74,8 @@ typedef struct message {
 #define OPEN_OLD        (1<<0)
 #define OPEN_NEW        (1<<1)
 #define OPEN_FLAGS      (1<<2)
-#define OPEN_SIZE       (1<<3)
+#define OPEN_OLD_SIZE   (1<<3)
+#define OPEN_NEW_SIZE   (1<<4)
 #define OPEN_EXPUNGE    (1<<5)
 #define OPEN_SETFLAGS   (1<<6)
 #define OPEN_APPEND     (1<<7)
@@ -205,9 +206,11 @@ struct driver {
 	/* Load the message attributes needed to perform the requested operations.
 	 * Consider only messages with UIDs between minuid and maxuid (inclusive)
 	 * and those named in the excs array (smaller than minuid).
-	 * The driver takes ownership of the excs array. Messages below newuid do not need
-	 * to have the TUID populated even if OPEN_FIND is set. */
-	void (*load_box)( store_t *ctx, int minuid, int maxuid, int newuid, int_array_t excs,
+	 * The driver takes ownership of the excs array.
+	 * Messages starting with newuid need to have the TUID populated when OPEN_FIND is set.
+	 * Messages up to seenuid need to have the size populated when OPEN_OLD_SIZE is set;
+	 * likewise messages above seenuid when OPEN_NEW_SIZE is set. */
+	void (*load_box)( store_t *ctx, int minuid, int maxuid, int newuid, int seenuid, int_array_t excs,
 	                  void (*cb)( int sts, void *aux ), void *aux );
 
 	/* Fetch the contents and flags of the given message from the current mailbox. */

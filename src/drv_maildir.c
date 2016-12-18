@@ -70,7 +70,7 @@ typedef struct maildir_message {
 typedef struct maildir_store {
 	store_t gen;
 	int uvfd, uvok, nuid, is_inbox, fresh[3];
-	int minuid, maxuid, newuid;
+	int minuid, maxuid, newuid, seenuid;
 	int_array_t excs;
 	char *trash;
 #ifdef USE_DB
@@ -1048,7 +1048,7 @@ maildir_scan( maildir_store_t *ctx, msg_t_array_alloc_t *msglist )
 				free( entry->base );
 				entry->base = nfstrndup( buf + bl + 4, fnl );
 			}
-			int want_size = (ctx->gen.opts & OPEN_SIZE);
+			int want_size = (uid > ctx->seenuid) ? (ctx->gen.opts & OPEN_NEW_SIZE) : (ctx->gen.opts & OPEN_OLD_SIZE);
 			int want_tuid = ((ctx->gen.opts & OPEN_FIND) && uid >= ctx->newuid);
 			if (!want_size && !want_tuid)
 				continue;
@@ -1280,7 +1280,7 @@ maildir_prepare_load_box( store_t *gctx, int opts )
 }
 
 static void
-maildir_load_box( store_t *gctx, int minuid, int maxuid, int newuid, int_array_t excs,
+maildir_load_box( store_t *gctx, int minuid, int maxuid, int newuid, int seenuid, int_array_t excs,
                   void (*cb)( int sts, void *aux ), void *aux )
 {
 	maildir_store_t *ctx = (maildir_store_t *)gctx;
@@ -1291,6 +1291,7 @@ maildir_load_box( store_t *gctx, int minuid, int maxuid, int newuid, int_array_t
 	ctx->minuid = minuid;
 	ctx->maxuid = maxuid;
 	ctx->newuid = newuid;
+	ctx->seenuid = seenuid;
 	ARRAY_SQUEEZE( &excs );
 	ctx->excs = excs;
 

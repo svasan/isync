@@ -1208,8 +1208,12 @@ box_opened2( sync_vars_t *svars, int t )
 				opts[1-t] |= OPEN_NEW;
 			if (chan->ops[t] & OP_EXPUNGE)
 				opts[1-t] |= OPEN_FLAGS;
-			if (chan->stores[t]->max_size != INT_MAX)
-				opts[1-t] |= OPEN_SIZE;
+			if (chan->stores[t]->max_size != INT_MAX) {
+				if (chan->ops[t] & OP_RENEW)
+					opts[1-t] |= OPEN_OLD_SIZE;
+				if (chan->ops[t] & OP_NEW)
+					opts[1-t] |= OPEN_NEW_SIZE;
+			}
 		}
 		if (chan->ops[t] & OP_EXPUNGE) {
 			opts[t] |= OPEN_EXPUNGE;
@@ -1298,28 +1302,46 @@ box_opened2( sync_vars_t *svars, int t )
 	sync_deref( svars );
 }
 
+static int
+get_seenuid( sync_vars_t *svars, int t )
+{
+	int seenuid = 0;
+	for (sync_rec_t *srec = svars->srecs; srec; srec = srec->next)
+		if (!(srec->status & S_DEAD) && seenuid < srec->uid[t])
+			seenuid = srec->uid[t];
+	return seenuid;
+}
+
 static void box_loaded( int sts, void *aux );
 
 static void
 load_box( sync_vars_t *svars, int t, int minwuid, int_array_t mexcs )
 {
-	sync_rec_t *srec;
-	int maxwuid;
+	int maxwuid, seenuid;
 
 	if (svars->ctx[t]->opts & OPEN_NEW) {
 		if (minwuid > svars->maxuid[t] + 1)
 			minwuid = svars->maxuid[t] + 1;
 		maxwuid = INT_MAX;
+		if (svars->ctx[t]->opts & OPEN_OLD_SIZE)
+			seenuid = get_seenuid( svars, t );
+		else
+			seenuid = 0;
 	} else if (svars->ctx[t]->opts & OPEN_OLD) {
-		maxwuid = 0;
-		for (srec = svars->srecs; srec; srec = srec->next)
-			if (!(srec->status & S_DEAD) && srec->uid[t] > maxwuid)
-				maxwuid = srec->uid[t];
+		maxwuid = seenuid = get_seenuid( svars, t );
 	} else
-		maxwuid = 0;
+		maxwuid = seenuid = 0;
+	if (seenuid < svars->maxuid[t]) {
+		/* We cannot rely on the maxuid, as uni-directional syncing does not update it.
+		 * But if it is there, use it to avoid a possible gap in the fetched range. */
+		seenuid = svars->maxuid[t];
+	}
 	info( "Loading %s...\n", str_ms[t] );
-	debug( maxwuid == INT_MAX ? "loading %s [%d,inf]\n" : "loading %s [%d,%d]\n", str_ms[t], minwuid, maxwuid );
-	svars->drv[t]->load_box( svars->ctx[t], minwuid, maxwuid, svars->newuid[t], mexcs, box_loaded, AUX );
+	if (maxwuid == INT_MAX)
+		debug( "loading %s [%d,inf] (new >= %d, seen <= %d)\n", str_ms[t], minwuid, svars->newuid[t], seenuid );
+	else
+		debug( "loading %s [%d,%d] (new >= %d, seen <= %d)\n", str_ms[t], minwuid, maxwuid, svars->newuid[t], seenuid );
+	svars->drv[t]->load_box( svars->ctx[t], minwuid, maxwuid, svars->newuid[t], seenuid, mexcs, box_loaded, AUX );
 }
 
 typedef struct {
@@ -1384,7 +1406,7 @@ box_loaded( int sts, void *aux )
 		uid = tmsg->uid;
 		if (DFlags & DEBUG_SYNC) {
 			make_flags( tmsg->flags, fbuf );
-			printf( svars->ctx[t]->opts & OPEN_SIZE ? "  message %5d, %-4s, %6lu: " : "  message %5d, %-4s: ", uid, fbuf, tmsg->size );
+			printf( tmsg->size ? "  message %5d, %-4s, %6lu: " : "  message %5d, %-4s: ", uid, fbuf, tmsg->size );
 		}
 		idx = (uint)((uint)uid * 1103515245U) % hashsz;
 		while (srecmap[idx].uid) {
