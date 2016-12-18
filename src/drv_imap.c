@@ -2322,6 +2322,33 @@ imap_prepare_load_box( store_t *gctx, int opts )
 	gctx->opts = opts;
 }
 
+enum { WantSize = 1, WantTuids = 2 };
+typedef struct imap_range {
+	int first, last, flags;
+} imap_range_t;
+
+static void
+imap_set_range( imap_range_t *ranges, int *nranges, int low_flags, int high_flags, int maxlow )
+{
+	if (low_flags != high_flags) {
+		for (int r = 0; r < *nranges; r++) {
+			if (ranges[r].first > maxlow)
+				break; /* Range starts above split point; so do all subsequent ranges. */
+			if (ranges[r].last < maxlow)
+				continue; /* Range ends below split point; try next one. */
+			if (ranges[r].last != maxlow) {
+				/* Range does not end exactly at split point; need to split. */
+				memmove( &ranges[r + 1], &ranges[r], ((*nranges)++ - r) * sizeof(*ranges) );
+				ranges[r].last = maxlow;
+				ranges[r + 1].first = maxlow + 1;
+			}
+			break;
+		}
+	}
+	for (int r = 0; r < *nranges; r++)
+		ranges[r].flags |= (ranges[r].last <= maxlow) ? low_flags : high_flags;
+}
+
 static void imap_submit_load( imap_store_t *, const char *, int, struct imap_cmd_refcounted_state * );
 
 static void
@@ -2353,31 +2380,31 @@ imap_load_box( store_t *gctx, int minuid, int maxuid, int newuid, int_array_t ex
 		if (maxuid == INT_MAX)
 			maxuid = ctx->gen.uidnext ? ctx->gen.uidnext - 1 : 0x7fffffff;
 		if (maxuid >= minuid) {
-			if ((ctx->gen.opts & OPEN_FIND) && minuid < newuid) {
-				sprintf( buf, "%d:%d", minuid, newuid - 1 );
-				imap_submit_load( ctx, buf, 0, sts );
-				if (newuid > maxuid)
-					goto done;
-				sprintf( buf, "%d:%d", newuid, maxuid );
-			} else {
-				sprintf( buf, "%d:%d", minuid, maxuid );
+			imap_range_t ranges[2];
+			ranges[0].first = minuid;
+			ranges[0].last = maxuid;
+			ranges[0].flags = shifted_bit( ctx->gen.opts, OPEN_SIZE, WantSize);
+			int nranges = 1;
+			if (ctx->gen.opts & OPEN_FIND)
+				imap_set_range( ranges, &nranges, 0, WantTuids, newuid - 1 );
+			for (int r = 0; r < nranges; r++) {
+				sprintf( buf, "%d:%d", ranges[r].first, ranges[r].last );
+				imap_submit_load( ctx, buf, ranges[r].flags, sts );
 			}
-			imap_submit_load( ctx, buf, (ctx->gen.opts & OPEN_FIND), sts );
 		}
-	  done:
 		free( excs.data );
 		imap_refcounted_done( sts );
 	}
 }
 
 static void
-imap_submit_load( imap_store_t *ctx, const char *buf, int tuids, struct imap_cmd_refcounted_state *sts )
+imap_submit_load( imap_store_t *ctx, const char *buf, int flags, struct imap_cmd_refcounted_state *sts )
 {
 	imap_exec( ctx, imap_refcounted_new_cmd( sts ), imap_refcounted_done_box,
 	           "UID FETCH %s (UID%s%s%s)", buf,
 	           (ctx->gen.opts & OPEN_FLAGS) ? " FLAGS" : "",
-	           (ctx->gen.opts & OPEN_SIZE) ? " RFC822.SIZE" : "",
-	           tuids ? " BODY.PEEK[HEADER.FIELDS (X-TUID)]" : "");
+	           (flags & WantSize) ? " RFC822.SIZE" : "",
+	           (flags & WantTuids) ? " BODY.PEEK[HEADER.FIELDS (X-TUID)]" : "");
 }
 
 /******************* imap_fetch_msg *******************/
