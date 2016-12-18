@@ -63,6 +63,7 @@ typedef struct store_conf {
 typedef struct message {
 	struct message *next;
 	struct sync_rec *srec;
+	char *msgid; /* owned */
 	/* string_list_t *keywords; */
 	size_t size; /* zero implies "not fetched" */
 	int uid;
@@ -80,6 +81,7 @@ typedef struct message {
 #define OPEN_SETFLAGS   (1<<6)
 #define OPEN_APPEND     (1<<7)
 #define OPEN_FIND       (1<<8)
+#define OPEN_OLD_IDS    (1<<9)
 
 typedef struct store {
 	struct store *next;
@@ -208,6 +210,7 @@ struct driver {
 	 * and those named in the excs array (smaller than minuid).
 	 * The driver takes ownership of the excs array.
 	 * Messages starting with newuid need to have the TUID populated when OPEN_FIND is set.
+	 * Messages up to seenuid need to have the Message-Id populated when OPEN_OLD_IDS is set.
 	 * Messages up to seenuid need to have the size populated when OPEN_OLD_SIZE is set;
 	 * likewise messages above seenuid when OPEN_NEW_SIZE is set. */
 	void (*load_box)( store_t *ctx, int minuid, int maxuid, int newuid, int seenuid, int_array_t excs,

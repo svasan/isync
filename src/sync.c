@@ -1165,12 +1165,13 @@ box_opened2( sync_vars_t *svars, int t )
 
 	fails = 0;
 	for (t = 0; t < 2; t++)
-		if (svars->uidval[t] >= 0 && svars->uidval[t] != ctx[t]->uidvalidity) {
-			error( "Error: UIDVALIDITY of %s changed (got %d, expected %d)\n",
-			       str_ms[t], ctx[t]->uidvalidity, svars->uidval[t] );
+		if (svars->uidval[t] >= 0 && svars->uidval[t] != ctx[t]->uidvalidity)
 			fails++;
-		}
-	if (fails) {
+	if (fails == 2) {
+		error( "Error: channel %s: UIDVALIDITY of both master and slave changed\n"
+		       "(master got %d, expected %d; slave got %d, expected %d).\n",
+		       svars->chan->name,
+		       ctx[M]->uidvalidity, svars->uidval[M], ctx[S]->uidvalidity, svars->uidval[S] );
 	  bail:
 		svars->ret = SYNC_FAIL;
 		sync_bail( svars );
@@ -1193,6 +1194,8 @@ box_opened2( sync_vars_t *svars, int t )
 		Fprintf( svars->jfp, JOURNAL_VERSION "\n" );
 
 	opts[M] = opts[S] = 0;
+	if (fails)
+		opts[M] = opts[S] = OPEN_OLD|OPEN_OLD_IDS;
 	for (t = 0; t < 2; t++) {
 		if (chan->ops[t] & (OP_DELETE|OP_FLAGS)) {
 			opts[t] |= OPEN_SETFLAGS;
@@ -1323,7 +1326,7 @@ load_box( sync_vars_t *svars, int t, int minwuid, int_array_t mexcs )
 		if (minwuid > svars->maxuid[t] + 1)
 			minwuid = svars->maxuid[t] + 1;
 		maxwuid = INT_MAX;
-		if (svars->ctx[t]->opts & OPEN_OLD_SIZE)
+		if (svars->ctx[t]->opts & (OPEN_OLD_IDS|OPEN_OLD_SIZE))
 			seenuid = get_seenuid( svars, t );
 		else
 			seenuid = 0;
@@ -1428,6 +1431,47 @@ box_loaded( int sts, void *aux )
 
 	if (!(svars->state[1-t] & ST_LOADED))
 		return;
+
+	for (t = 0; t < 2; t++) {
+		if (svars->uidval[t] >= 0 && svars->uidval[t] != svars->ctx[t]->uidvalidity) {
+			unsigned need = 0, got = 0;
+			debug( "trying to re-approve uid validity of %s\n", str_ms[t] );
+			for (srec = svars->srecs; srec; srec = srec->next) {
+				if (srec->status & S_DEAD)
+					continue;
+				if (!srec->msg[t])
+					continue;  // Message disappeared.
+				need++;  // Present paired messages require re-validation.
+				if (!srec->msg[t]->msgid)
+					continue;  // Messages without ID are useless for re-validation.
+				if (!srec->msg[1-t])
+					continue;  // Partner disappeared.
+				if (!srec->msg[1-t]->msgid || strcmp( srec->msg[M]->msgid, srec->msg[S]->msgid )) {
+					error( "Error: channel %s, %s %s: UIDVALIDITY genuinely changed (at UID %d).\n",
+					       svars->chan->name, str_ms[t], svars->orig_name[t], srec->uid[t] );
+				  uvchg:
+					svars->ret |= SYNC_FAIL;
+					cancel_sync( svars );
+					return;
+				}
+				got++;
+			}
+			if (got < 20 && got * 5 < need * 4) {
+				// Too few confirmed messages. This is very likely in the drafts folder.
+				// A proper fallback would be fetching more headers (which potentially need
+				// normalization) or the message body (which should be truncated for sanity)
+				// and comparing.
+				error( "Error: channel %s, %s %s: Unable to recover from UIDVALIDITY change\n"
+				       "(got %d, expected %d).\n",
+				       svars->chan->name, str_ms[t], svars->orig_name[t],
+				       svars->ctx[t]->uidvalidity, svars->uidval[t] );
+				goto uvchg;
+			}
+			notice( "Notice: channel %s, %s %s: Recovered from change of UIDVALIDITY.\n",
+			        svars->chan->name, str_ms[t], svars->orig_name[t] );
+			svars->uidval[t] = -1;
+		}
+	}
 
 	if (svars->uidval[M] < 0 || svars->uidval[S] < 0) {
 		svars->uidval[M] = svars->ctx[M]->uidvalidity;

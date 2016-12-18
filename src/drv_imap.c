@@ -905,7 +905,7 @@ static int
 parse_fetch_rsp( imap_store_t *ctx, list_t *list, char *s ATTR_UNUSED )
 {
 	list_t *tmp, *flags;
-	char *body = 0, *tuid = 0;
+	char *body = 0, *tuid = 0, *msgid = 0;
 	imap_message_t *cur;
 	msg_data_t *msgdata;
 	struct imap_cmd *cmdp;
@@ -983,8 +983,42 @@ parse_fetch_rsp( imap_store_t *ctx, list_t *list, char *s ATTR_UNUSED )
 					tmp = tmp->next;
 					if (!is_atom( tmp ))
 						goto bfail;
-					if (starts_with_upper( tmp->val, tmp->len, "X-TUID: ", 8 ))
-						tuid = tmp->val + 8;
+					int off, in_msgid = 0;
+					for (char *val = tmp->val, *end; (end = strchr( val, '\n' )); val = end + 1) {
+						int len = (int)(end - val);
+						if (len && end[-1] == '\r')
+							len--;
+						if (!len)
+							break;
+						if (starts_with_upper( val, len, "X-TUID: ", 8 )) {
+							if (len < 8 + TUIDL) {
+								error( "IMAP error: malformed X-TUID header (UID %d)\n", uid );
+								continue;
+							}
+							tuid = val + 8;
+							in_msgid = 0;
+							continue;
+						}
+						if (starts_with_upper( val, len, "MESSAGE-ID:", 11 )) {
+							off = 11;
+						} else if (in_msgid) {
+							if (!isspace( val[0] )) {
+								in_msgid = 0;
+								continue;
+							}
+							off = 1;
+						} else {
+							continue;
+						}
+						while (off < len && isspace( val[off] ))
+							off++;
+						if (off == len) {
+							in_msgid = 1;
+							continue;
+						}
+						msgid = nfstrndup( val + off, len - off );
+						in_msgid = 0;
+					}
 				} else {
 				  bfail:
 					error( "IMAP error: unable to parse BODY[HEADER.FIELDS ...]\n" );
@@ -1018,6 +1052,7 @@ parse_fetch_rsp( imap_store_t *ctx, list_t *list, char *s ATTR_UNUSED )
 		cur->gen.status = status;
 		cur->gen.size = size;
 		cur->gen.srec = 0;
+		cur->gen.msgid = msgid;
 		if (tuid)
 			strncpy( cur->gen.tuid, tuid, TUIDL );
 		else
@@ -2322,7 +2357,7 @@ imap_prepare_load_box( store_t *gctx, int opts )
 	gctx->opts = opts;
 }
 
-enum { WantSize = 1, WantTuids = 2 };
+enum { WantSize = 1, WantTuids = 2, WantMsgids = 4 };
 typedef struct imap_range {
 	int first, last, flags;
 } imap_range_t;
@@ -2375,7 +2410,7 @@ imap_load_box( store_t *gctx, int minuid, int maxuid, int newuid, int seenuid, i
 				if (i != j)
 					bl += sprintf( buf + bl, ":%d", excs.data[i] );
 			}
-			imap_submit_load( ctx, buf, 0, sts );
+			imap_submit_load( ctx, buf, shifted_bit( ctx->gen.opts, OPEN_OLD_IDS, WantMsgids ), sts );
 		}
 		if (maxuid == INT_MAX)
 			maxuid = ctx->gen.uidnext ? ctx->gen.uidnext - 1 : 0x7fffffff;
@@ -2390,6 +2425,8 @@ imap_load_box( store_t *gctx, int minuid, int maxuid, int newuid, int seenuid, i
 				                                  shifted_bit( ctx->gen.opts, OPEN_NEW_SIZE, WantSize), seenuid );
 			if (ctx->gen.opts & OPEN_FIND)
 				imap_set_range( ranges, &nranges, 0, WantTuids, newuid - 1 );
+			if (ctx->gen.opts & OPEN_OLD_IDS)
+				imap_set_range( ranges, &nranges, WantMsgids, 0, seenuid );
 			for (int r = 0; r < nranges; r++) {
 				sprintf( buf, "%d:%d", ranges[r].first, ranges[r].last );
 				imap_submit_load( ctx, buf, ranges[r].flags, sts );
@@ -2404,10 +2441,14 @@ static void
 imap_submit_load( imap_store_t *ctx, const char *buf, int flags, struct imap_cmd_refcounted_state *sts )
 {
 	imap_exec( ctx, imap_refcounted_new_cmd( sts ), imap_refcounted_done_box,
-	           "UID FETCH %s (UID%s%s%s)", buf,
+	           "UID FETCH %s (UID%s%s%s%s%s%s%s)", buf,
 	           (ctx->gen.opts & OPEN_FLAGS) ? " FLAGS" : "",
 	           (flags & WantSize) ? " RFC822.SIZE" : "",
-	           (flags & WantTuids) ? " BODY.PEEK[HEADER.FIELDS (X-TUID)]" : "");
+	           (flags & (WantTuids | WantMsgids)) ? " BODY.PEEK[HEADER.FIELDS (" : "",
+	           (flags & WantTuids) ? "X-TUID" : "",
+	           !(~flags & (WantTuids | WantMsgids)) ? " " : "",
+	           (flags & WantMsgids) ? "MESSAGE-ID" : "",
+	           (flags & (WantTuids | WantMsgids)) ? ")]" : "");
 }
 
 /******************* imap_fetch_msg *******************/

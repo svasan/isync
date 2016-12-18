@@ -34,6 +34,7 @@ free_generic_messages( message_t *msgs )
 
 	for (; msgs; msgs = tmsg) {
 		tmsg = msgs->next;
+		free( msgs->msgid );
 		free( msgs );
 	}
 }

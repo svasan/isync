@@ -36,8 +36,8 @@ the operation set can be selected in a fine-grained manner.
 .br
 Synchronization is based on unique message identifiers (UIDs), so no
 identification conflicts can occur (unlike with some other mail synchronizers).
-OTOH, \fBmbsync\fR is susceptible to UID validity changes (that \fIshould\fR
-never happen, but see "Compatibility" in the README).
+OTOH, \fBmbsync\fR is susceptible to UID validity changes (but will recover
+just fine if the change is unfounded).
 Synchronization state is kept in one local text file per mailbox pair;
 these files are protected against concurrent \fBmbsync\fR processes.
 Mailboxes can be safely modified while \fBmbsync\fR operates

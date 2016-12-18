@@ -442,6 +442,7 @@ static const char *subdirs[] = { "cur", "new", "tmp" };
 
 typedef struct {
 	char *base;
+	char *msgid;
 	int size;
 	uint uid:31, recent:1;
 	char tuid[TUIDL];
@@ -926,6 +927,7 @@ maildir_scan( maildir_store_t *ctx, msg_t_array_alloc_t *msglist )
 						continue;
 					entry = msg_t_array_append( msglist );
 					entry->base = nfstrdup( e->d_name );
+					entry->msgid = 0;
 					entry->uid = uid;
 					entry->recent = i;
 					entry->size = 0;
@@ -1050,7 +1052,8 @@ maildir_scan( maildir_store_t *ctx, msg_t_array_alloc_t *msglist )
 			}
 			int want_size = (uid > ctx->seenuid) ? (ctx->gen.opts & OPEN_NEW_SIZE) : (ctx->gen.opts & OPEN_OLD_SIZE);
 			int want_tuid = ((ctx->gen.opts & OPEN_FIND) && uid >= ctx->newuid);
-			if (!want_size && !want_tuid)
+			int want_msgid = ((ctx->gen.opts & OPEN_OLD_IDS) && uid <= ctx->seenuid);
+			if (!want_size && !want_tuid && !want_msgid)
 				continue;
 			if (!fnl)
 				nfsnprintf( buf + bl, sizeof(buf) - bl, "%s/%s", subdirs[entry->recent], entry->base );
@@ -1064,7 +1067,7 @@ maildir_scan( maildir_store_t *ctx, msg_t_array_alloc_t *msglist )
 				}
 				entry->size = st.st_size;
 			}
-			if (want_tuid) {
+			if (want_tuid || want_msgid) {
 				if (!(f = fopen( buf, "r" ))) {
 					if (errno != ENOENT) {
 						sys_error( "Maildir error: cannot open %s", buf );
@@ -1072,13 +1075,45 @@ maildir_scan( maildir_store_t *ctx, msg_t_array_alloc_t *msglist )
 					}
 					goto retry;
 				}
-				while (fgets( nbuf, sizeof(nbuf), f )) {
-					if (!nbuf[0] || nbuf[0] == '\n')
+				int off, in_msgid = 0;
+				while ((want_tuid || want_msgid) && fgets( nbuf, sizeof(nbuf), f )) {
+					int bufl = strlen( nbuf );
+					if (bufl && nbuf[bufl - 1] == '\n')
+						--bufl;
+					if (bufl && nbuf[bufl - 1] == '\r')
+						--bufl;
+					if (!bufl)
 						break;
-					if (starts_with( nbuf, -1, "X-TUID: ", 8 ) && nbuf[8 + TUIDL] == '\n') {
+					if (want_tuid && starts_with( nbuf, bufl, "X-TUID: ", 8 )) {
+						if (bufl < 8 + TUIDL) {
+							error( "Maildir error: malformed X-TUID header (UID %d)\n", uid );
+							continue;
+						}
 						memcpy( entry->tuid, nbuf + 8, TUIDL );
-						break;
+						want_tuid = 0;
+						in_msgid = 0;
+						continue;
 					}
+					if (want_msgid && starts_with_upper( nbuf, bufl, "MESSAGE-ID:", 11 )) {
+						off = 11;
+					} else if (in_msgid) {
+						if (!isspace( nbuf[0] )) {
+							in_msgid = 0;
+							continue;
+						}
+						off = 1;
+					} else {
+						continue;
+					}
+					while (off < bufl && isspace( nbuf[off] ))
+						off++;
+					if (off == bufl) {
+						in_msgid = 1;
+						continue;
+					}
+					entry->msgid = nfstrndup( nbuf + off, bufl - off );
+					want_msgid = 0;
+					in_msgid = 0;
 				}
 				fclose( f );
 			}
@@ -1093,6 +1128,8 @@ maildir_init_msg( maildir_store_t *ctx, maildir_message_t *msg, msg_t *entry )
 {
 	msg->base = entry->base;
 	entry->base = 0; /* prevent deletion */
+	msg->gen.msgid = entry->msgid;
+	entry->msgid = 0; /* prevent deletion */
 	msg->gen.size = entry->size;
 	msg->gen.srec = 0;
 	strncpy( msg->gen.tuid, entry->tuid, TUIDL );
@@ -1350,6 +1387,7 @@ maildir_rescan( maildir_store_t *ctx )
 			debug( "updating message %d\n", msg->gen.uid );
 			msg->gen.status &= ~(M_FLAGS|M_RECENT);
 			free( msg->base );
+			free( msg->gen.msgid );
 			maildir_init_msg( ctx, msg, msglist.array.data + i );
 			i++, msgapp = &msg->gen.next;
 		}
