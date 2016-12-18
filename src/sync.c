@@ -125,8 +125,6 @@ make_flags( int flags, char *buf )
 #define S_NEXPIRE      (1<<6)  /* temporary: new expiration state */
 #define S_DELETE       (1<<7)  /* ephemeral: flags propagation is a deletion */
 
-#define mvBit(in,ib,ob) ((uchar)(((uint)in) * (ob) / (ib)))
-
 typedef struct sync_rec {
 	struct sync_rec *next;
 	/* string_list_t *keywords; */
@@ -1675,7 +1673,7 @@ box_loaded( int sts, void *aux )
 				}
 			} else {
 				/* The trigger is an expiration transaction being ongoing ... */
-				if ((t == S) && ((mvBit(srec->status, S_EXPIRE, S_EXPIRED) ^ srec->status) & S_EXPIRED)) {
+				if ((t == S) && ((shifted_bit(srec->status, S_EXPIRE, S_EXPIRED) ^ srec->status) & S_EXPIRED)) {
 					/* ... but the actual action derives from the wanted state. */
 					if (srec->status & S_NEXPIRE)
 						aflags |= F_DELETED;

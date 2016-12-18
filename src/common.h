@@ -39,6 +39,9 @@ typedef unsigned int uint;
 #define __stringify(x) #x
 #define stringify(x) __stringify(x)
 
+#define shifted_bit(in, from, to) \
+	(((uint)(in) / (from > to ? from / to : 1) * (to > from ? to / from : 1)) & to)
+
 #if __GNUC__ > 2 || (__GNUC__ == 2 && __GNUC_MINOR__ > 4)
 # define ATTR_UNUSED __attribute__((unused))
 # define ATTR_NORETURN __attribute__((noreturn))

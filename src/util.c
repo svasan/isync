@@ -784,11 +784,6 @@ conf_wakeup( wakeup_t *tmr, int to )
 	}
 }
 
-#define shifted_bit(in, from, to) \
-	(((uint)(in) & from) \
-		/ (from > to ? from / to : 1) \
-		* (to > from ? to / from : 1))
-
 static void
 event_wait( void )
 {
