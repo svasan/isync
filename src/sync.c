@@ -1369,7 +1369,7 @@ box_loaded( int sts, void *aux )
 		uid = tmsg->uid;
 		if (DFlags & DEBUG_SYNC) {
 			make_flags( tmsg->flags, fbuf );
-			printf( svars->ctx[t]->opts & OPEN_SIZE ? "  message %5d, %-4s, %6lu: " : "  message %5d, %-4s: ", uid, fbuf, tmsg->size );
+			printf( svars->ctx[t]->opts & OPEN_SIZE ? "  message %5d, %-4s, %6d: " : "  message %5d, %-4s: ", uid, fbuf, tmsg->size );
 		}
 		idx = (uint)((uint)uid * 1103515245U) % hashsz;
 		while (srecmap[idx].uid) {
