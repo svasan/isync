@@ -222,7 +222,7 @@ memrchr( const void *s, int c, size_t n )
 #endif
 
 #ifndef HAVE_STRNLEN
-int
+size_t
 strnlen( const char *str, size_t maxlen )
 {
 	size_t len;
