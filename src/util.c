@@ -225,11 +225,8 @@ memrchr( const void *s, int c, size_t n )
 size_t
 strnlen( const char *str, size_t maxlen )
 {
-	size_t len;
-
-	/* It's tempting to use memchr(), but it's allowed to read past the end of the actual string. */
-	for (len = 0; len < maxlen && str[len]; len++) {}
-	return len;
+	const char *estr = memchr( str, 0, maxlen );
+	return estr ? (size_t)(estr - str) : maxlen;
 }
 
 #endif
