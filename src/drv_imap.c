@@ -403,7 +403,7 @@ submit_imap_cmd( imap_store_t *ctx, struct imap_cmd *cmd )
 static char *
 imap_vprintf( const char *fmt, va_list ap )
 {
-	const char *s, *es;
+	const char *s;
 	char *d, *ed;
 	int maxlen;
 	char c;
@@ -454,8 +454,7 @@ imap_vprintf( const char *fmt, va_list ap )
 					*d++ = (char)va_arg( ap , int );
 				} else if (c == 's') {
 					s = va_arg( ap, const char * );
-					es = memchr( s, 0, maxlen );
-					l = es ? es - s : maxlen;
+					l = strnlen( s, maxlen );
 					if (d + l > ed)
 						oob();
 					memcpy( d, s, l );

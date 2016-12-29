@@ -119,6 +119,9 @@ void free_string_list( string_list_t *list );
 #ifndef HAVE_MEMRCHR
 void *memrchr( const void *s, int c, size_t n );
 #endif
+#ifndef HAVE_STRNLEN
+size_t strnlen( const char *str, size_t maxlen );
+#endif
 
 int starts_with( const char *str, int strl, const char *cmp, int cmpl );
 int starts_with_upper( const char *str, int strl, const char *cmp, int cmpl );
