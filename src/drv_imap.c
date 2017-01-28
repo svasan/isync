@@ -151,6 +151,7 @@ struct imap_cmd {
 		char to_trash; /* we are storing to trash, not current. */
 		char create; /* create the mailbox if we get an error which suggests so. */
 		char failok; /* Don't complain about NO response. */
+		char lastuid; /* querying the last UID in the mailbox. */
 	} param;
 };
 
@@ -1051,7 +1052,15 @@ parse_fetch_rsp( imap_store_t *ctx, list_t *list, char *s ATTR_UNUSED )
 		}
 	}
 
-	if (body) {
+	if (!uid) {
+		assert( !body && !tuid && !msgid );
+		// Ignore async flag updates for now.
+	} else if ((cmdp = ctx->in_progress) && cmdp->param.lastuid) {
+		assert( !body && !tuid && !msgid );
+		// Workaround for server not sending UIDNEXT and/or APPENDUID.
+		ctx->gen.uidnext = uid + 1;
+	} else if (body) {
+		assert( !tuid && !msgid );
 		for (cmdp = ctx->in_progress; cmdp; cmdp = cmdp->next)
 			if (cmdp->param.uid == uid)
 				goto gotuid;
@@ -1065,7 +1074,7 @@ parse_fetch_rsp( imap_store_t *ctx, list_t *list, char *s ATTR_UNUSED )
 		msgdata->date = date;
 		if (status & M_FLAGS)
 			msgdata->flags = mask;
-	} else if (uid) { /* ignore async flag updates for now */
+	} else {
 		/* XXX this will need sorting for out-of-order (multiple queries) */
 		cur = nfcalloc( sizeof(*cur) );
 		*ctx->msgapp = &cur->gen;
@@ -1081,8 +1090,6 @@ parse_fetch_rsp( imap_store_t *ctx, list_t *list, char *s ATTR_UNUSED )
 			memcpy( cur->gen.tuid, tuid, TUIDL );
 		else
 			cur->gen.tuid[0] = 0;
-		if (ctx->gen.uidnext <= uid) /* in case the server sends no UIDNEXT */
-			ctx->gen.uidnext = uid + 1;
 	}
 
 	free_list( list );
@@ -2287,6 +2294,9 @@ imap_select_box( store_t *gctx, const char *name )
 	return DRV_OK;
 }
 
+static void imap_open_box_p2( imap_store_t *, imap_cmd_t *, int );
+static void imap_open_box_p3( imap_store_t *, imap_cmd_t *, int );
+
 static void
 imap_open_box( store_t *gctx,
                void (*cb)( int sts, void *aux ), void *aux )
@@ -2304,9 +2314,36 @@ imap_open_box( store_t *gctx,
 
 	INIT_IMAP_CMD(imap_cmd_simple_t, cmd, cb, aux)
 	cmd->gen.param.failok = 1;
-	imap_exec( ctx, &cmd->gen, imap_done_simple_box,
+	imap_exec( ctx, &cmd->gen, imap_open_box_p2,
 	           "SELECT \"%\\s\"", buf );
 	free( buf );
+}
+
+static void
+imap_open_box_p2( imap_store_t *ctx, imap_cmd_t *gcmd, int response )
+{
+	imap_cmd_simple_t *cmdp = (imap_cmd_simple_t *)gcmd;
+	imap_cmd_simple_t *cmd;
+
+	if (response != RESP_OK || ctx->gen.uidnext) {
+		imap_done_simple_box( ctx, &cmdp->gen, response );
+		return;
+	}
+
+	INIT_IMAP_CMD(imap_cmd_simple_t, cmd, cmdp->callback, cmdp->callback_aux)
+	cmd->gen.param.lastuid = 1;
+	imap_exec( ctx, &cmd->gen, imap_open_box_p3,
+	           "UID FETCH *:* (UID)" );
+}
+
+static void
+imap_open_box_p3( imap_store_t *ctx, imap_cmd_t *gcmd, int response )
+{
+	// This will happen if the box is empty.
+	if (!ctx->gen.uidnext)
+		ctx->gen.uidnext = 1;
+
+	imap_done_simple_box( ctx, gcmd, response );
 }
 
 /******************* imap_create_box *******************/
@@ -2443,7 +2480,7 @@ imap_load_box( store_t *gctx, int minuid, int maxuid, int newuid, int seenuid, i
 			imap_submit_load( ctx, buf, shifted_bit( ctx->gen.opts, OPEN_OLD_IDS, WantMsgids ), sts );
 		}
 		if (maxuid == INT_MAX)
-			maxuid = ctx->gen.uidnext ? ctx->gen.uidnext - 1 : 0x7fffffff;
+			maxuid = ctx->gen.uidnext - 1;
 		if (maxuid >= minuid) {
 			imap_range_t ranges[3];
 			ranges[0].first = minuid;
@@ -2720,6 +2757,7 @@ imap_store_msg_p2( imap_store_t *ctx ATTR_UNUSED, imap_cmd_t *cmd, int response 
 /******************* imap_find_new_msgs *******************/
 
 static void imap_find_new_msgs_p2( imap_store_t *, imap_cmd_t *, int );
+static void imap_find_new_msgs_p3( imap_store_t *, imap_cmd_t *, int );
 
 static void
 imap_find_new_msgs( store_t *gctx, int newuid,
@@ -2738,15 +2776,35 @@ static void
 imap_find_new_msgs_p2( imap_store_t *ctx, imap_cmd_t *gcmd, int response )
 {
 	imap_cmd_find_new_t *cmdp = (imap_cmd_find_new_t *)gcmd;
-	imap_cmd_simple_t *cmd;
+	imap_cmd_find_new_t *cmd;
 
 	if (response != RESP_OK) {
 		imap_done_simple_box( ctx, gcmd, response );
 		return;
 	}
+
+	ctx->gen.uidnext = 0;
+
+	INIT_IMAP_CMD_X(imap_cmd_find_new_t, cmd, cmdp->gen.callback, cmdp->gen.callback_aux)
+	cmd->uid = cmdp->uid;
+	cmd->gen.gen.param.lastuid = 1;
+	imap_exec( ctx, &cmd->gen.gen, imap_find_new_msgs_p3,
+	           "UID FETCH *:* (UID)" );
+}
+
+static void
+imap_find_new_msgs_p3( imap_store_t *ctx, imap_cmd_t *gcmd, int response )
+{
+	imap_cmd_find_new_t *cmdp = (imap_cmd_find_new_t *)gcmd;
+	imap_cmd_simple_t *cmd;
+
+	if (response != RESP_OK || ctx->gen.uidnext <= cmdp->uid) {
+		imap_done_simple_box( ctx, gcmd, response );
+		return;
+	}
 	INIT_IMAP_CMD(imap_cmd_simple_t, cmd, cmdp->gen.callback, cmdp->gen.callback_aux)
 	imap_exec( (imap_store_t *)ctx, &cmd->gen, imap_done_simple_box,
-	           "UID FETCH %d:" stringify(INT_MAX) " (UID BODY.PEEK[HEADER.FIELDS (X-TUID)])", cmdp->uid );
+	           "UID FETCH %d:%d (UID BODY.PEEK[HEADER.FIELDS (X-TUID)])", cmdp->uid, ctx->gen.uidnext - 1 );
 }
 
 /******************* imap_list_store *******************/
