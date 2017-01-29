@@ -1301,6 +1301,7 @@ box_opened2( sync_vars_t *svars, int t )
 					*int_array_append( &mexcs ) = srec->uid[M];
 				}
 			}
+			sort_int_array( mexcs.array );
 			debugn( "  exception list is:" );
 			for (t = 0; t < mexcs.array.size; t++)
 				debugn( " %d", mexcs.array.data[t] );
@@ -1312,7 +1313,6 @@ box_opened2( sync_vars_t *svars, int t )
 		minwuid = INT_MAX;
 	}
 	sync_ref( svars );
-	sort_int_array( mexcs.array );
 	load_box( svars, M, minwuid, mexcs.array );
 	if (!check_cancel( svars ))
 		load_box( svars, S, (ctx[S]->opts & OPEN_OLD) ? 1 : INT_MAX, (int_array_t){ 0, 0 } );
