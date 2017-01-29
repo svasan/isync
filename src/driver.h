@@ -83,6 +83,8 @@ typedef struct message {
 #define OPEN_FIND       (1<<8)
 #define OPEN_OLD_IDS    (1<<9)
 
+#define UIDVAL_BAD -1
+
 typedef struct store {
 	struct store *next;
 	store_conf_t *conf; /* foreign */

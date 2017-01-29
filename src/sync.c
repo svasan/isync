@@ -986,7 +986,7 @@ sync_boxes( store_t *ctx[], const char *names[], int present[], channel_conf_t *
 	svars->ctx[1] = ctx[1];
 	svars->chan = chan;
 	svars->lfd = -1;
-	svars->uidval[0] = svars->uidval[1] = -1;
+	svars->uidval[0] = svars->uidval[1] = UIDVAL_BAD;
 	svars->srecadd = &svars->srecs;
 
 	for (t = 0; t < 2; t++) {
@@ -1002,7 +1002,7 @@ sync_boxes( store_t *ctx[], const char *names[], int present[], channel_conf_t *
 			sync_bail3( svars );
 			return;
 		}
-		ctx[t]->uidvalidity = -1;
+		ctx[t]->uidvalidity = UIDVAL_BAD;
 		svars->drv[t] = ctx[t]->conf->driver;
 		svars->drv[t]->set_bad_callback( ctx[t], store_bad, AUX );
 	}
@@ -1180,7 +1180,7 @@ box_opened2( sync_vars_t *svars, int t )
 
 	fails = 0;
 	for (t = 0; t < 2; t++)
-		if (svars->uidval[t] >= 0 && svars->uidval[t] != ctx[t]->uidvalidity)
+		if (svars->uidval[t] != UIDVAL_BAD && svars->uidval[t] != ctx[t]->uidvalidity)
 			fails++;
 	if (fails == 2) {
 		error( "Error: channel %s: UIDVALIDITY of both master and slave changed\n"
@@ -1429,7 +1429,7 @@ box_loaded( int sts, message_t *msgs, int total_msgs, int recent_msgs, void *aux
 		return;
 
 	for (t = 0; t < 2; t++) {
-		if (svars->uidval[t] >= 0 && svars->uidval[t] != svars->ctx[t]->uidvalidity) {
+		if (svars->uidval[t] != UIDVAL_BAD && svars->uidval[t] != svars->ctx[t]->uidvalidity) {
 			unsigned need = 0, got = 0;
 			debug( "trying to re-approve uid validity of %s\n", str_ms[t] );
 			for (srec = svars->srecs; srec; srec = srec->next) {
@@ -1465,11 +1465,11 @@ box_loaded( int sts, message_t *msgs, int total_msgs, int recent_msgs, void *aux
 			}
 			notice( "Notice: channel %s, %s %s: Recovered from change of UIDVALIDITY.\n",
 			        svars->chan->name, str_ms[t], svars->orig_name[t] );
-			svars->uidval[t] = -1;
+			svars->uidval[t] = UIDVAL_BAD;
 		}
 	}
 
-	if (svars->uidval[M] < 0 || svars->uidval[S] < 0) {
+	if (svars->uidval[M] == UIDVAL_BAD || svars->uidval[S] == UIDVAL_BAD) {
 		svars->uidval[M] = svars->ctx[M]->uidvalidity;
 		svars->uidval[S] = svars->ctx[S]->uidvalidity;
 		jFprintf( svars, "| %d %d\n", svars->uidval[M], svars->uidval[S] );
