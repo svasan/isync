@@ -333,15 +333,33 @@ send_imap_cmd( imap_store_t *ctx, imap_cmd_t *cmd )
 static int
 cmd_sendable( imap_store_t *ctx, imap_cmd_t *cmd )
 {
-	imap_cmd_t *cmdp;
-
-	return !ctx->conn.write_buf &&
-	       !(ctx->in_progress &&
-	         (cmdp = (imap_cmd_t *)((char *)ctx->in_progress_append -
-	                                offsetof(imap_cmd_t, next)), 1) &&
-	         (cmdp->param.cont || cmdp->param.data)) &&
-	       !(cmd->param.to_trash && ctx->trashnc == TrashChecking) &&
-	       ctx->num_in_progress < ((imap_store_conf_t *)ctx->gen.conf)->server->max_in_progress;
+	if (ctx->conn.write_buf) {
+		/* Don't build up a long queue in the socket, so we can
+		 * control when the commands are actually sent.
+		 * This allows reliable cancelation of pending commands,
+		 * injecting commands in front of other pending commands,
+		 * and keeping num_in_progress accurate. */
+		return 0;
+	}
+	if (ctx->in_progress) {
+		/* If the last command in flight ... */
+		imap_cmd_t *cmdp = (imap_cmd_t *)((char *)ctx->in_progress_append -
+		                                  offsetof(imap_cmd_t, next));
+		if (cmdp->param.cont || cmdp->param.data) {
+			/* ... is expected to trigger a continuation request, we need to
+			 * wait for that round-trip before sending the next command. */
+			return 0;
+		}
+	}
+	if (cmd->param.to_trash && ctx->trashnc == TrashChecking) {
+		/* Don't build a queue of MOVE/COPY/APPEND commands that may all fail. */
+		return 0;
+	}
+	if (ctx->num_in_progress >= ((imap_store_conf_t *)ctx->gen.conf)->server->max_in_progress) {
+		/* Too many commands in flight. */
+		return 0;
+	}
+	return 1;
 }
 
 static void
