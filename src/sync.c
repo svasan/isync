@@ -141,34 +141,6 @@ typedef struct sync_rec {
 	char tuid[TUIDL];
 } sync_rec_t;
 
-
-/* cases:
-   a) both non-null
-   b) only master null
-   b.1) uid[M] 0
-   b.2) uid[M] -1
-   b.3) master not scanned
-   b.4) master gone
-   c) only slave null
-   c.1) uid[S] 0
-   c.2) uid[S] -1
-   c.3) slave not scanned
-   c.4) slave gone
-   d) both null
-   d.1) both gone
-   d.2) uid[M] 0, slave not scanned
-   d.3) uid[M] -1, slave not scanned
-   d.4) master gone, slave not scanned
-   d.5) uid[M] 0, slave gone
-   d.6) uid[M] -1, slave gone
-   d.7) uid[S] 0, master not scanned
-   d.8) uid[S] -1, master not scanned
-   d.9) slave gone, master not scanned
-   d.10) uid[S] 0, master gone
-   d.11) uid[S] -1, master gone
-   impossible cases: both uid[M] & uid[S] 0 or -1, both not scanned
-*/
-
 typedef struct {
 	int t[2];
 	void (*cb)( int sts, void *aux ), *aux;
@@ -1502,14 +1474,18 @@ box_loaded( int sts, void *aux )
 		if (srec->status & S_DEAD)
 			continue;
 		debug( "pair (%d,%d)\n", srec->uid[M], srec->uid[S] );
+		// no[] means that a message is known to be not there.
 		no[M] = !srec->msg[M] && (svars->ctx[M]->opts & OPEN_OLD);
 		no[S] = !srec->msg[S] && (svars->ctx[S]->opts & OPEN_OLD);
 		if (no[M] && no[S]) {
+			// It does not matter whether one side was already known to be missing
+			// (never stored [skipped or failed] or expunged [possibly expired]) -
+			// now both are missing, so the entry is superfluous.
 			debug( "  vanished\n" );
-			/* d.1) d.5) d.6) d.10) d.11) */
 			srec->status = S_DEAD;
 			jFprintf( svars, "- %d %d\n", srec->uid[M], srec->uid[S] );
 		} else {
+			// del[] means that a message becomes known to have been expunged.
 			del[M] = no[M] && (srec->uid[M] > 0);
 			del[S] = no[S] && (srec->uid[S] > 0);
 
@@ -1517,12 +1493,17 @@ box_loaded( int sts, void *aux )
 				srec->aflags[t] = srec->dflags[t] = 0;
 				if (srec->msg[t] && (srec->msg[t]->flags & F_DELETED))
 					srec->status |= S_DEL(t);
-				/* excludes (push) c.3) d.2) d.3) d.4) / (pull) b.3) d.7) d.8) d.9) */
-				if (!srec->uid[t]) {
-					/* b.1) / c.1) */
-					debug( "  no more %s\n", str_ms[t] );
+				if (del[t]) {
+					// The target was newly expunged, so there is nothing to update.
+					// The deletion is propagated in the opposite iteration.
+				} else if (srec->uid[t] <= 0) {
+					// The target was never stored, or was previously expunged, so there
+					// is nothing to update.
+					// Note: the opposite UID must be valid, as otherwise the entry would
+					// have been pruned already.
 				} else if (del[1-t]) {
-					/* c.4) d.9) / b.4) d.4) */
+					// The source was newly expunged, so possibly propagate the deletion.
+					// The target may be in an unknown state (not fetched).
 					if ((t == M) && (srec->status & (S_EXPIRE|S_EXPIRED))) {
 						/* Don't propagate deletion resulting from expiration. */
 						debug( "  slave expired, orphaning master\n" );
@@ -1539,14 +1520,12 @@ box_loaded( int sts, void *aux )
 							debug( "  not %sing delete\n", str_hl[t] );
 						}
 					}
-				} else if (!srec->msg[1-t])
-					/* c.1) c.2) d.7) d.8) / b.1) b.2) d.2) d.3) */
-					;
-				else if (srec->uid[t] < 0)
-					/* b.2) / c.2) */
-					; /* handled as new messages (sort of) */
-				else if (!del[t]) {
-					/* a) & b.3) / c.3) */
+				} else if (!srec->msg[1-t]) {
+					// We have no source to work with, because it was never stored,
+					// it was previously expunged, or we did not fetch it.
+					debug( "  no %s\n", str_ms[1-t] );
+				} else {
+					// We have a source. The target may be in an unknown state.
 					if (svars->chan->ops[t] & OP_FLAGS) {
 						sflags = srec->msg[1-t]->flags;
 						if ((t == M) && (srec->status & (S_EXPIRE|S_EXPIRED))) {
@@ -1556,15 +1535,14 @@ box_loaded( int sts, void *aux )
 						}
 						srec->aflags[t] = sflags & ~srec->flags;
 						srec->dflags[t] = ~sflags & srec->flags;
-						if (DFlags & DEBUG_SYNC) {
+						if ((DFlags & DEBUG_SYNC) && (srec->aflags[t] || srec->dflags[t])) {
 							char afbuf[16], dfbuf[16]; /* enlarge when support for keywords is added */
 							make_flags( srec->aflags[t], afbuf );
 							make_flags( srec->dflags[t], dfbuf );
 							debug( "  %sing flags: +%s -%s\n", str_hl[t], afbuf, dfbuf );
 						}
-					} else
-						debug( "  not %sing flags\n", str_hl[t] );
-				} /* else b.4) / c.4) */
+					}
+				}
 			}
 		}
 	}
