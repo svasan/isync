@@ -214,7 +214,7 @@ struct driver {
 	                   void (*cb)( int sts, void *aux ), void *aux );
 
 	/* Store the given message to either the current mailbox or the trash folder.
-	 * If the new copy's UID can be immediately determined, return it, otherwise -2. */
+	 * If the new copy's UID can be immediately determined, return it, otherwise 0. */
 	void (*store_msg)( store_t *ctx, msg_data_t *data, int to_trash,
 	                   void (*cb)( int sts, int uid, void *aux ), void *aux );
 

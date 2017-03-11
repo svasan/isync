@@ -2848,7 +2848,7 @@ imap_store_msg( store_t *gctx, msg_data_t *data, int to_trash,
 	ctx->buffer_mem += data->len;
 	cmd->gen.param.data_len = data->len;
 	cmd->gen.param.data = data->data;
-	cmd->out_uid = -2;
+	cmd->out_uid = 0;
 
 	if (to_trash) {
 		cmd->gen.param.create = 1;
