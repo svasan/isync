@@ -1356,6 +1356,8 @@ box_loaded( int sts, void *aux )
 		if (srec->status & S_DEAD)
 			continue;
 		uid = srec->uid[t];
+		if (uid <= 0)
+			continue;
 		idx = (uint)((uint)uid * 1103515245U) % hashsz;
 		while (srecmap[idx].uid)
 			if (++idx == hashsz)
