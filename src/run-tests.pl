@@ -616,24 +616,17 @@ sub test($$$@)
 	&writecfg(@sfx);
 
 	my ($xc, @ret) = runsync("-J");
-	if ($xc) {
+	if ($xc || ckchan("slave/.mbsyncstate.new", $tx)) {
 		print "Input:\n";
 		printchan($sx);
 		print "Options:\n";
 		print " [ ".join(", ", map('"'.qm($_).'"', @sfx))." ]\n";
-		print "Debug output:\n";
-		print @ret;
-		exit 1;
-	}
-	if (ckchan("slave/.mbsyncstate.new", $tx)) {
-		print "Input:\n";
-		printchan($sx);
-		print "Options:\n";
-		print " [ ".join(", ", map('"'.qm($_).'"', @sfx))." ]\n";
-		print "Expected result:\n";
-		printchan($tx);
-		print "Actual result:\n";
-		showchan("slave/.mbsyncstate.new");
+		if (!$xc) {
+			print "Expected result:\n";
+			printchan($tx);
+			print "Actual result:\n";
+			showchan("slave/.mbsyncstate.new");
+		}
 		print "Debug output:\n";
 		print @ret;
 		exit 1;
@@ -644,52 +637,35 @@ sub test($$$@)
 	my @nj = <FILE>;
 	close FILE;
 	($xc, @ret) = runsync("-0 --no-expunge");
-	if ($xc) {
+	if ($xc || ckstate("slave/.mbsyncstate", @{ $$tx[2] })) {
 		print "Journal replay failed.\n";
 		print "Options:\n";
 		print " [ ".join(", ", map('"'.qm($_).'"', @sfx))." ], [ \"-0\", \"--no-expunge\" ]\n";
 		print "Old State:\n";
 		printstate(@{ $$sx[2] });
 		print "Journal:\n".join("", @nj)."\n";
-		print "Debug output:\n";
-		print @ret;
-		exit 1;
-	}
-	if (ckstate("slave/.mbsyncstate", @{ $$tx[2] })) {
-		print "Journal replay failed.\n";
-		print "Options:\n";
-		print " [ ".join(", ", map('"'.qm($_).'"', @sfx))." ], [ \"-0\", \"--no-expunge\" ]\n";
-		print "Old State:\n";
-		printstate(@{ $$sx[2] });
-		print "Journal:\n".join("", @nj)."\n";
-		print "Expected New State:\n";
-		printstate(@{ $$tx[2] });
-		print "New State:\n";
-		showstate("slave/.mbsyncstate");
+		if (!$xc) {
+			print "Expected New State:\n";
+			printstate(@{ $$tx[2] });
+			print "New State:\n";
+			showstate("slave/.mbsyncstate");
+		}
 		print "Debug output:\n";
 		print @ret;
 		exit 1;
 	}
 
 	($xc, @ret) = runsync("");
-	if ($xc) {
+	if ($xc || ckchan("slave/.mbsyncstate", $tx)) {
 		print "Idempotence verification run failed.\n";
 		print "Input == Expected result:\n";
 		printchan($tx);
 		print "Options:\n";
 		print " [ ".join(", ", map('"'.qm($_).'"', @sfx))." ]\n";
-		print "Debug output:\n";
-		print @ret;
-		exit 1;
-	}
-	if (ckchan("slave/.mbsyncstate", $tx)) {
-		print "Idempotence verification run failed.\n";
-		print "Input == Expected result:\n";
-		printchan($tx);
-		print "Options:\n";
-		print " [ ".join(", ", map('"'.qm($_).'"', @sfx))." ]\n";
-		print "Actual result:\n";
-		showchan("slave/.mbsyncstate");
+		if (!$xc) {
+			print "Actual result:\n";
+			showchan("slave/.mbsyncstate");
+		}
 		print "Debug output:\n";
 		print @ret;
 		exit 1;
