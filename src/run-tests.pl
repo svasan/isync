@@ -603,7 +603,6 @@ sub printstate(@)
 		print shift(@t).", ".shift(@t).", \"".shift(@t)."\"";
 	}
 	print " ],\n";
-	close FILE;
 }
 
 # \@chan_state
