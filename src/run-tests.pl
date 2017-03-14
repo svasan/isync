@@ -621,8 +621,6 @@ sub test($$$@)
 		printchan($sx);
 		print "Options:\n";
 		print " [ ".join(", ", map('"'.qm($_).'"', @sfx))." ]\n";
-		print "Expected result:\n";
-		printchan($tx);
 		print "Debug output:\n";
 		print @ret;
 		exit 1;
