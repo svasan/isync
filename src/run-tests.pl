@@ -646,10 +646,11 @@ sub test($$$@)
 	($xc, @ret) = runsync("-0 --no-expunge");
 	if ($xc) {
 		print "Journal replay failed.\n";
-		print "Input == Expected result:\n";
-		printchan($tx);
 		print "Options:\n";
 		print " [ ".join(", ", map('"'.qm($_).'"', @sfx))." ], [ \"-0\", \"--no-expunge\" ]\n";
+		print "Old State:\n";
+		printstate(@{ $$sx[2] });
+		print "Journal:\n".join("", @nj)."\n";
 		print "Debug output:\n";
 		print @ret;
 		exit 1;
@@ -657,7 +658,7 @@ sub test($$$@)
 	if (ckstate("slave/.mbsyncstate", @{ $$tx[2] })) {
 		print "Journal replay failed.\n";
 		print "Options:\n";
-		print " [ ".join(", ", map('"'.qm($_).'"', @sfx))." ]\n";
+		print " [ ".join(", ", map('"'.qm($_).'"', @sfx))." ], [ \"-0\", \"--no-expunge\" ]\n";
 		print "Old State:\n";
 		printstate(@{ $$sx[2] });
 		print "Journal:\n".join("", @nj)."\n";
