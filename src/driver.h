@@ -259,10 +259,10 @@ struct driver {
 	void (*commit_cmds)( store_t *ctx );
 
 	/* Get approximate amount of memory occupied by the driver. */
-	int (*memory_usage)( store_t *ctx );
+	int (*get_memory_usage)( store_t *ctx );
 
 	/* Get the FAIL_* state of the driver. */
-	int (*fail_state)( store_conf_t *conf );
+	int (*get_fail_state)( store_conf_t *conf );
 };
 
 void free_generic_messages( message_t * );

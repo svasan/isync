@@ -1881,7 +1881,7 @@ msgs_copied( sync_vars_t *svars, int t )
 	if (!(svars->state[t] & ST_SENT_NEW)) {
 		for (tmsg = svars->new_msgs[t]; tmsg; tmsg = tmsg->next) {
 			if ((srec = tmsg->srec) && srec->tuid[0]) {
-				if (svars->drv[t]->memory_usage( svars->ctx[t] ) >= BufferLimit) {
+				if (svars->drv[t]->get_memory_usage( svars->ctx[t] ) >= BufferLimit) {
 					svars->new_msgs[t] = tmsg;
 					goto out;
 				}

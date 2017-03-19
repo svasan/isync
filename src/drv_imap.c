@@ -2875,20 +2875,20 @@ imap_commit_cmds( store_t *gctx )
 	(void)gctx;
 }
 
-/******************* imap_memory_usage *******************/
+/******************* imap_get_memory_usage *******************/
 
 static int
-imap_memory_usage( store_t *gctx )
+imap_get_memory_usage( store_t *gctx )
 {
 	imap_store_t *ctx = (imap_store_t *)gctx;
 
 	return ctx->buffer_mem + ctx->conn.buffer_mem;
 }
 
-/******************* imap_fail_state *******************/
+/******************* imap_get_fail_state *******************/
 
 static int
-imap_fail_state( store_conf_t *gconf )
+imap_get_fail_state( store_conf_t *gconf )
 {
 	return ((imap_store_conf_t *)gconf)->server->failed;
 }
@@ -3208,6 +3208,6 @@ struct driver imap_driver = {
 	imap_close_box,
 	imap_cancel_cmds,
 	imap_commit_cmds,
-	imap_memory_usage,
-	imap_fail_state,
+	imap_get_memory_usage,
+	imap_get_fail_state,
 };
