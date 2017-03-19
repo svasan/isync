@@ -826,9 +826,9 @@ load_state( sync_vars_t *svars )
 				buf[t] = 0;
 				if ((c = buf[0]) == '#' ?
 				      (t3 = 0, (sscanf( buf + 2, "%d %d %n", &t1, &t2, &t3 ) < 2) || !t3 || (t - t3 != TUIDL + 2)) :
-				      c == '!' ?
+				      c == 'S' || c == '!' ?
 				        (sscanf( buf + 2, "%d", &t1 ) != 1) :
-				        c == 'S' || c == 'F' || c == 'T' || c == '+' || c == '&' || c == '-' || c == '|' || c == '/' || c == '\\' ?
+				        c == 'F' || c == 'T' || c == '+' || c == '&' || c == '-' || c == '|' || c == '/' || c == '\\' ?
 				          (sscanf( buf + 2, "%d %d", &t1, &t2 ) != 2) :
 				          (sscanf( buf + 2, "%d %d %d", &t1, &t2, &t3 ) != 3))
 				{
@@ -836,7 +836,7 @@ load_state( sync_vars_t *svars )
 					goto jbail;
 				}
 				if (c == 'S')
-					svars->maxuid[t1] = t2;
+					svars->maxuid[t1] = svars->newmaxuid[t1];
 				else if (c == 'F')
 					svars->newuid[t1] = t2;
 				else if (c == 'T')
@@ -1569,15 +1569,18 @@ box_loaded( int sts, void *aux )
 	debug( "synchronizing new entries\n" );
 	for (t = 0; t < 2; t++) {
 		for (tmsg = svars->ctx[1-t]->msgs; tmsg; tmsg = tmsg->next) {
-			/* If we have a srec:
-			 * - message is old (> 0) or expired (0) => ignore
-			 * - message was skipped (-1) => ReNew
-			 * - message was attempted, but failed (-2) => New
-			 * If new have no srec, the message is always New. If messages were previously ignored
-			 * due to being excessive, they would now appear to be newer than the messages that
-			 * got actually synced, so make sure to look only at the newest ones. As some messages
-			 * may be already propagated before an interruption, and maxuid logging is delayed,
-			 * we need to track the newmaxuid separately. */
+			// If new have no srec, the message is always New. If we have a srec:
+			// - message is old (> 0) or expired (0) => ignore
+			// - message was skipped (-1) => ReNew
+			// - message was attempted, but failed (-2) => New
+			//
+			// If messages were previously ignored due to being excessive, they would now
+			// appear to be newer than the messages that got actually synced, so increment
+			// newmaxuid immediately to make sure we always look only at the newest ones.
+			// However, committing it to maxuid must be delayed until all messages were
+			// propagated, to ensure that all pending messages are still loaded next time
+			// in case of interruption - in particular skipping big messages would otherwise
+			// up the limit too early.
 			srec = tmsg->srec;
 			if (srec ? srec->uid[t] < 0 && (svars->chan->ops[t] & (srec->uid[t] == -1 ? OP_RENEW : OP_NEW))
 			         : svars->newmaxuid[1-t] < tmsg->uid && (svars->chan->ops[t] & OP_NEW)) {
@@ -1605,12 +1608,6 @@ box_loaded( int sts, void *aux )
 							svars->newmaxuid[1-t] = tmsg->uid;
 						jFprintf( svars, "+ %d %d\n", srec->uid[M], srec->uid[S] );
 						debug( "  -> pair(%d,%d) created\n", srec->uid[M], srec->uid[S] );
-					}
-					if (svars->maxuid[1-t] < tmsg->uid) {
-						/* We do this here for simplicity. However, logging must be delayed until
-						 * all messages were propagated, as skipped messages could otherwise be
-						 * logged before the propagation of messages with lower UIDs completes. */
-						svars->maxuid[1-t] = tmsg->uid;
 					}
 					if ((tmsg->flags & F_FLAGGED) || tmsg->size <= svars->chan->stores[t]->max_size) {
 						if (tmsg->flags) {
@@ -1923,7 +1920,10 @@ msgs_copied( sync_vars_t *svars, int t )
 	if (svars->new_pending[t])
 		goto out;
 
-	jFprintf( svars, "S %d %d\n", 1-t, svars->maxuid[1-t] );
+	if (svars->maxuid[1-t] != svars->newmaxuid[1-t]) {
+		svars->maxuid[1-t] = svars->newmaxuid[1-t];
+		jFprintf( svars, "S %d\n", 1-t );
+	}
 	sync_close( svars, 1-t );
 	if (check_cancel( svars ))
 		goto out;
