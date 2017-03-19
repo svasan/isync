@@ -3183,8 +3183,14 @@ imap_parse_store( conffile_t *cfg, store_conf_t **storep )
 	return 1;
 }
 
+static int
+imap_get_caps( store_t *gctx ATTR_UNUSED )
+{
+	return DRV_CRLF | DRV_VERBOSE;
+}
+
 struct driver imap_driver = {
-	DRV_CRLF | DRV_VERBOSE,
+	imap_get_caps,
 	imap_parse_store,
 	imap_cleanup,
 	imap_alloc_store,

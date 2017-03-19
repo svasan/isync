@@ -147,7 +147,8 @@ typedef struct {
 #define LIST_PATH_MAYBE 4
 
 struct driver {
-	int flags;
+	/* Return driver capabilities. */
+	int (*get_caps)( store_t *ctx );
 
 	/* Parse configuration. */
 	int (*parse_store)( conffile_t *cfg, store_conf_t **storep );

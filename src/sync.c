@@ -407,8 +407,8 @@ msg_fetched( int sts, void *aux )
 
 		vars->msg->flags = vars->data.flags;
 
-		scr = (svars->drv[1-t]->flags / DRV_CRLF) & 1;
-		tcr = (svars->drv[t]->flags / DRV_CRLF) & 1;
+		scr = (svars->drv[1-t]->get_caps( svars->ctx[1-t] ) / DRV_CRLF) & 1;
+		tcr = (svars->drv[t]->get_caps( svars->ctx[t] ) / DRV_CRLF) & 1;
 		if (vars->srec || scr != tcr) {
 			if (!copy_msg_convert( scr, tcr, vars )) {
 				warn( "Warning: message %d from %s has incomplete header.\n",

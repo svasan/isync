@@ -1865,8 +1865,14 @@ maildir_parse_store( conffile_t *cfg, store_conf_t **storep )
 	return 1;
 }
 
+static int
+maildir_get_caps( store_t *gctx ATTR_UNUSED )
+{
+	return 0; /* XXX DRV_CRLF? */
+}
+
 struct driver maildir_driver = {
-	0, /* XXX DRV_CRLF? */
+	maildir_get_caps,
 	maildir_parse_store,
 	maildir_cleanup_drv,
 	maildir_alloc_store,

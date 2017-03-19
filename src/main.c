@@ -810,7 +810,7 @@ sync_chans( main_vars_t *mvars, int ent )
 		if (mvars->skip)
 			goto next2;
 		mvars->state[M] = mvars->state[S] = ST_FRESH;
-		if (mvars->chan->stores[M]->driver->flags & mvars->chan->stores[S]->driver->flags & DRV_VERBOSE)
+		if (mvars->chan->stores[M]->driver->get_caps( 0 ) & mvars->chan->stores[S]->driver->get_caps( 0 ) & DRV_VERBOSE)
 			labels[M] = "M: ", labels[S] = "S: ";
 		else
 			labels[M] = labels[S] = "";
