@@ -641,8 +641,9 @@ sub test($$$@)
 
 	return 0 if (scalar(@ARGV) && !grep { $_ eq $ttl } @ARGV);
 	print "Testing: ".$ttl." ...\n";
-	mkchan($$sx[0], $$sx[1], @{ $$sx[2] });
 	&writecfg(@sfx);
+
+	mkchan($$sx[0], $$sx[1], @{ $$sx[2] });
 
 	my ($xc, @ret) = runsync("-J", "1-initial.log");
 	if ($xc || ckchan("slave/.mbsyncstate.new", $tx)) {
@@ -662,42 +663,80 @@ sub test($$$@)
 	}
 
 	my @nj = readfile("slave/.mbsyncstate.journal");
-	($xc, @ret) = runsync("-0 --no-expunge", "2-replay.log");
-	if ($xc || ckstate("slave/.mbsyncstate", @{ $$tx[2] })) {
+	my ($jxc, @jret) = runsync("-0 --no-expunge", "2-replay.log");
+	if ($jxc || ckstate("slave/.mbsyncstate", @{ $$tx[2] })) {
 		print "Journal replay failed.\n";
 		print "Options:\n";
 		print " [ ".join(", ", map('"'.qm($_).'"', @sfx))." ], [ \"-0\", \"--no-expunge\" ]\n";
 		print "Old State:\n";
 		printstate(@{ $$sx[2] });
 		print "Journal:\n".join("", @nj)."\n";
-		if (!$xc) {
+		if (!$jxc) {
 			print "Expected New State:\n";
 			printstate(@{ $$tx[2] });
 			print "New State:\n";
 			showstate("slave/.mbsyncstate");
 		}
 		print "Debug output:\n";
-		print @ret;
+		print @jret;
 		exit 1;
 	}
 
-	($xc, @ret) = runsync("", "3-verify.log");
-	if ($xc || ckchan("slave/.mbsyncstate", $tx)) {
+	my ($ixc, @iret) = runsync("", "3-verify.log");
+	if ($ixc || ckchan("slave/.mbsyncstate", $tx)) {
 		print "Idempotence verification run failed.\n";
 		print "Input == Expected result:\n";
 		printchan($tx);
 		print "Options:\n";
 		print " [ ".join(", ", map('"'.qm($_).'"', @sfx))." ]\n";
-		if (!$xc) {
+		if (!$ixc) {
 			print "Actual result:\n";
 			showchan("slave/.mbsyncstate");
 		}
 		print "Debug output:\n";
-		print @ret;
+		print @iret;
 		exit 1;
 	}
 
-	killcfg();
 	rmtree "slave";
 	rmtree "master";
+
+	my $njl = (@nj - 1) * 2;
+	for (my $l = 2; $l < $njl; $l++) {
+		mkchan($$sx[0], $$sx[1], @{ $$sx[2] });
+
+		my ($nxc, @nret) = runsync("-J$l", "4-interrupt.log");
+		if ($nxc != (100 + ($l & 1)) << 8) {
+			print "Interrupting at step $l/$njl failed.\n";
+			print "Debug output:\n";
+			print @nret;
+			exit 1;
+		}
+
+		($nxc, @nret) = runsync("-J", "5-resume.log");
+		if ($nxc || ckchan("slave/.mbsyncstate.new", $tx)) {
+			print "Resuming from step $l/$njl failed.\n";
+			print "Input:\n";
+			printchan($sx);
+			print "Options:\n";
+			print " [ ".join(", ", map('"'.qm($_).'"', @sfx))." ]\n";
+			my @nnj = readfile("slave/.mbsyncstate.journal");
+			print "Journal:\n".join("", @nnj[0..($l / 2 - 1)])."-------\n".join("", @nnj[($l / 2)..$#nnj])."\n";
+			print "Full journal:\n".join("", @nj)."\n";
+			if (!$nxc) {
+				print "Expected result:\n";
+				printchan($tx);
+				print "Actual result:\n";
+				showchan("slave/.mbsyncstate");
+			}
+			print "Debug output:\n";
+			print @nret;
+			exit 1;
+		}
+
+		rmtree "slave";
+		rmtree "master";
+	}
+
+	killcfg();
 }

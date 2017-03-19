@@ -32,6 +32,7 @@
 #include <sys/wait.h>
 
 int DFlags;
+int JLimit;
 int UseFSync = 1;
 #if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__NT__) || defined(__CYGWIN__)
 char FieldDelimiter = ';';
@@ -684,6 +685,7 @@ main( int argc, char **argv )
 			break;
 		case 'J':
 			DFlags |= KEEPJOURNAL;
+			JLimit = strtol( ochar, &ochar, 10 );
 			break;
 		case 'Z':
 			DFlags |= ZERODELAY;

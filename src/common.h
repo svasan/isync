@@ -81,6 +81,7 @@ typedef unsigned int uint;
 #define ZERODELAY       0x2000
 
 extern int DFlags;
+extern int JLimit;
 extern int UseFSync;
 extern char FieldDelimiter;
 
