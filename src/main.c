@@ -1,7 +1,7 @@
 /*
  * mbsync - mailbox synchronizer
  * Copyright (C) 2000-2002 Michael R. Elkins <me@mutt.org>
- * Copyright (C) 2002-2006,2010-2012 Oswald Buddenhagen <ossi@users.sf.net>
+ * Copyright (C) 2002-2006,2010-2017 Oswald Buddenhagen <ossi@users.sf.net>
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -64,7 +64,7 @@ usage( int code )
 	fputs(
 PACKAGE " " VERSION " - mailbox synchronizer\n"
 "Copyright (C) 2000-2002 Michael R. Elkins <me@mutt.org>\n"
-"Copyright (C) 2002-2006,2008,2010-2012 Oswald Buddenhagen <ossi@users.sf.net>\n"
+"Copyright (C) 2002-2006,2008,2010-2017 Oswald Buddenhagen <ossi@users.sf.net>\n"
 "Copyright (C) 2004 Theodore Ts'o <tytso@mit.edu>\n"
 "usage:\n"
 " " EXE " [flags] {{channel[:box,...]|group} ...|-a}\n"
@@ -91,9 +91,29 @@ PACKAGE " " VERSION " - mailbox synchronizer\n"
 "\nSupported mailbox formats are: IMAP4rev1, Maildir\n"
 "\nCompile time options:\n"
 #ifdef HAVE_LIBSSL
-"  +HAVE_LIBSSL\n"
+"  +HAVE_LIBSSL"
 #else
-"  -HAVE_LIBSSL\n"
+"  -HAVE_LIBSSL"
+#endif
+#ifdef HAVE_LIBSASL
+" +HAVE_LIBSASL"
+#else
+" -HAVE_LIBSASL"
+#endif
+#ifdef HAVE_LIBZ
+" +HAVE_LIBZ"
+#else
+" -HAVE_LIBZ"
+#endif
+#ifdef USE_DB
+" +USE_DB"
+#else
+" -USE_DB"
+#endif
+#ifdef HAVE_IPV6
+" +HAVE_IPV6\n"
+#else
+" -HAVE_IPV6\n"
 #endif
 	, code ? stderr : stdout );
 	exit( code );
