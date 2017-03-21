@@ -292,6 +292,63 @@ maildir_invoke_bad_callback( store_t *ctx )
 	ctx->bad_callback( ctx->bad_callback_aux );
 }
 
+static int
+maildir_list_maildirpp( store_t *gctx, int flags, const char *inbox )
+{
+	DIR *dir;
+	struct dirent *de;
+	int warned = 0;
+	struct stat st;
+
+	add_string_list( &gctx->boxes, "INBOX" );
+
+	char path[_POSIX_PATH_MAX];
+	int pathLen = nfsnprintf( path, _POSIX_PATH_MAX, "%s/", inbox );
+	if (!(dir = opendir( path ))) {
+		if (errno == ENOENT || errno == ENOTDIR)
+			return 0;
+		sys_error( "Maildir error: cannot list %s", path );
+		return -1;
+	}
+	while ((de = readdir( dir ))) {
+		const char *ent = de->d_name;
+		if (*ent++ != '.' || !*ent)
+			continue;
+		char name[_POSIX_PATH_MAX];
+		char *effName = name;
+		if (*ent == '.') {
+			if (!*++ent)
+				continue;
+			// The Maildir++ Inbox is technically not under Path (as there is none), so
+			// "*" would never match INBOX*, which is rather unintuitive. Matching INBOX*
+			// implicitly instead makes it consistent with an IMAP Store with an empty Path.
+		} else {
+			if (!(flags & (LIST_PATH | LIST_PATH_MAYBE)))
+				continue;
+			if (starts_with( ent, -1, "INBOX", 5 ) && (!ent[5] || ent[5] == '.')) {
+				if (!warned) {
+					warned = 1;
+					path[pathLen] = 0;
+					warn( "Maildir warning: ignoring INBOX in %s\n", path );
+				}
+				continue;
+			}
+			effName += 6;
+		}
+		nfsnprintf( path + pathLen, _POSIX_PATH_MAX - pathLen, "%s/cur", de->d_name );
+		if (!stat( path, &st ) && S_ISDIR(st.st_mode)) {
+			int nl = nfsnprintf( name, _POSIX_PATH_MAX, "INBOX/%s", ent );
+			for (int i = 6; i < nl; i++) {
+				if (name[i] == '.')
+					name[i] = '/';
+			}
+			add_string_list( &gctx->boxes, effName );
+		}
+	}
+	closedir (dir);
+	return 0;
+}
+
 static int maildir_list_inbox( store_t *gctx, int flags, const char *basePath );
 static int maildir_list_path( store_t *gctx, int flags, const char *inbox );
 
@@ -302,8 +359,7 @@ maildir_list_recurse( store_t *gctx, int isBox, int flags,
 {
 	DIR *dir;
 	int style = ((maildir_store_conf_t *)gctx->conf)->sub_style;
-	int pl, nl, i;
-	int warned = 0;
+	int pl, nl;
 	struct dirent *de;
 	struct stat st;
 
@@ -340,9 +396,7 @@ maildir_list_recurse( store_t *gctx, int isBox, int flags,
 				return -1;
 			}
 		} else {
-			char *effName = name;
-			int nameOff = 0;
-			if (style == SUB_MAILDIRPP || style == SUB_LEGACY) {
+			if (style == SUB_LEGACY) {
 				if (*ent == '.') {
 					if (!isBox)
 						continue;
@@ -351,42 +405,17 @@ maildir_list_recurse( store_t *gctx, int isBox, int flags,
 					if (isBox)
 						continue;
 				}
-				if (style == SUB_MAILDIRPP) {
-					if (*ent == '.') {
-						if (!(flags & LIST_INBOX))
-							continue;
-						ent++;
-					} else {
-						if (!(flags & (LIST_PATH | LIST_PATH_MAYBE)))
-							continue;
-						effName = name + 6;
-						nameOff = 6;
-					}
-				}
 			}
-			nl = nameLen + nfsnprintf( name + nameLen, _POSIX_PATH_MAX - nameLen, "%s", ent );
-			if (style == SUB_MAILDIRPP) {
-				for (i = nameLen; i < nl; i++) {
-					if (name[i] == '.')
-						name[i] = '/';
-				}
-			}
-			if (nameLen == nameOff && starts_with( effName, nl - nameOff, "INBOX", 5 ) && (!effName[5] || effName[5] == '/')) {
-				if (!warned) {
-					warned = 1;
-					path[pathLen] = 0;
-					warn( "Maildir warning: ignoring INBOX in %s\n", path );
-				}
+			if (!nameLen && equals( ent, -1, "INBOX", 5 )) {
+				path[pathLen] = 0;
+				warn( "Maildir warning: ignoring INBOX in %s\n", path );
 				continue;
 			}
+			nl = nameLen + nfsnprintf( name + nameLen, _POSIX_PATH_MAX - nameLen, "%s", ent );
 			path[pl++] = '/';
 			nfsnprintf( path + pl, _POSIX_PATH_MAX - pl, "cur" );
 			if (!stat( path, &st ) && S_ISDIR(st.st_mode))
-				add_string_list( &gctx->boxes, effName );
-			if (style == SUB_MAILDIRPP) {
-				/* Maildir++ folder - don't recurse further. */
-				continue;
-			}
+				add_string_list( &gctx->boxes, name );
 			path[pl] = 0;
 			name[nl++] = '/';
 			if (maildir_list_recurse( gctx, isBox + 1, flags, inbox, inboxLen, basePath, basePathLen, path, pl, name, nl ) < 0) {
@@ -430,18 +459,12 @@ maildir_list_store( store_t *gctx, int flags,
 {
 	maildir_store_conf_t *conf = (maildir_store_conf_t *)gctx->conf;
 
-	// The Maildir++ Inbox is technically not under Path, so "*" would
-	// never match INBOX*, which is rather unintuitive. Matching INBOX*
-	// implicitly instead makes it consistent with an IMAP Store with
-	// an empty Path.
-	if (conf->sub_style == SUB_MAILDIRPP)
-		flags |= LIST_INBOX;
-
-	if ((conf->sub_style != SUB_MAILDIRPP
-	     && ((flags & LIST_PATH) || ((flags & LIST_PATH_MAYBE) && gctx->conf->path))
-	     && maildir_list_path( gctx, flags, conf->inbox ) < 0) ||
-	    ((flags & LIST_INBOX)
-	     && maildir_list_inbox( gctx, flags, gctx->conf->path ) < 0)) {
+	if (conf->sub_style == SUB_MAILDIRPP
+	        ? maildir_list_maildirpp( gctx, flags, conf->inbox ) < 0
+	        : ((((flags & LIST_PATH) || ((flags & LIST_PATH_MAYBE) && gctx->conf->path))
+	            && maildir_list_path( gctx, flags, conf->inbox ) < 0) ||
+	           ((flags & LIST_INBOX)
+	            && maildir_list_inbox( gctx, flags, gctx->conf->path ) < 0))) {
 		maildir_invoke_bad_callback( gctx );
 		cb( DRV_CANCELED, aux );
 	} else {
