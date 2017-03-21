@@ -78,6 +78,9 @@ typedef struct {
 	char *usedb;
 #endif /* USE_DB */
 	wakeup_t lcktmr;
+
+	void (*bad_callback)( void *aux );
+	void *bad_callback_aux;
 } maildir_store_t;
 
 #ifdef USE_DB
@@ -287,7 +290,16 @@ maildir_cleanup_drv( void )
 }
 
 static void
-maildir_invoke_bad_callback( store_t *ctx )
+maildir_set_bad_callback( store_t *gctx, void (*cb)( void *aux ), void *aux )
+{
+	maildir_store_t *ctx = (maildir_store_t *)gctx;
+
+	ctx->bad_callback = cb;
+	ctx->bad_callback_aux = aux;
+}
+
+static void
+maildir_invoke_bad_callback( maildir_store_t *ctx )
 {
 	ctx->bad_callback( ctx->bad_callback_aux );
 }
@@ -475,6 +487,7 @@ static void
 maildir_list_store( store_t *gctx, int flags,
                     void (*cb)( int sts, void *aux ), void *aux )
 {
+	maildir_store_t *ctx = (maildir_store_t *)gctx;
 	maildir_store_conf_t *conf = (maildir_store_conf_t *)gctx->conf;
 
 	if (conf->sub_style == SUB_MAILDIRPP
@@ -483,7 +496,7 @@ maildir_list_store( store_t *gctx, int flags,
 	            && maildir_list_path( gctx, flags, conf->inbox ) < 0) ||
 	           ((flags & LIST_INBOX)
 	            && maildir_list_inbox( gctx, flags, gctx->conf->path ) < 0))) {
-		maildir_invoke_bad_callback( gctx );
+		maildir_invoke_bad_callback( ctx );
 		cb( DRV_CANCELED, aux );
 	} else {
 		cb( DRV_OK, aux );
@@ -582,7 +595,7 @@ maildir_validate( const char *box, int create, maildir_store_t *ctx )
 		if (make_box_dir( buf, bl )) {
 			sys_error( "Maildir error: cannot create mailbox '%s'", box );
 			((maildir_store_conf_t *)ctx->gen.conf)->failed = FAIL_FINAL;
-			maildir_invoke_bad_callback( &ctx->gen );
+			maildir_invoke_bad_callback( ctx );
 			return DRV_CANCELED;
 		}
 	} else if (!S_ISDIR(st.st_mode)) {
@@ -1876,6 +1889,7 @@ struct driver maildir_driver = {
 	maildir_parse_store,
 	maildir_cleanup_drv,
 	maildir_alloc_store,
+	maildir_set_bad_callback,
 	maildir_connect_store,
 	maildir_free_store,
 	maildir_free_store, /* _cancel_, but it's the same */

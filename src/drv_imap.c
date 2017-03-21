@@ -131,6 +131,9 @@ struct imap_store {
 	int sasl_cont;
 #endif
 
+	void (*bad_callback)( void *aux );
+	void *bad_callback_aux;
+
 	conn_t conn; /* this is BIG, so put it last */
 };
 
@@ -404,7 +407,7 @@ static void
 submit_imap_cmd( imap_store_t *ctx, imap_cmd_t *cmd )
 {
 	assert( ctx );
-	assert( ctx->gen.bad_callback );
+	assert( ctx->bad_callback );
 	assert( cmd );
 	assert( cmd->param.done );
 
@@ -1541,9 +1544,18 @@ imap_deref( imap_store_t *ctx )
 }
 
 static void
+imap_set_bad_callback( store_t *gctx, void (*cb)( void *aux ), void *aux )
+{
+	imap_store_t *ctx = (imap_store_t *)gctx;
+
+	ctx->bad_callback = cb;
+	ctx->bad_callback_aux = aux;
+}
+
+static void
 imap_invoke_bad_callback( imap_store_t *ctx )
 {
-	ctx->gen.bad_callback( ctx->gen.bad_callback_aux );
+	ctx->bad_callback( ctx->bad_callback_aux );
 }
 
 /******************* imap_free_store *******************/
@@ -1568,7 +1580,7 @@ imap_free_store( store_t *gctx )
 {
 	free_generic_messages( gctx->msgs );
 	gctx->msgs = 0;
-	set_bad_callback( gctx, imap_cancel_unowned, gctx );
+	imap_set_bad_callback( gctx, imap_cancel_unowned, gctx );
 	gctx->next = unowned;
 	unowned = gctx;
 }
@@ -1584,7 +1596,7 @@ imap_cleanup( void )
 
 	for (ctx = unowned; ctx; ctx = nctx) {
 		nctx = ctx->next;
-		set_bad_callback( ctx, (void (*)(void *))imap_cancel_store, ctx );
+		imap_set_bad_callback( ctx, (void (*)(void *))imap_cancel_store, ctx );
 		if (((imap_store_t *)ctx)->state != SST_BAD) {
 			((imap_store_t *)ctx)->expectBYE = 1;
 			imap_exec( (imap_store_t *)ctx, 0, imap_cleanup_p2, "LOGOUT" );
@@ -3194,6 +3206,7 @@ struct driver imap_driver = {
 	imap_parse_store,
 	imap_cleanup,
 	imap_alloc_store,
+	imap_set_bad_callback,
 	imap_connect_store,
 	imap_free_store,
 	imap_cancel_store,

@@ -1002,8 +1002,8 @@ sync_boxes( store_t *ctx[], const char *names[], int present[], channel_conf_t *
 			return;
 		}
 		ctx[t]->uidvalidity = -1;
-		set_bad_callback( ctx[t], store_bad, AUX );
 		svars->drv[t] = ctx[t]->conf->driver;
+		svars->drv[t]->set_bad_callback( ctx[t], store_bad, AUX );
 	}
 	/* Both boxes must be fully set up at this point, so that error exit paths
 	 * don't run into uninitialized variables. */

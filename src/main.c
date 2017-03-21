@@ -817,7 +817,7 @@ sync_chans( main_vars_t *mvars, int ent )
 		for (t = 0; t < 2; t++) {
 			mvars->drv[t] = mvars->chan->stores[t]->driver;
 			mvars->ctx[t] = mvars->drv[t]->alloc_store( mvars->chan->stores[t], labels[t] );
-			set_bad_callback( mvars->ctx[t], store_bad, AUX );
+			mvars->drv[t]->set_bad_callback( mvars->ctx[t], store_bad, AUX );
 		}
 		for (t = 0; ; t++) {
 			info( "Opening %s store %s...\n", str_ms[t], mvars->chan->stores[t]->name );

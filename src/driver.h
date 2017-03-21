@@ -89,9 +89,6 @@ typedef struct store {
 	string_list_t *boxes; /* _list results - own */
 	char listed; /* was _list already run? */
 
-	void (*bad_callback)( void *aux );
-	void *bad_callback_aux;
-
 	/* currently open mailbox */
 	char *path; /* own */
 	message_t *msgs; /* own */
@@ -102,15 +99,6 @@ typedef struct store {
 	int count; /* # of messages */
 	int recent; /* # of recent messages - don't trust this beyond the initial read */
 } store_t;
-
-/* When the callback is invoked (at most once per store), the store is fubar;
- * call the driver's cancel_store() to dispose of it. */
-static INLINE void
-set_bad_callback( store_t *ctx, void (*cb)( void *aux ), void *aux )
-{
-	ctx->bad_callback = cb;
-	ctx->bad_callback_aux = aux;
-}
 
 typedef struct {
 	char *data;
@@ -159,6 +147,10 @@ struct driver {
 	/* Allocate a store with the given configuration. This is expected to
 	 * return quickly, and must not fail. */
 	store_t *(*alloc_store)( store_conf_t *conf, const char *label );
+
+	/* When this callback is invoked (at most once per store), the store is fubar;
+	 * call cancel_store() to dispose of it. */
+	void (*set_bad_callback)( store_t *ctx, void (*cb)( void *aux ), void *aux );
 
 	/* Open/connect the store. This may recycle existing server connections. */
 	void (*connect_store)( store_t *ctx,
