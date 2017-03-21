@@ -945,7 +945,7 @@ store_connected( int sts, void *aux )
 	case DRV_CANCELED:
 		return;
 	case DRV_OK:
-		if (!mvars->skip && !mvars->chanptr->boxlist && mvars->chan->patterns && !mvars->ctx[t]->listed) {
+		if (!mvars->skip && !mvars->chanptr->boxlist && mvars->chan->patterns) {
 			for (cflags = 0, cpat = mvars->chan->patterns; cpat; cpat = cpat->next) {
 				const char *pat = cpat->string;
 				if (*pat != '!') {
@@ -1004,7 +1004,6 @@ store_listed( int sts, void *aux )
 	case DRV_CANCELED:
 		return;
 	case DRV_OK:
-		mvars->ctx[t]->listed = 1;
 		if (DFlags & DEBUG_MAIN) {
 			debug( "got mailbox list from %s:\n", str_ms[t] );
 			for (bx = mvars->ctx[t]->boxes; bx; bx = bx->next)

@@ -300,7 +300,11 @@ maildir_list_maildirpp( store_t *gctx, int flags, const char *inbox )
 	int warned = 0;
 	struct stat st;
 
-	add_string_list( &gctx->boxes, "INBOX" );
+	if (gctx->listed & LIST_PATH)  // Implies LIST_INBOX
+		return 0;
+
+	if (!(gctx->listed & LIST_INBOX))
+		add_string_list( &gctx->boxes, "INBOX" );
 
 	char path[_POSIX_PATH_MAX];
 	int pathLen = nfsnprintf( path, _POSIX_PATH_MAX, "%s/", inbox );
@@ -317,6 +321,8 @@ maildir_list_maildirpp( store_t *gctx, int flags, const char *inbox )
 		char name[_POSIX_PATH_MAX];
 		char *effName = name;
 		if (*ent == '.') {
+			if (gctx->listed & LIST_INBOX)
+				continue;
 			if (!*++ent)
 				continue;
 			// The Maildir++ Inbox is technically not under Path (as there is none), so
@@ -346,6 +352,10 @@ maildir_list_maildirpp( store_t *gctx, int flags, const char *inbox )
 		}
 	}
 	closedir (dir);
+
+	if (flags & (LIST_PATH | LIST_PATH_MAYBE))
+		gctx->listed |= LIST_PATH;
+	gctx->listed |= LIST_INBOX;
 	return 0;
 }
 
@@ -384,14 +394,14 @@ maildir_list_recurse( store_t *gctx, int isBox, int flags,
 			continue;
 		pl += pathLen;
 		if (inbox && equals( path, pl, inbox, inboxLen )) {
-			/* Inbox nested into Path. List now if it won't be listed separately anyway. */
-			if (!(flags & LIST_INBOX) && maildir_list_inbox( gctx, flags, 0 ) < 0) {
+			// Inbox nested into Path.
+			if (maildir_list_inbox( gctx, flags, 0 ) < 0) {
 				closedir( dir );
 				return -1;
 			}
 		} else if (basePath && equals( path, pl, basePath, basePathLen )) {
-			/* Path nested into Inbox. List now if it won't be listed separately anyway. */
-			if (!(flags & (LIST_PATH | LIST_PATH_MAYBE)) && maildir_list_path( gctx, flags, 0 ) < 0) {
+			// Path nested into Inbox.
+			if (maildir_list_path( gctx, flags, 0 ) < 0) {
 				closedir( dir );
 				return -1;
 			}
@@ -433,6 +443,10 @@ maildir_list_inbox( store_t *gctx, int flags, const char *basePath )
 {
 	char path[_POSIX_PATH_MAX], name[_POSIX_PATH_MAX];
 
+	if (gctx->listed & LIST_INBOX)
+		return 0;
+	gctx->listed |= LIST_INBOX;
+
 	add_string_list( &gctx->boxes, "INBOX" );
 	return maildir_list_recurse(
 	        gctx, 1, flags, 0, 0, basePath, basePath ? strlen( basePath ) - 1 : 0,
@@ -444,6 +458,10 @@ static int
 maildir_list_path( store_t *gctx, int flags, const char *inbox )
 {
 	char path[_POSIX_PATH_MAX], name[_POSIX_PATH_MAX];
+
+	if (gctx->listed & LIST_PATH)
+		return 0;
+	gctx->listed |= LIST_PATH;
 
 	if (maildir_ensure_path( (maildir_store_conf_t *)gctx->conf ) < 0)
 		return -1;

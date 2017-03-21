@@ -2759,23 +2759,35 @@ imap_list_store( store_t *gctx, int flags,
 	imap_cmd_refcounted_state_t *sts = imap_refcounted_new_state( cb, aux );
 
 	// ctx->prefix may be empty, "INBOX.", or something else.
-	// 'flags' may be LIST_INBOX, LIST_PATH (or LIST_PATH_MAYBE), or both.
-	// This matrix determines what to query, and what comes out as a side effect:
+	// 'flags' may be LIST_INBOX, LIST_PATH (or LIST_PATH_MAYBE), or both. 'listed'
+	// already containing a particular value effectively removes it from 'flags'.
+	// This matrix determines what to query, and what comes out as a side effect.
+	// The lowercase letters indicate unnecessary results; the queries are done
+	// this way to have non-overlapping result sets, so subsequent calls create
+	// no duplicates:
 	//
 	// qry \ pfx | empty | inbox | other
 	// ----------+-------+-------+-------
-	// inbox     | i     | i [p] | i
-	// both      | p [i] | i [p] | i + p
-	// path      | p [i] | p {i} | p
+	// inbox     | p [I] | I [p] | I
+	// both      | P [I] | I [P] | I + P
+	// path      | P [i] | i [P] | P
 	//
-	// {i} => This doesn't actually contain INBOX itself, only its subfolders.
-	//
-	if ((flags & (LIST_PATH | LIST_PATH_MAYBE)) && (!(flags & LIST_INBOX) || !is_inbox( ctx, ctx->prefix, -1 )))
+	int pfx_is_empty = !*ctx->prefix;
+	int pfx_is_inbox = !pfx_is_empty && is_inbox( ctx, ctx->prefix, -1 );
+	if (((flags & (LIST_PATH | LIST_PATH_MAYBE)) || pfx_is_empty) && !pfx_is_inbox && !(ctx->gen.listed & LIST_PATH)) {
+		ctx->gen.listed |= LIST_PATH;
+		if (pfx_is_empty)
+			ctx->gen.listed |= LIST_INBOX;
 		imap_exec( ctx, imap_refcounted_new_cmd( sts ), imap_refcounted_done_box,
 		           "LIST \"\" \"%\\s*\"", ctx->prefix );
-	if ((flags & LIST_INBOX) && (!(flags & (LIST_PATH | LIST_PATH_MAYBE)) || *ctx->prefix))
+	}
+	if (((flags & LIST_INBOX) || pfx_is_inbox) && !pfx_is_empty && !(ctx->gen.listed & LIST_INBOX)) {
+		ctx->gen.listed |= LIST_INBOX;
+		if (pfx_is_inbox)
+			ctx->gen.listed |= LIST_PATH;
 		imap_exec( ctx, imap_refcounted_new_cmd( sts ), imap_refcounted_done_box,
 		           "LIST \"\" INBOX*" );
+	}
 	imap_refcounted_done( sts );
 }
 
