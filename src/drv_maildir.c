@@ -303,6 +303,7 @@ maildir_list_recurse( store_t *gctx, int isBox, int flags,
 	DIR *dir;
 	int style = ((maildir_store_conf_t *)gctx->conf)->sub_style;
 	int pl, nl, i;
+	int warned = 0;
 	struct dirent *de;
 	struct stat st;
 
@@ -370,9 +371,12 @@ maildir_list_recurse( store_t *gctx, int isBox, int flags,
 						name[i] = '/';
 				}
 			}
-			if (nameLen == nameOff && equals( effName, nl - nameOff, "INBOX", 5 ) && (!effName[5] || effName[5] == '/')) {
-				path[pathLen] = 0;
-				warn( "Maildir warning: ignoring INBOX in %s\n", path );
+			if (nameLen == nameOff && starts_with( effName, nl - nameOff, "INBOX", 5 ) && (!effName[5] || effName[5] == '/')) {
+				if (!warned) {
+					warned = 1;
+					path[pathLen] = 0;
+					warn( "Maildir warning: ignoring INBOX in %s\n", path );
+				}
 				continue;
 			}
 			path[pl++] = '/';
