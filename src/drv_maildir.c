@@ -70,9 +70,9 @@ typedef struct {
 typedef struct {
 	store_t gen;
 	uint opts;
-	int uvfd, uvok, uidvalidity, nuid, is_inbox, fresh[3];
-	int minuid, maxuid, newuid, seenuid;
-	int_array_t excs;
+	int uvfd, uvok, is_inbox, fresh[3];
+	uint minuid, maxuid, newuid, seenuid, uidvalidity, nuid;
+	uint_array_t excs;
 	char *path; /* own */
 	char *trash;
 #ifdef USE_DB
@@ -518,7 +518,8 @@ typedef struct {
 	char *base;
 	char *msgid;
 	int size;
-	uint uid:31, recent:1;
+	uint uid;
+	uchar recent;
 	char tuid[TUIDL];
 } msg_t;
 
@@ -650,7 +651,8 @@ maildir_store_uidval( maildir_store_t *ctx )
 {
 	int n;
 #ifdef USE_DB
-	int ret, uv[2];
+	int ret;
+	uint uv[2];
 #endif
 	char buf[128];
 
@@ -673,7 +675,7 @@ maildir_store_uidval( maildir_store_t *ctx )
 	} else
 #endif /* USE_DB */
 	{
-		n = sprintf( buf, "%d\n%d\n", ctx->uidvalidity, ctx->nuid );
+		n = sprintf( buf, "%u\n%u\n", ctx->uidvalidity, ctx->nuid );
 		lseek( ctx->uvfd, 0, SEEK_SET );
 		if (write( ctx->uvfd, buf, n ) != n || ftruncate( ctx->uvfd, n ) || (UseFSync && fdatasync( ctx->uvfd ))) {
 			error( "Maildir error: cannot write UIDVALIDITY.\n" );
@@ -755,14 +757,14 @@ maildir_uidval_lock( maildir_store_t *ctx )
 			}
 			return maildir_init_uidval_new( ctx );
 		}
-		ctx->uidvalidity = ((int *)value.data)[0];
-		ctx->nuid = ((int *)value.data)[1];
+		ctx->uidvalidity = ((uint *)value.data)[0];
+		ctx->nuid = ((uint *)value.data)[1];
 	} else
 #endif
 	{
 		lseek( ctx->uvfd, 0, SEEK_SET );
 		if ((n = read( ctx->uvfd, buf, sizeof(buf) - 1 )) <= 0 ||
-			(buf[n] = 0, sscanf( buf, "%d\n%d", &ctx->uidvalidity, &ctx->nuid ) != 2)) {
+			(buf[n] = 0, sscanf( buf, "%u\n%u", &ctx->uidvalidity, &ctx->nuid ) != 2)) {
 #if 1
 			/* In a generic driver, resetting the UID validity would be the right thing.
 			 * But this would mess up the sync state completely. So better bail out and
@@ -800,7 +802,7 @@ lcktmr_timeout( void *aux )
 }
 
 static int
-maildir_obtain_uid( maildir_store_t *ctx, int *uid )
+maildir_obtain_uid( maildir_store_t *ctx, uint *uid )
 {
 	int ret;
 
@@ -812,7 +814,7 @@ maildir_obtain_uid( maildir_store_t *ctx, int *uid )
 
 #ifdef USE_DB
 static int
-maildir_set_uid( maildir_store_t *ctx, const char *name, int *uid )
+maildir_set_uid( maildir_store_t *ctx, const char *name, uint *uid )
 {
 	int ret;
 
@@ -906,7 +908,8 @@ maildir_scan( maildir_store_t *ctx, msg_t_array_alloc_t *msglist )
 	DBC *dbc;
 #endif /* USE_DB */
 	msg_t *entry;
-	int i, uid, bl, fnl, ret;
+	int i, bl, fnl, ret;
+	uint uid;
 	time_t now, stamps[2];
 	struct stat st;
 	char buf[_POSIX_PATH_MAX], nbuf[_POSIX_PATH_MAX];
@@ -914,7 +917,7 @@ maildir_scan( maildir_store_t *ctx, msg_t_array_alloc_t *msglist )
   again:
 	ARRAY_INIT( msglist );
 	ctx->total_msgs = ctx->recent_msgs = 0;
-	if (ctx->uvok || ctx->maxuid == INT_MAX) {
+	if (ctx->uvok || ctx->maxuid == UINT_MAX) {
 #ifdef USE_DB
 		if (ctx->usedb) {
 			if (db_create( &tdb, 0, 0 )) {
@@ -980,24 +983,24 @@ maildir_scan( maildir_store_t *ctx, msg_t_array_alloc_t *msglist )
 							closedir( d );
 							goto bork;
 						}
-						uid = INT_MAX;
+						uid = UINT_MAX;
 					} else {
 						value.size = 0;
 						if ((ret = tdb->put( tdb, 0, &key, &value, 0 ))) {
 							tdb->err( tdb, ret, "Maildir error: tdb->put()" );
 							goto mbork;
 						}
-						uid = *(int *)value.data;
+						uid = *(uint *)value.data;
 					}
 				} else
 #endif /* USE_DB */
 				{
-					uid = (ctx->uvok && (u = strstr( e->d_name, ",U=" ))) ? atoi( u + 3 ) : 0;
+					uid = (ctx->uvok && (u = strstr( e->d_name, ",U=" ))) ? strtoul( u + 3, NULL, 10 ) : 0;
 					if (!uid)
-						uid = INT_MAX;
+						uid = UINT_MAX;
 				}
 				if (uid <= ctx->maxuid) {
-					if (uid < ctx->minuid && !find_int_array( ctx->excs, uid ))
+					if (uid < ctx->minuid && !find_uint_array( ctx->excs, uid ))
 						continue;
 					entry = msg_t_array_append( msglist );
 					entry->base = nfstrdup( e->d_name );
@@ -1059,11 +1062,11 @@ maildir_scan( maildir_store_t *ctx, msg_t_array_alloc_t *msglist )
 		qsort( msglist->array.data, msglist->array.size, sizeof(msg_t), maildir_compare );
 		for (uid = i = 0; i < msglist->array.size; i++) {
 			entry = &msglist->array.data[i];
-			if (entry->uid != INT_MAX) {
+			if (entry->uid != UINT_MAX) {
 				if (uid == entry->uid) {
 #if 1
 					/* See comment in maildir_uidval_lock() why this is fatal. */
-					error( "Maildir error: duplicate UID %d.\n", uid );
+					error( "Maildir error: duplicate UID %u.\n", uid );
 					maildir_free_scan( msglist );
 					return DRV_BOX_BAD;
 #else
@@ -1080,7 +1083,7 @@ maildir_scan( maildir_store_t *ctx, msg_t_array_alloc_t *msglist )
 				if (uid > ctx->nuid) {
 					/* In principle, we could just warn and top up nuid. However, getting into this
 					 * situation might indicate some serious trouble, so let's not make it worse. */
-					error( "Maildir error: UID %d is beyond highest assigned UID %d.\n", uid, ctx->nuid );
+					error( "Maildir error: UID %u is beyond highest assigned UID %u.\n", uid, ctx->nuid );
 					maildir_free_scan( msglist );
 					return DRV_BOX_BAD;
 				}
@@ -1105,8 +1108,8 @@ maildir_scan( maildir_store_t *ctx, msg_t_array_alloc_t *msglist )
 				else
 					u = ru = strchr( entry->base, conf->info_delimiter );
 				fnl = (u ?
-					nfsnprintf( buf + bl, sizeof(buf) - bl, "%s/%.*s,U=%d%s", subdirs[entry->recent], (int)(u - entry->base), entry->base, uid, ru ) :
-					nfsnprintf( buf + bl, sizeof(buf) - bl, "%s/%s,U=%d", subdirs[entry->recent], entry->base, uid ))
+					nfsnprintf( buf + bl, sizeof(buf) - bl, "%s/%.*s,U=%u%s", subdirs[entry->recent], (int)(u - entry->base), entry->base, uid, ru ) :
+					nfsnprintf( buf + bl, sizeof(buf) - bl, "%s/%s,U=%u", subdirs[entry->recent], entry->base, uid ))
 					- 4;
 				memcpy( nbuf, buf, bl + 4 );
 				nfsnprintf( nbuf + bl + 4, sizeof(nbuf) - bl - 4, "%s", entry->base );
@@ -1160,7 +1163,7 @@ maildir_scan( maildir_store_t *ctx, msg_t_array_alloc_t *msglist )
 						break;
 					if (want_tuid && starts_with( nbuf, bufl, "X-TUID: ", 8 )) {
 						if (bufl < 8 + TUIDL) {
-							error( "Maildir error: malformed X-TUID header (UID %d)\n", uid );
+							error( "Maildir error: malformed X-TUID header (UID %u)\n", uid );
 							continue;
 						}
 						memcpy( entry->tuid, nbuf + 8, TUIDL );
@@ -1411,7 +1414,7 @@ maildir_prepare_load_box( store_t *gctx, int opts )
 }
 
 static void
-maildir_load_box( store_t *gctx, int minuid, int maxuid, int newuid, int seenuid, int_array_t excs,
+maildir_load_box( store_t *gctx, uint minuid, uint maxuid, uint newuid, uint seenuid, uint_array_t excs,
                   void (*cb)( int sts, message_t *msgs, int total_msgs, int recent_msgs, void *aux ), void *aux )
 {
 	maildir_store_t *ctx = (maildir_store_t *)gctx;
@@ -1454,31 +1457,31 @@ maildir_rescan( maildir_store_t *ctx )
 	{
 		if (!msg) {
 #if 0
-			debug( "adding new message %d\n", msglist.array.data[i].uid );
+			debug( "adding new message %u\n", msglist.array.data[i].uid );
 			maildir_app_msg( ctx, &msgapp, msglist.array.data + i );
 #else
-			debug( "ignoring new message %d\n", msglist.array.data[i].uid );
+			debug( "ignoring new message %u\n", msglist.array.data[i].uid );
 #endif
 			i++;
 		} else if (i >= msglist.array.size) {
-			debug( "purging deleted message %d\n", msg->gen.uid );
+			debug( "purging deleted message %u\n", msg->gen.uid );
 			msg->gen.status = M_DEAD;
 			msgapp = &msg->gen.next;
 		} else if (msglist.array.data[i].uid < msg->gen.uid) {
 			/* this should not happen, actually */
 #if 0
-			debug( "adding new message %d\n", msglist.array.data[i].uid );
+			debug( "adding new message %u\n", msglist.array.data[i].uid );
 			maildir_app_msg( ctx, &msgapp, msglist.array.data + i );
 #else
-			debug( "ignoring new message %d\n", msglist.array.data[i].uid );
+			debug( "ignoring new message %u\n", msglist.array.data[i].uid );
 #endif
 			i++;
 		} else if (msglist.array.data[i].uid > msg->gen.uid) {
-			debug( "purging deleted message %d\n", msg->gen.uid );
+			debug( "purging deleted message %u\n", msg->gen.uid );
 			msg->gen.status = M_DEAD;
 			msgapp = &msg->gen.next;
 		} else {
-			debug( "updating message %d\n", msg->gen.uid );
+			debug( "updating message %u\n", msg->gen.uid );
 			msg->gen.status &= ~(M_FLAGS|M_RECENT);
 			free( msg->base );
 			free( msg->gen.msgid );
@@ -1558,11 +1561,12 @@ maildir_make_flags( char info_delimiter, int flags, char *buf )
 
 static void
 maildir_store_msg( store_t *gctx, msg_data_t *data, int to_trash,
-                   void (*cb)( int sts, int uid, void *aux ), void *aux )
+                   void (*cb)( int sts, uint uid, void *aux ), void *aux )
 {
 	maildir_store_t *ctx = (maildir_store_t *)gctx;
 	const char *box;
-	int ret, fd, bl, uid;
+	int ret, fd, bl;
+	uint uid;
 	char buf[_POSIX_PATH_MAX], nbuf[_POSIX_PATH_MAX], fbuf[NUM_FLAGS + 3], base[128];
 
 	bl = nfsnprintf( base, sizeof(base), "%ld.%d_%d.%s", (long)time( 0 ), Pid, ++MaildirCount, Hostname );
@@ -1582,7 +1586,7 @@ maildir_store_msg( store_t *gctx, msg_data_t *data, int to_trash,
 				cb( ret, 0, aux );
 				return;
 			}
-			nfsnprintf( base + bl, sizeof(base) - bl, ",U=%d", uid );
+			nfsnprintf( base + bl, sizeof(base) - bl, ",U=%u", uid );
 		}
 		box = ctx->path;
 	} else {
@@ -1651,14 +1655,14 @@ maildir_store_msg( store_t *gctx, msg_data_t *data, int to_trash,
 }
 
 static void
-maildir_find_new_msgs( store_t *gctx ATTR_UNUSED, int newuid ATTR_UNUSED,
+maildir_find_new_msgs( store_t *gctx ATTR_UNUSED, uint newuid ATTR_UNUSED,
                        void (*cb)( int sts, message_t *msgs, void *aux ) ATTR_UNUSED, void *aux ATTR_UNUSED )
 {
 	assert( !"maildir_find_new_msgs is not supposed to be called" );
 }
 
 static void
-maildir_set_msg_flags( store_t *gctx, message_t *gmsg, int uid ATTR_UNUSED, int add, int del,
+maildir_set_msg_flags( store_t *gctx, message_t *gmsg, uint uid ATTR_UNUSED, int add, int del,
                        void (*cb)( int sts, void *aux ), void *aux )
 {
 	maildir_store_conf_t *conf = (maildir_store_conf_t *)gctx->conf;

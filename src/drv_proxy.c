@@ -195,8 +195,8 @@ proxy_@name@( store_t *gctx@decl_args@, void (*cb)( @decl_cb_args@void *aux ), v
 //# DEFINE load_box_pre_print_args
 	static char ubuf[12];
 //# END
-//# DEFINE load_box_print_fmt_args , [%d,%s] (new >= %d, seen <= %d)
-//# DEFINE load_box_print_pass_args , minuid, (maxuid == INT_MAX) ? "inf" : (nfsnprintf( ubuf, sizeof(ubuf), "%d", maxuid ), ubuf), newuid, seenuid
+//# DEFINE load_box_print_fmt_args , [%u,%s] (new >= %u, seen <= %u)
+//# DEFINE load_box_print_pass_args , minuid, (maxuid == UINT_MAX) ? "inf" : (nfsnprintf( ubuf, sizeof(ubuf), "%u", maxuid ), ubuf), newuid, seenuid
 //# DEFINE load_box_print_args
 	if (excs.size) {
 		debugn( "  excs:" );
@@ -213,7 +213,7 @@ proxy_@name@( store_t *gctx@decl_args@, void (*cb)( @decl_cb_args@void *aux ), v
 //# DEFINE load_box_print_cb_args
 	if (sts == DRV_OK) {
 		for (message_t *msg = msgs; msg; msg = msg->next)
-			debug( "  uid=%5d, flags=%4s, size=%6d, tuid=%." stringify(TUIDL) "s\n",
+			debug( "  uid=%5u, flags=%4s, size=%6d, tuid=%." stringify(TUIDL) "s\n",
 			       msg->uid, (msg->status & M_FLAGS) ? (proxy_make_flags( msg->flags, fbuf ), fbuf) : "?", msg->size, *msg->tuid ? msg->tuid : "?" );
 	}
 //# END
@@ -223,7 +223,7 @@ proxy_@name@( store_t *gctx@decl_args@, void (*cb)( @decl_cb_args@void *aux ), v
 //# DEFINE find_new_msgs_print_cb_args
 	if (sts == DRV_OK) {
 		for (message_t *msg = msgs; msg; msg = msg->next)
-			debug( "  uid=%5d, tuid=%." stringify(TUIDL) "s\n", msg->uid, msg->tuid );
+			debug( "  uid=%5u, tuid=%." stringify(TUIDL) "s\n", msg->uid, msg->tuid );
 	}
 //# END
 
@@ -233,7 +233,7 @@ proxy_@name@( store_t *gctx@decl_args@, void (*cb)( @decl_cb_args@void *aux ), v
 //# DEFINE fetch_msg_assign_state
 	cmd->data = data;
 //# END
-//# DEFINE fetch_msg_print_fmt_args , uid=%d, want_flags=%s, want_date=%s
+//# DEFINE fetch_msg_print_fmt_args , uid=%u, want_flags=%s, want_date=%s
 //# DEFINE fetch_msg_print_pass_args , msg->uid, !(msg->status & M_FLAGS) ? "yes" : "no", data->date ? "yes" : "no"
 //# DEFINE fetch_msg_pre_print_cb_args
 	static char fbuf[as(Flags) + 1];
@@ -270,10 +270,10 @@ proxy_@name@( store_t *gctx@decl_args@, void (*cb)( @decl_cb_args@void *aux ), v
 	proxy_make_flags( add, fbuf1 );
 	proxy_make_flags( del, fbuf2 );
 //# END
-//# DEFINE set_msg_flags_print_fmt_args , uid=%d, add=%s, del=%s
+//# DEFINE set_msg_flags_print_fmt_args , uid=%u, add=%s, del=%s
 //# DEFINE set_msg_flags_print_pass_args , uid, fbuf1, fbuf2
 
-//# DEFINE trash_msg_print_fmt_args , uid=%d
+//# DEFINE trash_msg_print_fmt_args , uid=%u
 //# DEFINE trash_msg_print_pass_args , msg->uid
 
 //# DEFINE free_store_action

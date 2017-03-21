@@ -112,7 +112,7 @@ struct imap_store {
 	// note that the message counts do _not_ reflect stats from msgs,
 	// but mailbox totals. also, don't trust them beyond the initial load.
 	int total_msgs, recent_msgs;
-	int uidvalidity, uidnext;
+	uint uidvalidity, uidnext;
 	message_t *msgs;
 	message_t **msgapp; /* FETCH results */
 	uint caps; /* CAPABILITY results */
@@ -157,7 +157,7 @@ struct imap_cmd {
 		void (*done)( imap_store_t *ctx, imap_cmd_t *cmd, int response );
 		char *data;
 		int data_len;
-		int uid; /* to identify fetch responses */
+		uint uid; /* to identify fetch responses */
 		char high_prio; /* if command is queued, put it at the front of the queue. */
 		char to_trash; /* we are storing to trash, not current. */
 		char create; /* create the mailbox if we get an error which suggests so. */
@@ -179,9 +179,9 @@ typedef struct {
 
 typedef struct {
 	imap_cmd_t gen;
-	void (*callback)( int sts, int uid, void *aux );
+	void (*callback)( int sts, uint uid, void *aux );
 	void *callback_aux;
-	int out_uid;
+	uint out_uid;
 } imap_cmd_out_uid_t;
 
 typedef struct {
@@ -189,7 +189,7 @@ typedef struct {
 	void (*callback)( int sts, message_t *msgs, void *aux );
 	void *callback_aux;
 	message_t **out_msgs;
-	int uid;
+	uint uid;
 } imap_cmd_find_new_t;
 
 typedef struct {
@@ -498,6 +498,8 @@ imap_vprintf( const char *fmt, va_list ap )
 					d += l;
 				} else if (c == 'd') {
 					d += nfsnprintf( d, ed - d, "%d", va_arg( ap , int ) );
+				} else if (c == 'u') {
+					d += nfsnprintf( d, ed - d, "%u", va_arg( ap , uint ) );
 				} else {
 					fputs( "Fatal: unsupported format specifier. Please report a bug.\n", stderr );
 					abort();
@@ -959,12 +961,12 @@ static int
 parse_fetch_rsp( imap_store_t *ctx, list_t *list, char *s ATTR_UNUSED )
 {
 	list_t *tmp, *flags;
-	char *body = 0, *tuid = 0, *msgid = 0;
+	char *body = 0, *tuid = 0, *msgid = 0, *ep;
 	imap_message_t *cur;
 	msg_data_t *msgdata;
 	imap_cmd_t *cmdp;
-	int uid = 0, mask = 0, status = 0, size = 0;
-	uint i;
+	int mask = 0, status = 0, size = 0;
+	uint i, uid = 0;
 	time_t date = 0;
 
 	if (!is_list( list )) {
@@ -977,9 +979,7 @@ parse_fetch_rsp( imap_store_t *ctx, list_t *list, char *s ATTR_UNUSED )
 		if (is_atom( tmp )) {
 			if (!strcmp( "UID", tmp->val )) {
 				tmp = tmp->next;
-				if (is_atom( tmp ))
-					uid = atoi( tmp->val );
-				else
+				if (!is_atom( tmp ) || (uid = strtoul( tmp->val, &ep, 10 ), *ep))
 					error( "IMAP error: unable to parse UID\n" );
 			} else if (!strcmp( "FLAGS", tmp->val )) {
 				tmp = tmp->next;
@@ -1016,9 +1016,7 @@ parse_fetch_rsp( imap_store_t *ctx, list_t *list, char *s ATTR_UNUSED )
 					error( "IMAP error: unable to parse INTERNALDATE\n" );
 			} else if (!strcmp( "RFC822.SIZE", tmp->val )) {
 				tmp = tmp->next;
-				if (is_atom( tmp ))
-					size = atoi( tmp->val );
-				else
+				if (!is_atom( tmp ) || (size = strtoul( tmp->val, &ep, 10 ), *ep))
 					error( "IMAP error: unable to parse RFC822.SIZE\n" );
 			} else if (!strcmp( "BODY[]", tmp->val )) {
 				tmp = tmp->next;
@@ -1046,7 +1044,7 @@ parse_fetch_rsp( imap_store_t *ctx, list_t *list, char *s ATTR_UNUSED )
 							break;
 						if (starts_with_upper( val, len, "X-TUID: ", 8 )) {
 							if (len < 8 + TUIDL) {
-								error( "IMAP error: malformed X-TUID header (UID %d)\n", uid );
+								error( "IMAP error: malformed X-TUID header (UID %u)\n", uid );
 								continue;
 							}
 							tuid = val + 8;
@@ -1093,7 +1091,7 @@ parse_fetch_rsp( imap_store_t *ctx, list_t *list, char *s ATTR_UNUSED )
 		for (cmdp = ctx->in_progress; cmdp; cmdp = cmdp->next)
 			if (cmdp->param.uid == uid)
 				goto gotuid;
-		error( "IMAP error: unexpected FETCH response (UID %d)\n", uid );
+		error( "IMAP error: unexpected FETCH response (UID %u)\n", uid );
 		free_list( list );
 		return LIST_BAD;
 	  gotuid:
@@ -1166,13 +1164,15 @@ parse_response_code( imap_store_t *ctx, imap_cmd_t *cmd, char *s )
 		goto bad_resp;
 	if (!strcmp( "UIDVALIDITY", arg )) {
 		if (!(arg = next_arg( &s )) ||
-		    (ctx->uidvalidity = strtoll( arg, &earg, 10 ), *earg))
+		    (ctx->uidvalidity = strtoul( arg, &earg, 10 ), *earg))
 		{
 			error( "IMAP error: malformed UIDVALIDITY status\n" );
 			return RESP_CANCEL;
 		}
 	} else if (!strcmp( "UIDNEXT", arg )) {
-		if (!(arg = next_arg( &s )) || !(ctx->uidnext = atoi( arg ))) {
+		if (!(arg = next_arg( &s )) ||
+		    (ctx->uidnext = strtoul( arg, &earg, 10 ), *earg))
+		{
 			error( "IMAP error: malformed NEXTUID status\n" );
 			return RESP_CANCEL;
 		}
@@ -1186,9 +1186,9 @@ parse_response_code( imap_store_t *ctx, imap_cmd_t *cmd, char *s )
 		error( "*** IMAP ALERT *** %s\n", p );
 	} else if (cmd && !strcmp( "APPENDUID", arg )) {
 		if (!(arg = next_arg( &s )) ||
-		    (ctx->uidvalidity = strtoll( arg, &earg, 10 ), *earg) ||
+		    (ctx->uidvalidity = strtoul( arg, &earg, 10 ), *earg) ||
 		    !(arg = next_arg( &s )) ||
-		    !(((imap_cmd_out_uid_t *)cmd)->out_uid = atoi( arg )))
+		    (((imap_cmd_out_uid_t *)cmd)->out_uid = strtoul( arg, &earg, 10 ), *earg))
 		{
 			error( "IMAP error: malformed APPENDUID status\n" );
 			return RESP_CANCEL;
@@ -2538,7 +2538,7 @@ static void imap_submit_load( imap_store_t *, const char *, int, imap_load_box_s
 static void imap_submit_load_p3( imap_store_t *ctx, imap_load_box_state_t * );
 
 static void
-imap_load_box( store_t *gctx, int minuid, int maxuid, int newuid, int seenuid, int_array_t excs,
+imap_load_box( store_t *gctx, uint minuid, uint maxuid, uint newuid, uint seenuid, uint_array_t excs,
                void (*cb)( int sts, message_t *msgs, int total_msgs, int recent_msgs, void *aux ), void *aux )
 {
 	imap_store_t *ctx = (imap_store_t *)gctx;
@@ -2554,15 +2554,15 @@ imap_load_box( store_t *gctx, int minuid, int maxuid, int newuid, int seenuid, i
 			for (bl = 0; i < excs.size && bl < 960; i++) {
 				if (bl)
 					buf[bl++] = ',';
-				bl += sprintf( buf + bl, "%d", excs.data[i] );
+				bl += sprintf( buf + bl, "%u", excs.data[i] );
 				j = i;
 				for (; i + 1 < excs.size && excs.data[i + 1] == excs.data[i] + 1; i++) {}
 				if (i != j)
-					bl += sprintf( buf + bl, ":%d", excs.data[i] );
+					bl += sprintf( buf + bl, ":%u", excs.data[i] );
 			}
 			imap_submit_load( ctx, buf, shifted_bit( ctx->opts, OPEN_OLD_IDS, WantMsgids ), sts );
 		}
-		if (maxuid == INT_MAX)
+		if (maxuid == UINT_MAX)
 			maxuid = ctx->uidnext - 1;
 		if (maxuid >= minuid) {
 			imap_range_t ranges[3];
@@ -2578,7 +2578,7 @@ imap_load_box( store_t *gctx, int minuid, int maxuid, int newuid, int seenuid, i
 			if (ctx->opts & OPEN_OLD_IDS)
 				imap_set_range( ranges, &nranges, WantMsgids, 0, seenuid );
 			for (int r = 0; r < nranges; r++) {
-				sprintf( buf, "%d:%d", ranges[r].first, ranges[r].last );
+				sprintf( buf, "%u:%u", ranges[r].first, ranges[r].last );
 				imap_submit_load( ctx, buf, ranges[r].flags, sts );
 			}
 		}
@@ -2633,7 +2633,7 @@ imap_fetch_msg( store_t *ctx, message_t *msg, msg_data_t *data,
 	cmd->msg_data = data;
 	data->data = 0;
 	imap_exec( (imap_store_t *)ctx, &cmd->gen.gen, imap_fetch_msg_p2,
-	           "UID FETCH %d (%s%sBODY.PEEK[])", msg->uid,
+	           "UID FETCH %u (%s%sBODY.PEEK[])", msg->uid,
 	           !(msg->status & M_FLAGS) ? "FLAGS " : "",
 	           (data->date== -1) ? "INTERNALDATE " : "" );
 }
@@ -2680,18 +2680,18 @@ static void imap_set_flags_p2( imap_store_t *, imap_cmd_t *, int );
 static void imap_set_flags_p3( imap_set_msg_flags_state_t * );
 
 static void
-imap_flags_helper( imap_store_t *ctx, int uid, char what, int flags,
+imap_flags_helper( imap_store_t *ctx, uint uid, char what, int flags,
                    imap_set_msg_flags_state_t *sts )
 {
 	char buf[256];
 
 	buf[imap_make_flags( flags, buf )] = 0;
 	imap_exec( ctx, imap_refcounted_new_cmd( &sts->gen ), imap_set_flags_p2,
-	           "UID STORE %d %cFLAGS.SILENT %s", uid, what, buf );
+	           "UID STORE %u %cFLAGS.SILENT %s", uid, what, buf );
 }
 
 static void
-imap_set_msg_flags( store_t *gctx, message_t *msg, int uid, int add, int del,
+imap_set_msg_flags( store_t *gctx, message_t *msg, uint uid, int add, int del,
                     void (*cb)( int sts, void *aux ), void *aux )
 {
 	imap_store_t *ctx = (imap_store_t *)gctx;
@@ -2759,11 +2759,11 @@ imap_close_box( store_t *gctx,
 					continue;
 				if (bl)
 					buf[bl++] = ',';
-				bl += sprintf( buf + bl, "%d", msg->uid );
+				bl += sprintf( buf + bl, "%u", msg->uid );
 				fmsg = msg;
 				for (; (nmsg = msg->next) && (nmsg->flags & F_DELETED); msg = nmsg) {}
 				if (msg != fmsg)
-					bl += sprintf( buf + bl, ":%d", msg->uid );
+					bl += sprintf( buf + bl, ":%u", msg->uid );
 			}
 			if (!bl)
 				break;
@@ -2813,7 +2813,7 @@ imap_trash_msg( store_t *gctx, message_t *msg,
 		return;
 	}
 	imap_exec( ctx, &cmd->gen, imap_done_simple_msg,
-	           CAP(MOVE) ? "UID MOVE %d \"%\\s\"" : "UID COPY %d \"%\\s\"", msg->uid, buf );
+	           CAP(MOVE) ? "UID MOVE %u \"%\\s\"" : "UID COPY %u \"%\\s\"", msg->uid, buf );
 	free( buf );
 }
 
@@ -2829,7 +2829,7 @@ my_strftime( char *s, size_t max, const char *fmt, const struct tm *tm )
 
 static void
 imap_store_msg( store_t *gctx, msg_data_t *data, int to_trash,
-                void (*cb)( int sts, int uid, void *aux ), void *aux )
+                void (*cb)( int sts, uint uid, void *aux ), void *aux )
 {
 	imap_store_t *ctx = (imap_store_t *)gctx;
 	imap_cmd_out_uid_t *cmd;
@@ -2891,7 +2891,7 @@ static void imap_find_new_msgs_p3( imap_store_t *, imap_cmd_t *, int );
 static void imap_find_new_msgs_p4( imap_store_t *, imap_cmd_t *, int );
 
 static void
-imap_find_new_msgs( store_t *gctx, int newuid,
+imap_find_new_msgs( store_t *gctx, uint newuid,
                     void (*cb)( int sts, message_t *msgs, void *aux ), void *aux )
 {
 	imap_store_t *ctx = (imap_store_t *)gctx;
@@ -2938,7 +2938,7 @@ imap_find_new_msgs_p3( imap_store_t *ctx, imap_cmd_t *gcmd, int response )
 	INIT_IMAP_CMD(imap_cmd_find_new_t, cmd, cmdp->callback, cmdp->callback_aux)
 	cmd->out_msgs = cmdp->out_msgs;
 	imap_exec( (imap_store_t *)ctx, &cmd->gen, imap_find_new_msgs_p4,
-	           "UID FETCH %d:%d (UID BODY.PEEK[HEADER.FIELDS (X-TUID)])", cmdp->uid, ctx->uidnext - 1 );
+	           "UID FETCH %u:%u (UID BODY.PEEK[HEADER.FIELDS (X-TUID)])", cmdp->uid, ctx->uidnext - 1 );
 }
 
 static void

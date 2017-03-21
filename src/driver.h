@@ -66,7 +66,7 @@ typedef struct message {
 	char *msgid; /* owned */
 	/* string_list_t *keywords; */
 	int size; /* zero implies "not fetched" */
-	int uid;
+	uint uid;
 	uchar flags, status;
 	char tuid[TUIDL];
 } message_t;
@@ -83,7 +83,7 @@ typedef struct message {
 #define OPEN_FIND       (1<<8)
 #define OPEN_OLD_IDS    (1<<9)
 
-#define UIDVAL_BAD -1
+#define UIDVAL_BAD ((uint)-1)
 
 typedef struct store {
 	struct store *next;
@@ -206,7 +206,7 @@ struct driver {
 	 * Messages up to seenuid need to have the size populated when OPEN_OLD_SIZE is set;
 	 * likewise messages above seenuid when OPEN_NEW_SIZE is set.
 	 * The returned message list remains owned by the driver. */
-	void (*load_box)( store_t *ctx, int minuid, int maxuid, int newuid, int seenuid, int_array_t excs,
+	void (*load_box)( store_t *ctx, uint minuid, uint maxuid, uint newuid, uint seenuid, uint_array_t excs,
 	                  void (*cb)( int sts, message_t *msgs, int total_msgs, int recent_msgs, void *aux ), void *aux );
 
 	/* Fetch the contents and flags of the given message from the current mailbox. */
@@ -216,20 +216,20 @@ struct driver {
 	/* Store the given message to either the current mailbox or the trash folder.
 	 * If the new copy's UID can be immediately determined, return it, otherwise 0. */
 	void (*store_msg)( store_t *ctx, msg_data_t *data, int to_trash,
-	                   void (*cb)( int sts, int uid, void *aux ), void *aux );
+	                   void (*cb)( int sts, uint uid, void *aux ), void *aux );
 
 	/* Index the messages which have newly appeared in the mailbox, including their
 	 * temporary UID headers. This is needed if store_msg() does not guarantee returning
 	 * a UID; otherwise the driver needs to implement only the OPEN_FIND flag.
 	 * The returned message list remains owned by the driver. */
-	void (*find_new_msgs)( store_t *ctx, int newuid,
+	void (*find_new_msgs)( store_t *ctx, uint newuid,
 	                       void (*cb)( int sts, message_t *msgs, void *aux ), void *aux );
 
 	/* Add/remove the named flags to/from the given message. The message may be either
 	 * a pre-fetched one (in which case the in-memory representation is updated),
 	 * or it may be identifed by UID only. The operation may be delayed until commit()
 	 * is called. */
-	void (*set_msg_flags)( store_t *ctx, message_t *msg, int uid, int add, int del, /* msg can be null, therefore uid as a fallback */
+	void (*set_msg_flags)( store_t *ctx, message_t *msg, uint uid, int add, int del, /* msg can be null, therefore uid as a fallback */
 	                       void (*cb)( int sts, void *aux ), void *aux );
 
 	/* Move the given message from the current mailbox to the trash folder.

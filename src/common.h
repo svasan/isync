@@ -174,9 +174,9 @@ int map_name( const char *arg, char **result, int reserve, const char *in, const
 		(arr)->data = nfrealloc( (arr)->data, (arr)->size * sizeof((arr)->data[0]) ); \
 	} while (0)
 
-DEFINE_ARRAY_TYPE(int)
-void sort_int_array( int_array_t array );
-int find_int_array( const int_array_t array, int value );
+DEFINE_ARRAY_TYPE(uint)
+void sort_uint_array( uint_array_t array );
+int find_uint_array( const uint_array_t array, uint value );
 
 void arc4_init( void );
 uchar arc4_getbyte( void );

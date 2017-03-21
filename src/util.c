@@ -539,24 +539,24 @@ map_name( const char *arg, char **result, int reserve, const char *in, const cha
 }
 
 static int
-compare_ints( const void *l, const void *r )
+compare_uints( const void *l, const void *r )
 {
-	return *(int *)l - *(int *)r;
+	return *(uint *)l - *(uint *)r;
 }
 
 void
-sort_int_array( int_array_t array )
+sort_uint_array( uint_array_t array )
 {
-	qsort( array.data, array.size, sizeof(int), compare_ints );
+	qsort( array.data, array.size, sizeof(uint), compare_uints );
 }
 
 int
-find_int_array( int_array_t array, int value )
+find_uint_array( uint_array_t array, uint value )
 {
 	int bot = 0, top = array.size - 1;
 	while (bot <= top) {
 		int i = (bot + top) / 2;
-		int elt = array.data[i];
+		uint elt = array.data[i];
 		if (elt == value)
 			return 1;
 		if (elt < value)
