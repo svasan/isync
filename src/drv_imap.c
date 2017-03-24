@@ -107,6 +107,8 @@ struct imap_store {
 	uint got_namespace:1;
 	char delimiter[2]; /* hierarchy delimiter */
 	list_t *ns_personal, *ns_other, *ns_shared; /* NAMESPACE info */
+	string_list_t *boxes; // _list results
+	char listed; // was _list already run with these flags?
 	message_t **msgapp; /* FETCH results */
 	uint caps; /* CAPABILITY results */
 	string_list_t *auth_mechs;
@@ -1257,8 +1259,8 @@ parse_list_rsp_p2( imap_store_t *ctx, list_t *list, char *cmd ATTR_UNUSED )
 		warn( "IMAP warning: ignoring mailbox %s (reserved character '/' in name)\n", arg );
 		goto skip;
 	}
-	narg->next = ctx->gen.boxes;
-	ctx->gen.boxes = narg;
+	narg->next = ctx->boxes;
+	ctx->boxes = narg;
   skip:
 	free_list( list );
 	return LIST_OK;
@@ -1527,7 +1529,7 @@ static void
 imap_cleanup_store( imap_store_t *ctx )
 {
 	free_generic_messages( ctx->gen.msgs );
-	free_string_list( ctx->gen.boxes );
+	free_string_list( ctx->boxes );
 }
 
 static void
@@ -2901,16 +2903,16 @@ imap_find_new_msgs_p3( imap_store_t *ctx, imap_cmd_t *gcmd, int response )
 
 typedef struct {
 	imap_cmd_refcounted_state_t gen;
-	void (*callback)( int sts, void *aux );
+	void (*callback)( int sts, string_list_t *, void *aux );
 	void *callback_aux;
 } imap_list_store_state_t;
 
 static void imap_list_store_p2( imap_store_t *, imap_cmd_t *, int );
-static void imap_list_store_p3( imap_list_store_state_t * );
+static void imap_list_store_p3( imap_store_t *, imap_list_store_state_t * );
 
 static void
 imap_list_store( store_t *gctx, int flags,
-                 void (*cb)( int sts, void *aux ), void *aux )
+                 void (*cb)( int sts, string_list_t *boxes, void *aux ), void *aux )
 {
 	imap_store_t *ctx = (imap_store_t *)gctx;
 	INIT_REFCOUNTED_STATE(imap_list_store_state_t, sts, cb, aux)
@@ -2931,36 +2933,36 @@ imap_list_store( store_t *gctx, int flags,
 	//
 	int pfx_is_empty = !*ctx->prefix;
 	int pfx_is_inbox = !pfx_is_empty && is_inbox( ctx, ctx->prefix, -1 );
-	if (((flags & (LIST_PATH | LIST_PATH_MAYBE)) || pfx_is_empty) && !pfx_is_inbox && !(ctx->gen.listed & LIST_PATH)) {
-		ctx->gen.listed |= LIST_PATH;
+	if (((flags & (LIST_PATH | LIST_PATH_MAYBE)) || pfx_is_empty) && !pfx_is_inbox && !(ctx->listed & LIST_PATH)) {
+		ctx->listed |= LIST_PATH;
 		if (pfx_is_empty)
-			ctx->gen.listed |= LIST_INBOX;
+			ctx->listed |= LIST_INBOX;
 		imap_exec( ctx, imap_refcounted_new_cmd( &sts->gen ), imap_list_store_p2,
 		           "LIST \"\" \"%\\s*\"", ctx->prefix );
 	}
-	if (((flags & LIST_INBOX) || pfx_is_inbox) && !pfx_is_empty && !(ctx->gen.listed & LIST_INBOX)) {
-		ctx->gen.listed |= LIST_INBOX;
+	if (((flags & LIST_INBOX) || pfx_is_inbox) && !pfx_is_empty && !(ctx->listed & LIST_INBOX)) {
+		ctx->listed |= LIST_INBOX;
 		if (pfx_is_inbox)
-			ctx->gen.listed |= LIST_PATH;
+			ctx->listed |= LIST_PATH;
 		imap_exec( ctx, imap_refcounted_new_cmd( &sts->gen ), imap_list_store_p2,
 		           "LIST \"\" INBOX*" );
 	}
-	imap_list_store_p3( sts );
+	imap_list_store_p3( ctx, sts );
 }
 
 static void
-imap_list_store_p2( imap_store_t *ctx ATTR_UNUSED, imap_cmd_t *cmd, int response )
+imap_list_store_p2( imap_store_t *ctx, imap_cmd_t *cmd, int response )
 {
 	imap_list_store_state_t *sts = (imap_list_store_state_t *)((imap_cmd_refcounted_t *)cmd)->state;
 
 	transform_refcounted_box_response( &sts->gen, response );
-	imap_list_store_p3( sts );
+	imap_list_store_p3( ctx, sts );
 }
 
 static void
-imap_list_store_p3( imap_list_store_state_t *sts )
+imap_list_store_p3( imap_store_t *ctx, imap_list_store_state_t *sts )
 {
-	DONE_REFCOUNTED_STATE(sts)
+	DONE_REFCOUNTED_STATE_ARGS(sts, ctx->boxes)
 }
 
 /******************* imap_cancel_cmds *******************/

@@ -775,7 +775,7 @@ store_bad( void *aux )
 }
 
 static void store_connected( int sts, void *aux );
-static void store_listed( int sts, void *aux );
+static void store_listed( int sts, string_list_t *boxes, void *aux );
 static int sync_listed_boxes( main_vars_t *mvars, box_ent_t *mbox );
 static void done_sync_2_dyn( int sts, void *aux );
 static void done_sync( int sts, void *aux );
@@ -999,10 +999,9 @@ store_connected( int sts, void *aux )
 }
 
 static void
-store_listed( int sts, void *aux )
+store_listed( int sts, string_list_t *boxes, void *aux )
 {
 	MVARS(aux)
-	string_list_t *boxes = mvars->ctx[t]->boxes;
 	string_list_t *box;
 
 	switch (sts) {

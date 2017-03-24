@@ -86,8 +86,6 @@ typedef struct message {
 typedef struct store {
 	struct store *next;
 	store_conf_t *conf; /* foreign */
-	string_list_t *boxes; /* _list results - own */
-	char listed; /* was _list already run? */
 
 	/* currently open mailbox */
 	message_t *msgs; /* own */
@@ -161,9 +159,10 @@ struct driver {
 	 * Pending commands will have their callbacks synchronously invoked with DRV_CANCELED. */
 	void (*cancel_store)( store_t *ctx );
 
-	/* List the mailboxes in this store. Flags are ORed LIST_* values. */
+	/* List the mailboxes in this store. Flags are ORed LIST_* values.
+	 * The returned box list remains owned by the driver. */
 	void (*list_store)( store_t *ctx, int flags,
-	                    void (*cb)( int sts, void *aux ), void *aux );
+	                    void (*cb)( int sts, string_list_t *boxes, void *aux ), void *aux );
 
 	/* Invoked before open_box(), this informs the driver which box is to be opened. */
 	int (*select_box)( store_t *ctx, const char *name );
