@@ -153,7 +153,7 @@ typedef struct {
 	const char *orig_name[2];
 	message_t *new_msgs[2];
 	int_array_alloc_t trashed_msgs[2];
-	int state[2], ref_count, nsrecs, ret, lfd, existing, replayed;
+	int state[2], opts[2], ref_count, nsrecs, ret, lfd, existing, replayed;
 	int new_pending[2], flags_pending[2], trash_pending[2];
 	int maxuid[2]; /* highest UID that was already propagated */
 	int newmaxuid[2]; /* highest UID that is currently being propagated */
@@ -1258,11 +1258,11 @@ box_opened2( sync_vars_t *svars, int t )
 					assert( !"sync record with stray TUID" );
 			}
 		}
-	svars->drv[M]->prepare_load_box( ctx[M], opts[M] );
-	svars->drv[S]->prepare_load_box( ctx[S], opts[S] );
+	svars->opts[M] = svars->drv[M]->prepare_load_box( ctx[M], opts[M] );
+	svars->opts[S] = svars->drv[S]->prepare_load_box( ctx[S], opts[S] );
 
 	ARRAY_INIT( &mexcs );
-	if (svars->ctx[M]->opts & OPEN_OLD) {
+	if (svars->opts[M] & OPEN_OLD) {
 		if (chan->max_messages) {
 			/* When messages have been expired on the slave, the master fetch is split into
 			 * two ranges: The bulk fetch which corresponds with the most recent messages, and an
@@ -1275,7 +1275,7 @@ box_opened2( sync_vars_t *svars, int t )
 				if (srec->status & S_DEAD)
 					continue;
 				if (srec->uid[M] > 0 && srec->uid[S] > 0 && minwuid > srec->uid[M] &&
-				    (!(svars->ctx[M]->opts & OPEN_NEW) || svars->maxuid[M] >= srec->uid[M])) {
+				    (!(svars->opts[M] & OPEN_NEW) || svars->maxuid[M] >= srec->uid[M])) {
 					/* The pair is alive, but outside the bulk range. */
 					*int_array_append( &mexcs ) = srec->uid[M];
 				}
@@ -1294,7 +1294,7 @@ box_opened2( sync_vars_t *svars, int t )
 	sync_ref( svars );
 	load_box( svars, M, minwuid, mexcs.array );
 	if (!check_cancel( svars ))
-		load_box( svars, S, (ctx[S]->opts & OPEN_OLD) ? 1 : INT_MAX, (int_array_t){ 0, 0 } );
+		load_box( svars, S, (svars->opts[S] & OPEN_OLD) ? 1 : INT_MAX, (int_array_t){ 0, 0 } );
 	sync_deref( svars );
 }
 
@@ -1315,15 +1315,15 @@ load_box( sync_vars_t *svars, int t, int minwuid, int_array_t mexcs )
 {
 	int maxwuid, seenuid;
 
-	if (svars->ctx[t]->opts & OPEN_NEW) {
+	if (svars->opts[t] & OPEN_NEW) {
 		if (minwuid > svars->maxuid[t] + 1)
 			minwuid = svars->maxuid[t] + 1;
 		maxwuid = INT_MAX;
-		if (svars->ctx[t]->opts & (OPEN_OLD_IDS|OPEN_OLD_SIZE))
+		if (svars->opts[t] & (OPEN_OLD_IDS|OPEN_OLD_SIZE))
 			seenuid = get_seenuid( svars, t );
 		else
 			seenuid = 0;
-	} else if (svars->ctx[t]->opts & OPEN_OLD) {
+	} else if (svars->opts[t] & OPEN_OLD) {
 		maxwuid = seenuid = get_seenuid( svars, t );
 	} else
 		maxwuid = seenuid = 0;
@@ -1482,8 +1482,8 @@ box_loaded( int sts, void *aux )
 			continue;
 		debug( "pair (%d,%d)\n", srec->uid[M], srec->uid[S] );
 		// no[] means that a message is known to be not there.
-		no[M] = !srec->msg[M] && (svars->ctx[M]->opts & OPEN_OLD);
-		no[S] = !srec->msg[S] && (svars->ctx[S]->opts & OPEN_OLD);
+		no[M] = !srec->msg[M] && (svars->opts[M] & OPEN_OLD);
+		no[S] = !srec->msg[S] && (svars->opts[S] & OPEN_OLD);
 		if (no[M] && no[S]) {
 			// It does not matter whether one side was already known to be missing
 			// (never stored [skipped or failed] or expunged [possibly expired]) -

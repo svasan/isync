@@ -93,7 +93,6 @@ typedef struct store {
 	message_t *msgs; /* own */
 	int uidvalidity;
 	int uidnext; /* from SELECT responses */
-	uint opts; /* maybe preset? */
 	/* note that the following do _not_ reflect stats from msgs, but mailbox totals */
 	int count; /* # of messages */
 	int recent; /* # of recent messages - don't trust this beyond the initial read */
@@ -196,8 +195,8 @@ struct driver {
 
 	/* Invoked before load_box(), this informs the driver which operations (OP_*)
 	 * will be performed on the mailbox. The driver may extend the set by implicitly
-	 * needed or available operations. */
-	void (*prepare_load_box)( store_t *ctx, int opts );
+	 * needed or available operations. Returns this possibly extended set. */
+	int (*prepare_load_box)( store_t *ctx, int opts );
 
 	/* Load the message attributes needed to perform the requested operations.
 	 * Consider only messages with UIDs between minuid and maxuid (inclusive)

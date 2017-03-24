@@ -69,6 +69,7 @@ typedef struct {
 
 typedef struct {
 	store_t gen;
+	uint opts;
 	int uvfd, uvok, nuid, is_inbox, fresh[3];
 	int minuid, maxuid, newuid, seenuid;
 	int_array_t excs;
@@ -1116,9 +1117,9 @@ maildir_scan( maildir_store_t *ctx, msg_t_array_alloc_t *msglist )
 				free( entry->base );
 				entry->base = nfstrndup( buf + bl + 4, fnl );
 			}
-			int want_size = (uid > ctx->seenuid) ? (ctx->gen.opts & OPEN_NEW_SIZE) : (ctx->gen.opts & OPEN_OLD_SIZE);
-			int want_tuid = ((ctx->gen.opts & OPEN_FIND) && uid >= ctx->newuid);
-			int want_msgid = ((ctx->gen.opts & OPEN_OLD_IDS) && uid <= ctx->seenuid);
+			int want_size = (uid > ctx->seenuid) ? (ctx->opts & OPEN_NEW_SIZE) : (ctx->opts & OPEN_OLD_SIZE);
+			int want_tuid = ((ctx->opts & OPEN_FIND) && uid >= ctx->newuid);
+			int want_msgid = ((ctx->opts & OPEN_OLD_IDS) && uid <= ctx->seenuid);
 			if (!want_size && !want_tuid && !want_msgid)
 				continue;
 			if (!fnl)
@@ -1201,7 +1202,7 @@ maildir_init_msg( maildir_store_t *ctx, maildir_message_t *msg, msg_t *entry )
 	memcpy( msg->gen.tuid, entry->tuid, TUIDL );
 	if (entry->recent)
 		msg->gen.status |= M_RECENT;
-	if (ctx->gen.opts & OPEN_FLAGS) {
+	if (ctx->opts & OPEN_FLAGS) {
 		msg->gen.status |= M_FLAGS;
 		msg->gen.flags = maildir_parse_flags( ((maildir_store_conf_t *)ctx->gen.conf)->info_prefix, msg->base );
 	} else
@@ -1383,14 +1384,17 @@ maildir_finish_delete_box( store_t *gctx )
 	return DRV_OK;
 }
 
-static void
+static int
 maildir_prepare_load_box( store_t *gctx, int opts )
 {
+	maildir_store_t *ctx = (maildir_store_t *)gctx;
+
 	if (opts & OPEN_SETFLAGS)
 		opts |= OPEN_OLD;
 	if (opts & OPEN_EXPUNGE)
 		opts |= OPEN_OLD|OPEN_NEW|OPEN_FLAGS;
-	gctx->opts = opts;
+	ctx->opts = opts;
+	return opts;
 }
 
 static void

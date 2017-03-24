@@ -100,6 +100,7 @@ struct imap_store {
 	const char *prefix;
 	const char *name;
 	int ref_count;
+	uint opts;
 	enum { SST_BAD, SST_HALF, SST_GOOD } state;
 	/* trash folder's existence is not confirmed yet */
 	enum { TrashUnknown, TrashChecking, TrashKnown } trashnc;
@@ -2436,10 +2437,13 @@ imap_finish_delete_box( store_t *gctx ATTR_UNUSED )
 
 /******************* imap_load_box *******************/
 
-static void
+static int
 imap_prepare_load_box( store_t *gctx, int opts )
 {
-	gctx->opts = opts;
+	imap_store_t *ctx = (imap_store_t *)gctx;
+
+	ctx->opts = opts;
+	return opts;
 }
 
 enum { WantSize = 1, WantTuids = 2, WantMsgids = 4 };
@@ -2495,7 +2499,7 @@ imap_load_box( store_t *gctx, int minuid, int maxuid, int newuid, int seenuid, i
 				if (i != j)
 					bl += sprintf( buf + bl, ":%d", excs.data[i] );
 			}
-			imap_submit_load( ctx, buf, shifted_bit( ctx->gen.opts, OPEN_OLD_IDS, WantMsgids ), sts );
+			imap_submit_load( ctx, buf, shifted_bit( ctx->opts, OPEN_OLD_IDS, WantMsgids ), sts );
 		}
 		if (maxuid == INT_MAX)
 			maxuid = ctx->gen.uidnext - 1;
@@ -2505,12 +2509,12 @@ imap_load_box( store_t *gctx, int minuid, int maxuid, int newuid, int seenuid, i
 			ranges[0].last = maxuid;
 			ranges[0].flags = 0;
 			int nranges = 1;
-			if (ctx->gen.opts & (OPEN_OLD_SIZE | OPEN_NEW_SIZE))
-				imap_set_range( ranges, &nranges, shifted_bit( ctx->gen.opts, OPEN_OLD_SIZE, WantSize),
-				                                  shifted_bit( ctx->gen.opts, OPEN_NEW_SIZE, WantSize), seenuid );
-			if (ctx->gen.opts & OPEN_FIND)
+			if (ctx->opts & (OPEN_OLD_SIZE | OPEN_NEW_SIZE))
+				imap_set_range( ranges, &nranges, shifted_bit( ctx->opts, OPEN_OLD_SIZE, WantSize),
+				                                  shifted_bit( ctx->opts, OPEN_NEW_SIZE, WantSize), seenuid );
+			if (ctx->opts & OPEN_FIND)
 				imap_set_range( ranges, &nranges, 0, WantTuids, newuid - 1 );
-			if (ctx->gen.opts & OPEN_OLD_IDS)
+			if (ctx->opts & OPEN_OLD_IDS)
 				imap_set_range( ranges, &nranges, WantMsgids, 0, seenuid );
 			for (int r = 0; r < nranges; r++) {
 				sprintf( buf, "%d:%d", ranges[r].first, ranges[r].last );
@@ -2527,7 +2531,7 @@ imap_submit_load( imap_store_t *ctx, const char *buf, int flags, imap_cmd_refcou
 {
 	imap_exec( ctx, imap_refcounted_new_cmd( sts ), imap_refcounted_done_box,
 	           "UID FETCH %s (UID%s%s%s%s%s%s%s)", buf,
-	           (ctx->gen.opts & OPEN_FLAGS) ? " FLAGS" : "",
+	           (ctx->opts & OPEN_FLAGS) ? " FLAGS" : "",
 	           (flags & WantSize) ? " RFC822.SIZE" : "",
 	           (flags & (WantTuids | WantMsgids)) ? " BODY.PEEK[HEADER.FIELDS (" : "",
 	           (flags & WantTuids) ? "X-TUID" : "",
