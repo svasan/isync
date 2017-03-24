@@ -90,7 +90,6 @@ typedef struct store {
 	char listed; /* was _list already run? */
 
 	/* currently open mailbox */
-	char *path; /* own */
 	message_t *msgs; /* own */
 	int uidvalidity;
 	int uidnext; /* from SELECT responses */
@@ -167,9 +166,11 @@ struct driver {
 	void (*list_store)( store_t *ctx, int flags,
 	                    void (*cb)( int sts, void *aux ), void *aux );
 
-	/* Invoked before open_box(), this informs the driver which box is to be opened.
-	 * As a side effect, this should resolve ctx->path if applicable. */
+	/* Invoked before open_box(), this informs the driver which box is to be opened. */
 	int (*select_box)( store_t *ctx, const char *name );
+
+	/* Get the selected box' on-disk path, if applicable, null otherwise. */
+	const char *(*get_box_path)( store_t *ctx );
 
 	/* Create the selected mailbox. */
 	void (*create_box)( store_t *ctx,

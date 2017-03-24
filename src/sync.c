@@ -577,11 +577,12 @@ prepare_state( sync_vars_t *svars )
 
 	chan = svars->chan;
 	if (!strcmp( chan->sync_state ? chan->sync_state : global_conf.sync_state, "*" )) {
-		if (!svars->ctx[S]->path) {
+		const char *path = svars->drv[S]->get_box_path( svars->ctx[S] );
+		if (!path) {
 			error( "Error: store '%s' does not support in-box sync state\n", chan->stores[S]->name );
 			return 0;
 		}
-		nfasprintf( &svars->dname, "%s/." EXE "state", svars->ctx[S]->path );
+		nfasprintf( &svars->dname, "%s/." EXE "state", path );
 	} else {
 		csname = clean_strdup( svars->box_name[S] );
 		if (chan->sync_state)

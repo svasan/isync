@@ -2306,6 +2306,12 @@ imap_select_box( store_t *gctx, const char *name )
 	return DRV_OK;
 }
 
+static const char *
+imap_get_box_path( store_t *gctx ATTR_UNUSED )
+{
+	return 0;
+}
+
 static void imap_open_box_p2( imap_store_t *, imap_cmd_t *, int );
 static void imap_open_box_p3( imap_store_t *, imap_cmd_t *, int );
 
@@ -3212,6 +3218,7 @@ struct driver imap_driver = {
 	imap_cancel_store,
 	imap_list_store,
 	imap_select_box,
+	imap_get_box_path,
 	imap_create_box,
 	imap_open_box,
 	imap_confirm_box_empty,
