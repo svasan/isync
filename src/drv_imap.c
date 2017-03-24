@@ -183,8 +183,6 @@ typedef struct {
 } imap_cmd_find_new_t;
 
 typedef struct {
-	void (*callback)( int sts, void *aux );
-	void *callback_aux;
 	int ref_count;
 	int ret_val;
 } imap_cmd_refcounted_state_t;
@@ -559,15 +557,18 @@ imap_done_simple_msg( imap_store_t *ctx ATTR_UNUSED,
 }
 
 static imap_cmd_refcounted_state_t *
-imap_refcounted_new_state( void (*cb)( int, void * ), void *aux )
+imap_refcounted_new_state( int sz )
 {
-	imap_cmd_refcounted_state_t *sts = nfmalloc( sizeof(*sts) );
-	sts->callback = cb;
-	sts->callback_aux = aux;
+	imap_cmd_refcounted_state_t *sts = nfmalloc( sz );
 	sts->ref_count = 1; /* so forced sync does not cause an early exit */
 	sts->ret_val = DRV_OK;
 	return sts;
 }
+
+#define INIT_REFCOUNTED_STATE(type, sts, cb, aux) \
+	type *sts = (type *)imap_refcounted_new_state( sizeof(type) ); \
+	sts->callback = cb; \
+	sts->callback_aux = aux;
 
 static imap_cmd_t *
 imap_refcounted_new_cmd( imap_cmd_refcounted_state_t *sts )
@@ -578,20 +579,21 @@ imap_refcounted_new_cmd( imap_cmd_refcounted_state_t *sts )
 	return &cmd->gen;
 }
 
-static void
-imap_refcounted_done( imap_cmd_refcounted_state_t *sts )
-{
-	if (!--sts->ref_count) {
-		sts->callback( sts->ret_val, sts->callback_aux );
-		free( sts );
+#define DONE_REFCOUNTED_STATE(sts) \
+	if (!--sts->gen.ref_count) { \
+		sts->callback( sts->gen.ret_val, sts->callback_aux ); \
+		free( sts ); \
 	}
-}
+
+#define DONE_REFCOUNTED_STATE_ARGS(sts, ...) \
+	if (!--sts->gen.ref_count) { \
+		sts->callback( sts->gen.ret_val, __VA_ARGS__, sts->callback_aux ); \
+		free( sts ); \
+	}
 
 static void
-imap_refcounted_done_box( imap_store_t *ctx ATTR_UNUSED, imap_cmd_t *cmd, int response )
+transform_refcounted_box_response( imap_cmd_refcounted_state_t *sts, int response )
 {
-	imap_cmd_refcounted_state_t *sts = ((imap_cmd_refcounted_t *)cmd)->state;
-
 	switch (response) {
 	case RESP_CANCEL:
 		sts->ret_val = DRV_CANCELED;
@@ -601,7 +603,6 @@ imap_refcounted_done_box( imap_store_t *ctx ATTR_UNUSED, imap_cmd_t *cmd, int re
 			sts->ret_val = DRV_BOX_BAD;
 		break;
 	}
-	imap_refcounted_done( sts );
 }
 
 static const char *
@@ -2473,7 +2474,14 @@ imap_set_range( imap_range_t *ranges, int *nranges, int low_flags, int high_flag
 		ranges[r].flags |= (ranges[r].last <= maxlow) ? low_flags : high_flags;
 }
 
-static void imap_submit_load( imap_store_t *, const char *, int, imap_cmd_refcounted_state_t * );
+typedef struct {
+	imap_cmd_refcounted_state_t gen;
+	void (*callback)( int sts, void *aux );
+	void *callback_aux;
+} imap_load_box_state_t;
+
+static void imap_submit_load( imap_store_t *, const char *, int, imap_load_box_state_t * );
+static void imap_submit_load_p3( imap_load_box_state_t * );
 
 static void
 imap_load_box( store_t *gctx, int minuid, int maxuid, int newuid, int seenuid, int_array_t excs,
@@ -2487,8 +2495,7 @@ imap_load_box( store_t *gctx, int minuid, int maxuid, int newuid, int seenuid, i
 		free( excs.data );
 		cb( DRV_OK, aux );
 	} else {
-		imap_cmd_refcounted_state_t *sts = imap_refcounted_new_state( cb, aux );
-
+		INIT_REFCOUNTED_STATE(imap_load_box_state_t, sts, cb, aux)
 		for (i = 0; i < excs.size; ) {
 			for (bl = 0; i < excs.size && bl < 960; i++) {
 				if (bl)
@@ -2522,14 +2529,16 @@ imap_load_box( store_t *gctx, int minuid, int maxuid, int newuid, int seenuid, i
 			}
 		}
 		free( excs.data );
-		imap_refcounted_done( sts );
+		imap_submit_load_p3( sts );
 	}
 }
 
+static void imap_submit_load_p2( imap_store_t *, imap_cmd_t *, int );
+
 static void
-imap_submit_load( imap_store_t *ctx, const char *buf, int flags, imap_cmd_refcounted_state_t *sts )
+imap_submit_load( imap_store_t *ctx, const char *buf, int flags, imap_load_box_state_t *sts )
 {
-	imap_exec( ctx, imap_refcounted_new_cmd( sts ), imap_refcounted_done_box,
+	imap_exec( ctx, imap_refcounted_new_cmd( &sts->gen ), imap_submit_load_p2,
 	           "UID FETCH %s (UID%s%s%s%s%s%s%s)", buf,
 	           (ctx->opts & OPEN_FLAGS) ? " FLAGS" : "",
 	           (flags & WantSize) ? " RFC822.SIZE" : "",
@@ -2538,6 +2547,21 @@ imap_submit_load( imap_store_t *ctx, const char *buf, int flags, imap_cmd_refcou
 	           !(~flags & (WantTuids | WantMsgids)) ? " " : "",
 	           (flags & WantMsgids) ? "MESSAGE-ID" : "",
 	           (flags & (WantTuids | WantMsgids)) ? ")]" : "");
+}
+
+static void
+imap_submit_load_p2( imap_store_t *ctx ATTR_UNUSED, imap_cmd_t *cmd, int response )
+{
+	imap_load_box_state_t *sts = (imap_load_box_state_t *)((imap_cmd_refcounted_t *)cmd)->state;
+
+	transform_refcounted_box_response( &sts->gen, response );
+	imap_submit_load_p3( sts );
+}
+
+static void
+imap_submit_load_p3( imap_load_box_state_t *sts )
+{
+	DONE_REFCOUNTED_STATE(sts)
 }
 
 /******************* imap_fetch_msg *******************/
@@ -2574,8 +2598,6 @@ imap_fetch_msg_p2( imap_store_t *ctx, imap_cmd_t *gcmd, int response )
 
 /******************* imap_set_msg_flags *******************/
 
-static void imap_set_flags_p2( imap_store_t *, imap_cmd_t *, int );
-
 static int
 imap_make_flags( int flags, char *buf )
 {
@@ -2594,14 +2616,23 @@ imap_make_flags( int flags, char *buf )
 	return d;
 }
 
+typedef struct {
+	imap_cmd_refcounted_state_t gen;
+	void (*callback)( int sts, void *aux );
+	void *callback_aux;
+} imap_set_msg_flags_state_t;
+
+static void imap_set_flags_p2( imap_store_t *, imap_cmd_t *, int );
+static void imap_set_flags_p3( imap_set_msg_flags_state_t * );
+
 static void
 imap_flags_helper( imap_store_t *ctx, int uid, char what, int flags,
-                   imap_cmd_refcounted_state_t *sts )
+                   imap_set_msg_flags_state_t *sts )
 {
 	char buf[256];
 
 	buf[imap_make_flags( flags, buf )] = 0;
-	imap_exec( ctx, imap_refcounted_new_cmd( sts ), imap_set_flags_p2,
+	imap_exec( ctx, imap_refcounted_new_cmd( &sts->gen ), imap_set_flags_p2,
 	           "UID STORE %d %cFLAGS.SILENT %s", uid, what, buf );
 }
 
@@ -2619,12 +2650,12 @@ imap_set_msg_flags( store_t *gctx, message_t *msg, int uid, int add, int del,
 		msg->flags &= ~del;
 	}
 	if (add || del) {
-		imap_cmd_refcounted_state_t *sts = imap_refcounted_new_state( cb, aux );
+		INIT_REFCOUNTED_STATE(imap_set_msg_flags_state_t, sts, cb, aux)
 		if (add)
 			imap_flags_helper( ctx, uid, '+', add, sts );
 		if (del)
 			imap_flags_helper( ctx, uid, '-', del, sts );
-		imap_refcounted_done( sts );
+		imap_set_flags_p3( sts );
 	} else {
 		cb( DRV_OK, aux );
 	}
@@ -2633,20 +2664,35 @@ imap_set_msg_flags( store_t *gctx, message_t *msg, int uid, int add, int del,
 static void
 imap_set_flags_p2( imap_store_t *ctx ATTR_UNUSED, imap_cmd_t *cmd, int response )
 {
-	imap_cmd_refcounted_state_t *sts = ((imap_cmd_refcounted_t *)cmd)->state;
+	imap_set_msg_flags_state_t *sts = (imap_set_msg_flags_state_t *)((imap_cmd_refcounted_t *)cmd)->state;
 	switch (response) {
 	case RESP_CANCEL:
-		sts->ret_val = DRV_CANCELED;
+		sts->gen.ret_val = DRV_CANCELED;
 		break;
 	case RESP_NO:
-		if (sts->ret_val == DRV_OK) /* Don't override cancelation. */
-			sts->ret_val = DRV_MSG_BAD;
+		if (sts->gen.ret_val == DRV_OK) /* Don't override cancelation. */
+			sts->gen.ret_val = DRV_MSG_BAD;
 		break;
 	}
-	imap_refcounted_done( sts );
+	imap_set_flags_p3( sts );
+}
+
+static void
+imap_set_flags_p3( imap_set_msg_flags_state_t *sts )
+{
+	DONE_REFCOUNTED_STATE(sts)
 }
 
 /******************* imap_close_box *******************/
+
+typedef struct {
+	imap_cmd_refcounted_state_t gen;
+	void (*callback)( int sts, void *aux );
+	void *callback_aux;
+} imap_expunge_state_t;
+
+static void imap_close_box_p2( imap_store_t *, imap_cmd_t *, int );
+static void imap_close_box_p3( imap_expunge_state_t * );
 
 static void
 imap_close_box( store_t *gctx,
@@ -2655,7 +2701,7 @@ imap_close_box( store_t *gctx,
 	imap_store_t *ctx = (imap_store_t *)gctx;
 
 	if (ctx->gen.conf->trash && CAP(UIDPLUS)) {
-		imap_cmd_refcounted_state_t *sts = imap_refcounted_new_state( cb, aux );
+		INIT_REFCOUNTED_STATE(imap_expunge_state_t, sts, cb, aux)
 		message_t *msg, *fmsg, *nmsg;
 		int bl;
 		char buf[1000];
@@ -2674,10 +2720,10 @@ imap_close_box( store_t *gctx,
 			}
 			if (!bl)
 				break;
-			imap_exec( ctx, imap_refcounted_new_cmd( sts ), imap_refcounted_done_box,
+			imap_exec( ctx, imap_refcounted_new_cmd( &sts->gen ), imap_close_box_p2,
 			           "UID EXPUNGE %s", buf );
 		}
-		imap_refcounted_done( sts );
+		imap_close_box_p3( sts );
 	} else {
 		/* This is inherently racy: it may cause messages which other clients
 		 * marked as deleted to be expunged without being trashed. */
@@ -2685,6 +2731,21 @@ imap_close_box( store_t *gctx,
 		INIT_IMAP_CMD(imap_cmd_simple_t, cmd, cb, aux)
 		imap_exec( ctx, &cmd->gen, imap_done_simple_box, "CLOSE" );
 	}
+}
+
+static void
+imap_close_box_p2( imap_store_t *ctx ATTR_UNUSED, imap_cmd_t *cmd, int response )
+{
+	imap_expunge_state_t *sts = (imap_expunge_state_t *)((imap_cmd_refcounted_t *)cmd)->state;
+
+	transform_refcounted_box_response( &sts->gen, response );
+	imap_close_box_p3( sts );
+}
+
+static void
+imap_close_box_p3( imap_expunge_state_t *sts )
+{
+	DONE_REFCOUNTED_STATE(sts)
 }
 
 /******************* imap_trash_msg *******************/
@@ -2831,12 +2892,21 @@ imap_find_new_msgs_p3( imap_store_t *ctx, imap_cmd_t *gcmd, int response )
 
 /******************* imap_list_store *******************/
 
+typedef struct {
+	imap_cmd_refcounted_state_t gen;
+	void (*callback)( int sts, void *aux );
+	void *callback_aux;
+} imap_list_store_state_t;
+
+static void imap_list_store_p2( imap_store_t *, imap_cmd_t *, int );
+static void imap_list_store_p3( imap_list_store_state_t * );
+
 static void
 imap_list_store( store_t *gctx, int flags,
                  void (*cb)( int sts, void *aux ), void *aux )
 {
 	imap_store_t *ctx = (imap_store_t *)gctx;
-	imap_cmd_refcounted_state_t *sts = imap_refcounted_new_state( cb, aux );
+	INIT_REFCOUNTED_STATE(imap_list_store_state_t, sts, cb, aux)
 
 	// ctx->prefix may be empty, "INBOX.", or something else.
 	// 'flags' may be LIST_INBOX, LIST_PATH (or LIST_PATH_MAYBE), or both. 'listed'
@@ -2858,17 +2928,32 @@ imap_list_store( store_t *gctx, int flags,
 		ctx->gen.listed |= LIST_PATH;
 		if (pfx_is_empty)
 			ctx->gen.listed |= LIST_INBOX;
-		imap_exec( ctx, imap_refcounted_new_cmd( sts ), imap_refcounted_done_box,
+		imap_exec( ctx, imap_refcounted_new_cmd( &sts->gen ), imap_list_store_p2,
 		           "LIST \"\" \"%\\s*\"", ctx->prefix );
 	}
 	if (((flags & LIST_INBOX) || pfx_is_inbox) && !pfx_is_empty && !(ctx->gen.listed & LIST_INBOX)) {
 		ctx->gen.listed |= LIST_INBOX;
 		if (pfx_is_inbox)
 			ctx->gen.listed |= LIST_PATH;
-		imap_exec( ctx, imap_refcounted_new_cmd( sts ), imap_refcounted_done_box,
+		imap_exec( ctx, imap_refcounted_new_cmd( &sts->gen ), imap_list_store_p2,
 		           "LIST \"\" INBOX*" );
 	}
-	imap_refcounted_done( sts );
+	imap_list_store_p3( sts );
+}
+
+static void
+imap_list_store_p2( imap_store_t *ctx ATTR_UNUSED, imap_cmd_t *cmd, int response )
+{
+	imap_list_store_state_t *sts = (imap_list_store_state_t *)((imap_cmd_refcounted_t *)cmd)->state;
+
+	transform_refcounted_box_response( &sts->gen, response );
+	imap_list_store_p3( sts );
+}
+
+static void
+imap_list_store_p3( imap_list_store_state_t *sts )
+{
+	DONE_REFCOUNTED_STATE(sts)
 }
 
 /******************* imap_cancel_cmds *******************/
