@@ -381,6 +381,7 @@ typedef struct {
 	store_t *ctx[2];
 	chan_ent_t *chanptr;
 	box_ent_t *boxptr;
+	string_list_t *boxes[2];
 	char *names[2];
 	int ret, all, list, state[2];
 	char done, skip, cben;
@@ -835,8 +836,8 @@ sync_chans( main_vars_t *mvars, int ent )
 
 		if (!mvars->chanptr->boxlist && mvars->chan->patterns) {
 			mvars->chanptr->boxlist = 2;
-			boxes[M] = filter_boxes( mvars->ctx[M]->boxes, mvars->chan->boxes[M], mvars->chan->patterns );
-			boxes[S] = filter_boxes( mvars->ctx[S]->boxes, mvars->chan->boxes[S], mvars->chan->patterns );
+			boxes[M] = filter_boxes( mvars->boxes[M], mvars->chan->boxes[M], mvars->chan->patterns );
+			boxes[S] = filter_boxes( mvars->boxes[S], mvars->chan->boxes[S], mvars->chan->patterns );
 			mboxapp = &mvars->chanptr->boxes;
 			for (mb = sb = 0; ; ) {
 				char *mname = boxes[M] ? boxes[M][mb] : 0;
@@ -901,7 +902,9 @@ sync_chans( main_vars_t *mvars, int ent )
 
 	  next:
 		mvars->cben = 0;
-		for (t = 0; t < 2; t++)
+		for (t = 0; t < 2; t++) {
+			free_string_list( mvars->boxes[t] );
+			mvars->boxes[t] = 0;
 			if (mvars->state[t] == ST_FRESH) {
 				/* An unconnected store may be only cancelled. */
 				mvars->state[t] = ST_CLOSED;
@@ -910,6 +913,7 @@ sync_chans( main_vars_t *mvars, int ent )
 				mvars->state[t] = ST_CANCELING;
 				mvars->drv[t]->cancel_cmds( mvars->ctx[t], cancel_prep_done, AUX );
 			}
+		}
 		mvars->cben = 1;
 		if (mvars->state[M] != ST_CLOSED || mvars->state[S] != ST_CLOSED) {
 			mvars->skip = 1;
@@ -998,7 +1002,8 @@ static void
 store_listed( int sts, void *aux )
 {
 	MVARS(aux)
-	string_list_t **box, *bx;
+	string_list_t *boxes = mvars->ctx[t]->boxes;
+	string_list_t *box;
 
 	switch (sts) {
 	case DRV_CANCELED:
@@ -1006,25 +1011,26 @@ store_listed( int sts, void *aux )
 	case DRV_OK:
 		if (DFlags & DEBUG_MAIN) {
 			debug( "got mailbox list from %s:\n", str_ms[t] );
-			for (bx = mvars->ctx[t]->boxes; bx; bx = bx->next)
-				debug( "  %s\n", bx->string );
+			for (box = boxes; box; box = box->next)
+				debug( "  %s\n", box->string );
 		}
-		if (mvars->ctx[t]->conf->flat_delim) {
-			for (box = &mvars->ctx[t]->boxes; *box; box = &(*box)->next) {
+		for (box = boxes; box; box = box->next) {
+			if (mvars->ctx[t]->conf->flat_delim) {
 				string_list_t *nbox;
-				if (map_name( (*box)->string, (char **)&nbox, offsetof(string_list_t, string), mvars->ctx[t]->conf->flat_delim, "/" ) < 0) {
-					error( "Error: flattened mailbox name '%s' contains canonical hierarchy delimiter\n", (*box)->string );
+				if (map_name( box->string, (char **)&nbox, offsetof(string_list_t, string), mvars->ctx[t]->conf->flat_delim, "/" ) < 0) {
+					error( "Error: flattened mailbox name '%s' contains canonical hierarchy delimiter\n", box->string );
 					mvars->ret = mvars->skip = 1;
 				} else {
-					nbox->next = (*box)->next;
-					free( *box );
-					*box = nbox;
+					nbox->next = mvars->boxes[t];
+					mvars->boxes[t] = nbox;
 				}
+			} else {
+				add_string_list( &mvars->boxes[t], box->string );
 			}
 		}
 		if (mvars->ctx[t]->conf->map_inbox) {
 			debug( "adding mapped inbox to %s: %s\n", str_ms[t], mvars->ctx[t]->conf->map_inbox );
-			add_string_list( &mvars->ctx[t]->boxes, mvars->ctx[t]->conf->map_inbox );
+			add_string_list( &mvars->boxes[t], mvars->ctx[t]->conf->map_inbox );
 		}
 		break;
 	default:
