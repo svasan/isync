@@ -109,6 +109,10 @@ struct imap_store {
 	list_t *ns_personal, *ns_other, *ns_shared; /* NAMESPACE info */
 	string_list_t *boxes; // _list results
 	char listed; // was _list already run with these flags?
+	// note that the message counts do _not_ reflect stats from msgs,
+	// but mailbox totals. also, don't trust them beyond the initial load.
+	int total_msgs, recent_msgs;
+	message_t *msgs;
 	message_t **msgapp; /* FETCH results */
 	uint caps; /* CAPABILITY results */
 	string_list_t *auth_mechs;
@@ -1391,9 +1395,9 @@ imap_socket_read( void *aux )
 				goto listret;
 			} else if ((arg1 = next_arg( &cmd ))) {
 				if (!strcmp( "EXISTS", arg1 ))
-					ctx->gen.count = atoi( arg );
+					ctx->total_msgs = atoi( arg );
 				else if (!strcmp( "RECENT", arg1 ))
-					ctx->gen.recent = atoi( arg );
+					ctx->recent_msgs = atoi( arg );
 				else if(!strcmp ( "FETCH", arg1 )) {
 					resp = parse_list( ctx, cmd, parse_fetch_rsp );
 					goto listret;
@@ -1528,7 +1532,7 @@ get_cmd_result_p2( imap_store_t *ctx, imap_cmd_t *cmd, int response )
 static void
 imap_cleanup_store( imap_store_t *ctx )
 {
-	free_generic_messages( ctx->gen.msgs );
+	free_generic_messages( ctx->msgs );
 	free_string_list( ctx->boxes );
 }
 
@@ -1596,8 +1600,10 @@ imap_cancel_unowned( void *gctx )
 static void
 imap_free_store( store_t *gctx )
 {
-	free_generic_messages( gctx->msgs );
-	gctx->msgs = 0;
+	imap_store_t *ctx = (imap_store_t *)gctx;
+
+	free_generic_messages( ctx->msgs );
+	ctx->msgs = 0;
 	imap_set_bad_callback( gctx, imap_cancel_unowned, gctx );
 	gctx->next = unowned;
 	unowned = gctx;
@@ -2316,9 +2322,9 @@ imap_select_box( store_t *gctx, const char *name )
 {
 	imap_store_t *ctx = (imap_store_t *)gctx;
 
-	free_generic_messages( gctx->msgs );
-	gctx->msgs = 0;
-	ctx->msgapp = &gctx->msgs;
+	free_generic_messages( ctx->msgs );
+	ctx->msgs = 0;
+	ctx->msgapp = &ctx->msgs;
 
 	ctx->name = name;
 	return DRV_OK;
@@ -2408,7 +2414,9 @@ imap_create_box( store_t *gctx,
 static int
 imap_confirm_box_empty( store_t *gctx )
 {
-	return gctx->count ? DRV_BOX_BAD : DRV_OK;
+	imap_store_t *ctx = (imap_store_t *)gctx;
+
+	return ctx->total_msgs ? DRV_BOX_BAD : DRV_OK;
 }
 
 static void imap_delete_box_p2( imap_store_t *, imap_cmd_t *, int );
@@ -2492,24 +2500,24 @@ imap_set_range( imap_range_t *ranges, int *nranges, int low_flags, int high_flag
 
 typedef struct {
 	imap_cmd_refcounted_state_t gen;
-	void (*callback)( int sts, void *aux );
+	void (*callback)( int sts, message_t *msgs, int total_msgs, int recent_msgs, void *aux );
 	void *callback_aux;
 } imap_load_box_state_t;
 
 static void imap_submit_load( imap_store_t *, const char *, int, imap_load_box_state_t * );
-static void imap_submit_load_p3( imap_load_box_state_t * );
+static void imap_submit_load_p3( imap_store_t *ctx, imap_load_box_state_t * );
 
 static void
 imap_load_box( store_t *gctx, int minuid, int maxuid, int newuid, int seenuid, int_array_t excs,
-               void (*cb)( int sts, void *aux ), void *aux )
+               void (*cb)( int sts, message_t *msgs, int total_msgs, int recent_msgs, void *aux ), void *aux )
 {
 	imap_store_t *ctx = (imap_store_t *)gctx;
 	int i, j, bl;
 	char buf[1000];
 
-	if (!ctx->gen.count) {
+	if (!ctx->total_msgs) {
 		free( excs.data );
-		cb( DRV_OK, aux );
+		cb( DRV_OK, 0, 0, 0, aux );
 	} else {
 		INIT_REFCOUNTED_STATE(imap_load_box_state_t, sts, cb, aux)
 		for (i = 0; i < excs.size; ) {
@@ -2545,7 +2553,7 @@ imap_load_box( store_t *gctx, int minuid, int maxuid, int newuid, int seenuid, i
 			}
 		}
 		free( excs.data );
-		imap_submit_load_p3( sts );
+		imap_submit_load_p3( ctx, sts );
 	}
 }
 
@@ -2566,18 +2574,18 @@ imap_submit_load( imap_store_t *ctx, const char *buf, int flags, imap_load_box_s
 }
 
 static void
-imap_submit_load_p2( imap_store_t *ctx ATTR_UNUSED, imap_cmd_t *cmd, int response )
+imap_submit_load_p2( imap_store_t *ctx, imap_cmd_t *cmd, int response )
 {
 	imap_load_box_state_t *sts = (imap_load_box_state_t *)((imap_cmd_refcounted_t *)cmd)->state;
 
 	transform_refcounted_box_response( &sts->gen, response );
-	imap_submit_load_p3( sts );
+	imap_submit_load_p3( ctx, sts );
 }
 
 static void
-imap_submit_load_p3( imap_load_box_state_t *sts )
+imap_submit_load_p3( imap_store_t *ctx, imap_load_box_state_t *sts )
 {
-	DONE_REFCOUNTED_STATE(sts)
+	DONE_REFCOUNTED_STATE_ARGS(sts, ctx->msgs, ctx->total_msgs, ctx->recent_msgs)
 }
 
 /******************* imap_fetch_msg *******************/
@@ -2715,7 +2723,7 @@ imap_close_box( store_t *gctx,
 		int bl;
 		char buf[1000];
 
-		for (msg = ctx->gen.msgs; ; ) {
+		for (msg = ctx->msgs; ; ) {
 			for (bl = 0; msg && bl < 960; msg = msg->next) {
 				if (!(msg->flags & F_DELETED))
 					continue;

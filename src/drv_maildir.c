@@ -81,6 +81,10 @@ typedef struct {
 #endif /* USE_DB */
 	string_list_t *boxes; // _list results
 	char listed; // was _list already run with these flags?
+	// note that the message counts do _not_ reflect stats from msgs,
+	// but mailbox totals. also, don't trust them beyond the initial load.
+	int total_msgs, recent_msgs;
+	message_t *msgs;
 	wakeup_t lcktmr;
 
 	void (*bad_callback)( void *aux );
@@ -263,7 +267,7 @@ maildir_cleanup( store_t *gctx )
 {
 	maildir_store_t *ctx = (maildir_store_t *)gctx;
 
-	free_maildir_messages( gctx->msgs );
+	free_maildir_messages( ctx->msgs );
 #ifdef USE_DB
 	if (ctx->db)
 		ctx->db->close( ctx->db, 0 );
@@ -908,7 +912,7 @@ maildir_scan( maildir_store_t *ctx, msg_t_array_alloc_t *msglist )
 
   again:
 	ARRAY_INIT( msglist );
-	ctx->gen.count = ctx->gen.recent = 0;
+	ctx->total_msgs = ctx->recent_msgs = 0;
 	if (ctx->uvok || ctx->maxuid == INT_MAX) {
 #ifdef USE_DB
 		if (ctx->usedb) {
@@ -960,8 +964,8 @@ maildir_scan( maildir_store_t *ctx, msg_t_array_alloc_t *msglist )
 			while ((e = readdir( d ))) {
 				if (*e->d_name == '.')
 					continue;
-				ctx->gen.count++;
-				ctx->gen.recent += i;
+				ctx->total_msgs++;
+				ctx->recent_msgs += i;
 #ifdef USE_DB
 				if (ctx->usedb) {
 					if (maildir_uidval_lock( ctx ) != DRV_OK)
@@ -1230,7 +1234,7 @@ maildir_select_box( store_t *gctx, const char *name )
 	maildir_store_t *ctx = (maildir_store_t *)gctx;
 
 	maildir_cleanup( gctx );
-	gctx->msgs = 0;
+	ctx->msgs = 0;
 	ctx->excs.data = 0;
 	ctx->uvfd = -1;
 #ifdef USE_DB
@@ -1327,7 +1331,7 @@ maildir_confirm_box_empty( store_t *gctx )
 	if (maildir_scan( ctx, &msglist ) != DRV_OK)
 		return DRV_BOX_BAD;
 	maildir_free_scan( &msglist );
-	return gctx->count ? DRV_BOX_BAD : DRV_OK;
+	return ctx->total_msgs ? DRV_BOX_BAD : DRV_OK;
 }
 
 static void
@@ -1401,7 +1405,7 @@ maildir_prepare_load_box( store_t *gctx, int opts )
 
 static void
 maildir_load_box( store_t *gctx, int minuid, int maxuid, int newuid, int seenuid, int_array_t excs,
-                  void (*cb)( int sts, void *aux ), void *aux )
+                  void (*cb)( int sts, message_t *msgs, int total_msgs, int recent_msgs, void *aux ), void *aux )
 {
 	maildir_store_t *ctx = (maildir_store_t *)gctx;
 	message_t **msgapp;
@@ -1416,15 +1420,15 @@ maildir_load_box( store_t *gctx, int minuid, int maxuid, int newuid, int seenuid
 	ctx->excs = excs;
 
 	if (maildir_scan( ctx, &msglist ) != DRV_OK) {
-		cb( DRV_BOX_BAD, aux );
+		cb( DRV_BOX_BAD, 0, 0, 0, aux );
 		return;
 	}
-	msgapp = &ctx->gen.msgs;
+	msgapp = &ctx->msgs;
 	for (i = 0; i < msglist.array.size; i++)
 		maildir_app_msg( ctx, &msgapp, msglist.array.data + i );
 	maildir_free_scan( &msglist );
 
-	cb( DRV_OK, aux );
+	cb( DRV_OK, ctx->msgs, ctx->total_msgs, ctx->recent_msgs, aux );
 }
 
 static int
@@ -1438,7 +1442,7 @@ maildir_rescan( maildir_store_t *ctx )
 	ctx->fresh[0] = ctx->fresh[1] = 0;
 	if (maildir_scan( ctx, &msglist ) != DRV_OK)
 		return DRV_BOX_BAD;
-	for (msgapp = &ctx->gen.msgs, i = 0;
+	for (msgapp = &ctx->msgs, i = 0;
 	     (msg = (maildir_message_t *)*msgapp) || i < msglist.array.size; )
 	{
 		if (!msg) {
@@ -1758,7 +1762,7 @@ maildir_trash_msg( store_t *gctx, message_t *gmsg,
 		}
 	}
 	gmsg->status |= M_DEAD;
-	gctx->count--;
+	ctx->total_msgs--;
 
 #ifdef USE_DB
 	if (ctx->usedb) {
@@ -1783,7 +1787,7 @@ maildir_close_box( store_t *gctx,
 	for (;;) {
 		retry = 0;
 		basel = nfsnprintf( buf, sizeof(buf), "%s/", ctx->path );
-		for (msg = gctx->msgs; msg; msg = msg->next)
+		for (msg = ctx->msgs; msg; msg = msg->next)
 			if (!(msg->status & M_DEAD) && (msg->flags & F_DELETED)) {
 				nfsnprintf( buf + basel, sizeof(buf) - basel, "%s/%s", subdirs[msg->status & M_RECENT], ((maildir_message_t *)msg)->base );
 				if (unlink( buf )) {
@@ -1793,7 +1797,7 @@ maildir_close_box( store_t *gctx,
 						sys_error( "Maildir error: cannot remove %s", buf );
 				} else {
 					msg->status |= M_DEAD;
-					gctx->count--;
+					ctx->total_msgs--;
 #ifdef USE_DB
 					if (ctx->db && (ret = maildir_purge_msg( ctx, ((maildir_message_t *)msg)->base )) != DRV_OK) {
 						cb( ret, aux );

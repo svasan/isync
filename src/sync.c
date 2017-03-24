@@ -151,7 +151,7 @@ typedef struct {
 	store_t *ctx[2];
 	driver_t *drv[2];
 	const char *orig_name[2];
-	message_t *new_msgs[2];
+	message_t *msgs[2], *new_msgs[2];
 	int_array_alloc_t trashed_msgs[2];
 	int state[2], opts[2], ref_count, nsrecs, ret, lfd, existing, replayed;
 	int new_pending[2], flags_pending[2], trash_pending[2];
@@ -237,7 +237,7 @@ match_tuids( sync_vars_t *svars, int t )
 					goto mfound;
 				}
 			}
-			for (tmsg = svars->ctx[t]->msgs; tmsg != ntmsg; tmsg = tmsg->next) {
+			for (tmsg = svars->msgs[t]; tmsg != ntmsg; tmsg = tmsg->next) {
 				if (tmsg->status & M_DEAD)
 					continue;
 				if (tmsg->tuid[0] && !memcmp( tmsg->tuid, srec->tuid, TUIDL )) {
@@ -1308,7 +1308,7 @@ get_seenuid( sync_vars_t *svars, int t )
 	return seenuid;
 }
 
-static void box_loaded( int sts, void *aux );
+static void box_loaded( int sts, message_t *msgs, int total_msgs, int recent_msgs, void *aux );
 
 static void
 load_box( sync_vars_t *svars, int t, int minwuid, int_array_t mexcs )
@@ -1359,7 +1359,7 @@ static void msg_copied_p2( sync_vars_t *svars, sync_rec_t *srec, int t, int uid 
 static void msgs_copied( sync_vars_t *svars, int t );
 
 static void
-box_loaded( int sts, void *aux )
+box_loaded( int sts, message_t *msgs, int total_msgs, int recent_msgs, void *aux )
 {
 	DECL_SVARS;
 	sync_rec_t *srec;
@@ -1375,7 +1375,8 @@ box_loaded( int sts, void *aux )
 		return;
 	INIT_SVARS(aux);
 	svars->state[t] |= ST_LOADED;
-	info( "%s: %d messages, %d recent\n", str_ms[t], svars->ctx[t]->count, svars->ctx[t]->recent );
+	svars->msgs[t] = msgs;
+	info( "%s: %d messages, %d recent\n", str_ms[t], total_msgs, recent_msgs );
 
 	if (svars->state[t] & ST_FIND_OLD) {
 		debug( "matching previously copied messages on %s\n", str_ms[t] );
@@ -1398,7 +1399,7 @@ box_loaded( int sts, void *aux )
 		srecmap[idx].uid = uid;
 		srecmap[idx].srec = srec;
 	}
-	for (tmsg = svars->ctx[t]->msgs; tmsg; tmsg = tmsg->next) {
+	for (tmsg = svars->msgs[t]; tmsg; tmsg = tmsg->next) {
 		if (tmsg->srec) /* found by TUID */
 			continue;
 		uid = tmsg->uid;
@@ -1556,7 +1557,7 @@ box_loaded( int sts, void *aux )
 
 	debug( "synchronizing new entries\n" );
 	for (t = 0; t < 2; t++) {
-		for (tmsg = svars->ctx[1-t]->msgs; tmsg; tmsg = tmsg->next) {
+		for (tmsg = svars->msgs[1-t]; tmsg; tmsg = tmsg->next) {
 			// If new have no srec, the message is always New. If we have a srec:
 			// - message is old (> 0) or expired (0) => ignore
 			// - message was skipped (-1) => ReNew
@@ -1633,7 +1634,7 @@ box_loaded( int sts, void *aux )
 		 * older than the first not expired message are not counted towards the total. */
 		debug( "preparing message expiration\n" );
 		alive = 0;
-		for (tmsg = svars->ctx[S]->msgs; tmsg; tmsg = tmsg->next) {
+		for (tmsg = svars->msgs[S]; tmsg; tmsg = tmsg->next) {
 			if (tmsg->status & M_DEAD)
 				continue;
 			if ((srec = tmsg->srec) && srec->uid[M] > 0 &&
@@ -1644,14 +1645,14 @@ box_loaded( int sts, void *aux )
 				alive++;
 			}
 		}
-		for (tmsg = svars->ctx[M]->msgs; tmsg; tmsg = tmsg->next) {
+		for (tmsg = svars->msgs[M]; tmsg; tmsg = tmsg->next) {
 			if ((srec = tmsg->srec) && srec->tuid[0] && !(tmsg->flags & F_DELETED))
 				alive++;
 		}
 		todel = alive - svars->chan->max_messages;
 		debug( "%d alive messages, %d excess - expiring\n", alive, todel );
 		alive = 0;
-		for (tmsg = svars->ctx[S]->msgs; tmsg; tmsg = tmsg->next) {
+		for (tmsg = svars->msgs[S]; tmsg; tmsg = tmsg->next) {
 			if (tmsg->status & M_DEAD)
 				continue;
 			if (!(srec = tmsg->srec) || srec->uid[M] <= 0) {
@@ -1679,7 +1680,7 @@ box_loaded( int sts, void *aux )
 				}
 			}
 		}
-		for (tmsg = svars->ctx[M]->msgs; tmsg; tmsg = tmsg->next) {
+		for (tmsg = svars->msgs[M]; tmsg; tmsg = tmsg->next) {
 			if ((srec = tmsg->srec) && srec->tuid[0]) {
 				nflags = tmsg->flags;
 				if (!(nflags & F_DELETED)) {
@@ -1808,7 +1809,7 @@ box_loaded( int sts, void *aux )
 	for (t = 0; t < 2; t++) {
 		svars->newuid[t] = svars->ctx[t]->uidnext;
 		jFprintf( svars, "F %d %d\n", t, svars->newuid[t] );
-		svars->new_msgs[t] = svars->ctx[1-t]->msgs;
+		svars->new_msgs[t] = svars->msgs[1-t];
 		msgs_copied( svars, t );
 		if (check_cancel( svars ))
 			goto out;
@@ -2021,7 +2022,7 @@ msgs_flags_set( sync_vars_t *svars, int t )
 	if ((svars->chan->ops[t] & OP_EXPUNGE) &&
 	    (svars->ctx[t]->conf->trash || (svars->ctx[1-t]->conf->trash && svars->ctx[1-t]->conf->trash_remote_new))) {
 		debug( "trashing in %s\n", str_ms[t] );
-		for (tmsg = svars->ctx[t]->msgs; tmsg; tmsg = tmsg->next)
+		for (tmsg = svars->msgs[t]; tmsg; tmsg = tmsg->next)
 			if ((tmsg->flags & F_DELETED) && !find_int_array( svars->trashed_msgs[t].array, tmsg->uid ) &&
 			    (t == M || !tmsg->srec || !(tmsg->srec->status & (S_EXPIRE|S_EXPIRED)))) {
 				if (svars->ctx[t]->conf->trash) {

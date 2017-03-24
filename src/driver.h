@@ -88,12 +88,8 @@ typedef struct store {
 	store_conf_t *conf; /* foreign */
 
 	/* currently open mailbox */
-	message_t *msgs; /* own */
 	int uidvalidity;
 	int uidnext; /* from SELECT responses */
-	/* note that the following do _not_ reflect stats from msgs, but mailbox totals */
-	int count; /* # of messages */
-	int recent; /* # of recent messages - don't trust this beyond the initial read */
 } store_t;
 
 typedef struct {
@@ -204,9 +200,10 @@ struct driver {
 	 * Messages starting with newuid need to have the TUID populated when OPEN_FIND is set.
 	 * Messages up to seenuid need to have the Message-Id populated when OPEN_OLD_IDS is set.
 	 * Messages up to seenuid need to have the size populated when OPEN_OLD_SIZE is set;
-	 * likewise messages above seenuid when OPEN_NEW_SIZE is set. */
+	 * likewise messages above seenuid when OPEN_NEW_SIZE is set.
+	 * The returned message list remains owned by the driver. */
 	void (*load_box)( store_t *ctx, int minuid, int maxuid, int newuid, int seenuid, int_array_t excs,
-	                  void (*cb)( int sts, void *aux ), void *aux );
+	                  void (*cb)( int sts, message_t *msgs, int total_msgs, int recent_msgs, void *aux ), void *aux );
 
 	/* Fetch the contents and flags of the given message from the current mailbox. */
 	void (*fetch_msg)( store_t *ctx, message_t *msg, msg_data_t *data,
