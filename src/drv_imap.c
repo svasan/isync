@@ -112,6 +112,7 @@ struct imap_store {
 	// note that the message counts do _not_ reflect stats from msgs,
 	// but mailbox totals. also, don't trust them beyond the initial load.
 	int total_msgs, recent_msgs;
+	int uidnext;
 	message_t *msgs;
 	message_t **msgapp; /* FETCH results */
 	uint caps; /* CAPABILITY results */
@@ -1086,7 +1087,7 @@ parse_fetch_rsp( imap_store_t *ctx, list_t *list, char *s ATTR_UNUSED )
 	} else if ((cmdp = ctx->in_progress) && cmdp->param.lastuid) {
 		assert( !body && !tuid && !msgid );
 		// Workaround for server not sending UIDNEXT and/or APPENDUID.
-		ctx->gen.uidnext = uid + 1;
+		ctx->uidnext = uid + 1;
 	} else if (body) {
 		assert( !tuid && !msgid );
 		for (cmdp = ctx->in_progress; cmdp; cmdp = cmdp->next)
@@ -1171,7 +1172,7 @@ parse_response_code( imap_store_t *ctx, imap_cmd_t *cmd, char *s )
 			return RESP_CANCEL;
 		}
 	} else if (!strcmp( "UIDNEXT", arg )) {
-		if (!(arg = next_arg( &s )) || !(ctx->gen.uidnext = atoi( arg ))) {
+		if (!(arg = next_arg( &s )) || !(ctx->uidnext = atoi( arg ))) {
 			error( "IMAP error: malformed NEXTUID status\n" );
 			return RESP_CANCEL;
 		}
@@ -1520,7 +1521,7 @@ get_cmd_result_p2( imap_store_t *ctx, imap_cmd_t *cmd, int response )
 	if (response != RESP_OK) {
 		done_imap_cmd( ctx, ocmd, response );
 	} else {
-		ctx->gen.uidnext = 1;
+		ctx->uidnext = 1;
 		if (ocmd->param.to_trash)
 			ctx->trashnc = TrashKnown;
 		ocmd->param.create = 0;
@@ -2355,7 +2356,7 @@ imap_open_box( store_t *gctx,
 		return;
 	}
 
-	ctx->gen.uidnext = 0;
+	ctx->uidnext = 0;
 
 	INIT_IMAP_CMD(imap_cmd_simple_t, cmd, cb, aux)
 	cmd->gen.param.failok = 1;
@@ -2370,7 +2371,7 @@ imap_open_box_p2( imap_store_t *ctx, imap_cmd_t *gcmd, int response )
 	imap_cmd_simple_t *cmdp = (imap_cmd_simple_t *)gcmd;
 	imap_cmd_simple_t *cmd;
 
-	if (response != RESP_OK || ctx->gen.uidnext) {
+	if (response != RESP_OK || ctx->uidnext) {
 		imap_done_simple_box( ctx, &cmdp->gen, response );
 		return;
 	}
@@ -2385,10 +2386,18 @@ static void
 imap_open_box_p3( imap_store_t *ctx, imap_cmd_t *gcmd, int response )
 {
 	// This will happen if the box is empty.
-	if (!ctx->gen.uidnext)
-		ctx->gen.uidnext = 1;
+	if (!ctx->uidnext)
+		ctx->uidnext = 1;
 
 	imap_done_simple_box( ctx, gcmd, response );
+}
+
+static int
+imap_get_uidnext( store_t *gctx )
+{
+	imap_store_t *ctx = (imap_store_t *)gctx;
+
+	return ctx->uidnext;
 }
 
 /******************* imap_create_box *******************/
@@ -2536,7 +2545,7 @@ imap_load_box( store_t *gctx, int minuid, int maxuid, int newuid, int seenuid, i
 			imap_submit_load( ctx, buf, shifted_bit( ctx->opts, OPEN_OLD_IDS, WantMsgids ), sts );
 		}
 		if (maxuid == INT_MAX)
-			maxuid = ctx->gen.uidnext - 1;
+			maxuid = ctx->uidnext - 1;
 		if (maxuid >= minuid) {
 			imap_range_t ranges[3];
 			ranges[0].first = minuid;
@@ -2888,7 +2897,7 @@ imap_find_new_msgs_p2( imap_store_t *ctx, imap_cmd_t *gcmd, int response )
 		return;
 	}
 
-	ctx->gen.uidnext = 0;
+	ctx->uidnext = 0;
 
 	INIT_IMAP_CMD(imap_cmd_find_new_t, cmd, cmdp->callback, cmdp->callback_aux)
 	cmd->out_msgs = cmdp->out_msgs;
@@ -2904,14 +2913,14 @@ imap_find_new_msgs_p3( imap_store_t *ctx, imap_cmd_t *gcmd, int response )
 	imap_cmd_find_new_t *cmdp = (imap_cmd_find_new_t *)gcmd;
 	imap_cmd_find_new_t *cmd;
 
-	if (response != RESP_OK || ctx->gen.uidnext <= cmdp->uid) {
+	if (response != RESP_OK || ctx->uidnext <= cmdp->uid) {
 		imap_find_new_msgs_p4( ctx, gcmd, response );
 		return;
 	}
 	INIT_IMAP_CMD(imap_cmd_find_new_t, cmd, cmdp->callback, cmdp->callback_aux)
 	cmd->out_msgs = cmdp->out_msgs;
 	imap_exec( (imap_store_t *)ctx, &cmd->gen, imap_find_new_msgs_p4,
-	           "UID FETCH %d:%d (UID BODY.PEEK[HEADER.FIELDS (X-TUID)])", cmdp->uid, ctx->gen.uidnext - 1 );
+	           "UID FETCH %d:%d (UID BODY.PEEK[HEADER.FIELDS (X-TUID)])", cmdp->uid, ctx->uidnext - 1 );
 }
 
 static void
@@ -3343,6 +3352,7 @@ struct driver imap_driver = {
 	imap_get_box_path,
 	imap_create_box,
 	imap_open_box,
+	imap_get_uidnext,
 	imap_confirm_box_empty,
 	imap_delete_box,
 	imap_finish_delete_box,

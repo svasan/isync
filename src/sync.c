@@ -1807,7 +1807,7 @@ box_loaded( int sts, message_t *msgs, int total_msgs, int recent_msgs, void *aux
 	if (UseFSync)
 		fdatasync( fileno( svars->jfp ) );
 	for (t = 0; t < 2; t++) {
-		svars->newuid[t] = svars->ctx[t]->uidnext;
+		svars->newuid[t] = svars->drv[t]->get_uidnext( svars->ctx[t] );
 		jFprintf( svars, "F %d %d\n", t, svars->newuid[t] );
 		svars->new_msgs[t] = svars->msgs[1-t];
 		msgs_copied( svars, t );

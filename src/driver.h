@@ -89,7 +89,6 @@ typedef struct store {
 
 	/* currently open mailbox */
 	int uidvalidity;
-	int uidnext; /* from SELECT responses */
 } store_t;
 
 typedef struct {
@@ -174,6 +173,9 @@ struct driver {
 	 * Note that this should not directly complain about failure to open. */
 	void (*open_box)( store_t *ctx,
 	                  void (*cb)( int sts, void *aux ), void *aux );
+
+	/* Return the minimal UID the next stored message will have. */
+	int (*get_uidnext)( store_t *ctx );
 
 	/* Confirm that the open mailbox is empty. */
 	int (*confirm_box_empty)( store_t *ctx );
