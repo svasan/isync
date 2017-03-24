@@ -70,7 +70,7 @@ typedef struct {
 typedef struct {
 	store_t gen;
 	uint opts;
-	int uvfd, uvok, nuid, is_inbox, fresh[3];
+	int uvfd, uvok, uidvalidity, nuid, is_inbox, fresh[3];
 	int minuid, maxuid, newuid, seenuid;
 	int_array_t excs;
 	char *path; /* own */
@@ -657,7 +657,7 @@ maildir_store_uidval( maildir_store_t *ctx )
 	if (ctx->db) {
 		key.data = (void *)"UIDVALIDITY";
 		key.size = 11;
-		uv[0] = ctx->gen.uidvalidity;
+		uv[0] = ctx->uidvalidity;
 		uv[1] = ctx->nuid;
 		value.data = uv;
 		value.size = sizeof(uv);
@@ -672,7 +672,7 @@ maildir_store_uidval( maildir_store_t *ctx )
 	} else
 #endif /* USE_DB */
 	{
-		n = sprintf( buf, "%d\n%d\n", ctx->gen.uidvalidity, ctx->nuid );
+		n = sprintf( buf, "%d\n%d\n", ctx->uidvalidity, ctx->nuid );
 		lseek( ctx->uvfd, 0, SEEK_SET );
 		if (write( ctx->uvfd, buf, n ) != n || ftruncate( ctx->uvfd, n ) || (UseFSync && fdatasync( ctx->uvfd ))) {
 			error( "Maildir error: cannot write UIDVALIDITY.\n" );
@@ -686,7 +686,7 @@ maildir_store_uidval( maildir_store_t *ctx )
 static int
 maildir_init_uidval( maildir_store_t *ctx )
 {
-	ctx->gen.uidvalidity = time( 0 );
+	ctx->uidvalidity = time( 0 );
 	ctx->nuid = 0;
 	ctx->uvok = 0;
 #ifdef USE_DB
@@ -754,14 +754,14 @@ maildir_uidval_lock( maildir_store_t *ctx )
 			}
 			return maildir_init_uidval_new( ctx );
 		}
-		ctx->gen.uidvalidity = ((int *)value.data)[0];
+		ctx->uidvalidity = ((int *)value.data)[0];
 		ctx->nuid = ((int *)value.data)[1];
 	} else
 #endif
 	{
 		lseek( ctx->uvfd, 0, SEEK_SET );
 		if ((n = read( ctx->uvfd, buf, sizeof(buf) - 1 )) <= 0 ||
-			(buf[n] = 0, sscanf( buf, "%d\n%d", &ctx->gen.uidvalidity, &ctx->nuid ) != 2)) {
+			(buf[n] = 0, sscanf( buf, "%d\n%d", &ctx->uidvalidity, &ctx->nuid ) != 2)) {
 #if 1
 			/* In a generic driver, resetting the UID validity would be the right thing.
 			 * But this would mess up the sync state completely. So better bail out and
@@ -1266,7 +1266,7 @@ maildir_get_box_path( store_t *gctx )
 
 static void
 maildir_open_box( store_t *gctx,
-                  void (*cb)( int sts, void *aux ), void *aux )
+                  void (*cb)( int sts, int uidvalidity, void *aux ), void *aux )
 {
 	maildir_store_t *ctx = (maildir_store_t *)gctx;
 	int ret;
@@ -1279,7 +1279,7 @@ maildir_open_box( store_t *gctx,
 #ifndef USE_DB
 	if ((ctx->uvfd = open( uvpath, O_RDWR|O_CREAT, 0600 )) < 0) {
 		sys_error( "Maildir error: cannot write %s", uvpath );
-		cb( DRV_BOX_BAD, aux );
+		cb( DRV_BOX_BAD, UIDVAL_BAD, aux );
 		return;
 	}
 #else
@@ -1296,7 +1296,7 @@ maildir_open_box( store_t *gctx,
 					goto fnok;
 			}
 			sys_error( "Maildir error: cannot write %s", uvpath );
-			cb( DRV_BOX_BAD, aux );
+			cb( DRV_BOX_BAD, UIDVAL_BAD, aux );
 			return;
 		} else {
 		  dbok:
@@ -1308,7 +1308,7 @@ maildir_open_box( store_t *gctx,
 	ret = maildir_uidval_lock( ctx );
 
   bail:
-	cb( ret, aux );
+	cb( ret, ctx->uidvalidity, aux );
 }
 
 static int

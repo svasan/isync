@@ -112,7 +112,7 @@ struct imap_store {
 	// note that the message counts do _not_ reflect stats from msgs,
 	// but mailbox totals. also, don't trust them beyond the initial load.
 	int total_msgs, recent_msgs;
-	int uidnext;
+	int uidvalidity, uidnext;
 	message_t *msgs;
 	message_t **msgapp; /* FETCH results */
 	uint caps; /* CAPABILITY results */
@@ -1166,7 +1166,7 @@ parse_response_code( imap_store_t *ctx, imap_cmd_t *cmd, char *s )
 		goto bad_resp;
 	if (!strcmp( "UIDVALIDITY", arg )) {
 		if (!(arg = next_arg( &s )) ||
-		    (ctx->gen.uidvalidity = strtoll( arg, &earg, 10 ), *earg))
+		    (ctx->uidvalidity = strtoll( arg, &earg, 10 ), *earg))
 		{
 			error( "IMAP error: malformed UIDVALIDITY status\n" );
 			return RESP_CANCEL;
@@ -1186,7 +1186,7 @@ parse_response_code( imap_store_t *ctx, imap_cmd_t *cmd, char *s )
 		error( "*** IMAP ALERT *** %s\n", p );
 	} else if (cmd && !strcmp( "APPENDUID", arg )) {
 		if (!(arg = next_arg( &s )) ||
-		    (ctx->gen.uidvalidity = strtoll( arg, &earg, 10 ), *earg) ||
+		    (ctx->uidvalidity = strtoll( arg, &earg, 10 ), *earg) ||
 		    !(arg = next_arg( &s )) ||
 		    !(((imap_cmd_out_uid_t *)cmd)->out_uid = atoi( arg )))
 		{
@@ -2340,25 +2340,33 @@ imap_get_box_path( store_t *gctx ATTR_UNUSED )
 	return 0;
 }
 
+typedef struct {
+	imap_cmd_t gen;
+	void (*callback)( int sts, int uidvalidity, void *aux );
+	void *callback_aux;
+} imap_cmd_open_box_t;
+
 static void imap_open_box_p2( imap_store_t *, imap_cmd_t *, int );
 static void imap_open_box_p3( imap_store_t *, imap_cmd_t *, int );
+static void imap_open_box_p4( imap_store_t *, imap_cmd_open_box_t *, int );
 
 static void
 imap_open_box( store_t *gctx,
-               void (*cb)( int sts, void *aux ), void *aux )
+               void (*cb)( int sts, int uidvalidity, void *aux ), void *aux )
 {
 	imap_store_t *ctx = (imap_store_t *)gctx;
-	imap_cmd_simple_t *cmd;
+	imap_cmd_open_box_t *cmd;
 	char *buf;
 
 	if (prepare_box( &buf, ctx ) < 0) {
-		cb( DRV_BOX_BAD, aux );
+		cb( DRV_BOX_BAD, UIDVAL_BAD, aux );
 		return;
 	}
 
+	ctx->uidvalidity = UIDVAL_BAD;
 	ctx->uidnext = 0;
 
-	INIT_IMAP_CMD(imap_cmd_simple_t, cmd, cb, aux)
+	INIT_IMAP_CMD(imap_cmd_open_box_t, cmd, cb, aux)
 	cmd->gen.param.failok = 1;
 	imap_exec( ctx, &cmd->gen, imap_open_box_p2,
 	           "SELECT \"%\\s\"", buf );
@@ -2368,15 +2376,15 @@ imap_open_box( store_t *gctx,
 static void
 imap_open_box_p2( imap_store_t *ctx, imap_cmd_t *gcmd, int response )
 {
-	imap_cmd_simple_t *cmdp = (imap_cmd_simple_t *)gcmd;
-	imap_cmd_simple_t *cmd;
+	imap_cmd_open_box_t *cmdp = (imap_cmd_open_box_t *)gcmd;
+	imap_cmd_open_box_t *cmd;
 
 	if (response != RESP_OK || ctx->uidnext) {
-		imap_done_simple_box( ctx, &cmdp->gen, response );
+		imap_open_box_p4( ctx, cmdp, response );
 		return;
 	}
 
-	INIT_IMAP_CMD(imap_cmd_simple_t, cmd, cmdp->callback, cmdp->callback_aux)
+	INIT_IMAP_CMD(imap_cmd_open_box_t, cmd, cmdp->callback, cmdp->callback_aux)
 	cmd->gen.param.lastuid = 1;
 	imap_exec( ctx, &cmd->gen, imap_open_box_p3,
 	           "UID FETCH *:* (UID)" );
@@ -2385,11 +2393,20 @@ imap_open_box_p2( imap_store_t *ctx, imap_cmd_t *gcmd, int response )
 static void
 imap_open_box_p3( imap_store_t *ctx, imap_cmd_t *gcmd, int response )
 {
+	imap_cmd_open_box_t *cmdp = (imap_cmd_open_box_t *)gcmd;
+
 	// This will happen if the box is empty.
 	if (!ctx->uidnext)
 		ctx->uidnext = 1;
 
-	imap_done_simple_box( ctx, gcmd, response );
+	imap_open_box_p4( ctx, cmdp, response );
+}
+
+static void
+imap_open_box_p4( imap_store_t *ctx, imap_cmd_open_box_t *cmdp, int response )
+{
+	transform_box_response( &response );
+	cmdp->callback( response, ctx->uidvalidity, cmdp->callback_aux );
 }
 
 static int

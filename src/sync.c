@@ -158,6 +158,7 @@ typedef struct {
 	int maxuid[2]; /* highest UID that was already propagated */
 	int newmaxuid[2]; /* highest UID that is currently being propagated */
 	int uidval[2]; /* UID validity value */
+	int newuidval[2]; /* UID validity obtained from driver */
 	int newuid[2]; /* TUID lookup makes sense only for UIDs >= this */
 	int mmaxxuid; /* highest expired UID on master */
 } sync_vars_t;
@@ -962,11 +963,11 @@ delete_state( sync_vars_t *svars )
 	}
 }
 
-static void box_confirmed( int sts, void *aux );
+static void box_confirmed( int sts, int uidvalidity, void *aux );
 static void box_confirmed2( sync_vars_t *svars, int t );
 static void box_deleted( int sts, void *aux );
 static void box_created( int sts, void *aux );
-static void box_opened( int sts, void *aux );
+static void box_opened( int sts, int uidvalidity, void *aux );
 static void box_opened2( sync_vars_t *svars, int t );
 static void load_box( sync_vars_t *svars, int t, int minwuid, int_array_t mexcs );
 
@@ -1002,7 +1003,6 @@ sync_boxes( store_t *ctx[], const char *names[], int present[], channel_conf_t *
 			sync_bail3( svars );
 			return;
 		}
-		ctx[t]->uidvalidity = UIDVAL_BAD;
 		svars->drv[t] = ctx[t]->conf->driver;
 		svars->drv[t]->set_bad_callback( ctx[t], store_bad, AUX );
 	}
@@ -1043,7 +1043,7 @@ sync_boxes( store_t *ctx[], const char *names[], int present[], channel_conf_t *
 }
 
 static void
-box_confirmed( int sts, void *aux )
+box_confirmed( int sts, int uidvalidity, void *aux )
 {
 	DECL_SVARS;
 
@@ -1053,8 +1053,10 @@ box_confirmed( int sts, void *aux )
 	if (check_cancel( svars ))
 		return;
 
-	if (sts == DRV_OK)
+	if (sts == DRV_OK) {
 		svars->state[t] |= ST_PRESENT;
+		svars->newuidval[t] = uidvalidity;
+	}
 	box_confirmed2( svars, t );
 }
 
@@ -1100,7 +1102,7 @@ box_confirmed2( sync_vars_t *svars, int t )
 				svars->drv[1-t]->delete_box( svars->ctx[1-t], box_deleted, INV_AUX );
 			} else {
 				if (!(svars->chan->ops[t] & OP_CREATE)) {
-					box_opened( DRV_BOX_BAD, AUX );
+					box_opened( DRV_BOX_BAD, UIDVAL_BAD, AUX );
 				} else {
 					info( "Creating %s %s...\n", str_ms[t], svars->orig_name[t] );
 					svars->drv[t]->create_box( svars->ctx[t], box_created, AUX );
@@ -1142,7 +1144,7 @@ box_created( int sts, void *aux )
 }
 
 static void
-box_opened( int sts, void *aux )
+box_opened( int sts, int uidvalidity, void *aux )
 {
 	DECL_SVARS;
 
@@ -1158,6 +1160,7 @@ box_opened( int sts, void *aux )
 		svars->ret = SYNC_FAIL;
 		sync_bail( svars );
 	} else {
+		svars->newuidval[t] = uidvalidity;
 		box_opened2( svars, t );
 	}
 }
@@ -1180,13 +1183,13 @@ box_opened2( sync_vars_t *svars, int t )
 
 	fails = 0;
 	for (t = 0; t < 2; t++)
-		if (svars->uidval[t] != UIDVAL_BAD && svars->uidval[t] != ctx[t]->uidvalidity)
+		if (svars->uidval[t] != UIDVAL_BAD && svars->uidval[t] != svars->newuidval[t])
 			fails++;
 	if (fails == 2) {
 		error( "Error: channel %s: UIDVALIDITY of both master and slave changed\n"
 		       "(master got %d, expected %d; slave got %d, expected %d).\n",
 		       svars->chan->name,
-		       ctx[M]->uidvalidity, svars->uidval[M], ctx[S]->uidvalidity, svars->uidval[S] );
+		       svars->newuidval[M], svars->uidval[M], svars->newuidval[S], svars->uidval[S] );
 	  bail:
 		svars->ret = SYNC_FAIL;
 		sync_bail( svars );
@@ -1429,7 +1432,7 @@ box_loaded( int sts, message_t *msgs, int total_msgs, int recent_msgs, void *aux
 		return;
 
 	for (t = 0; t < 2; t++) {
-		if (svars->uidval[t] != UIDVAL_BAD && svars->uidval[t] != svars->ctx[t]->uidvalidity) {
+		if (svars->uidval[t] != UIDVAL_BAD && svars->uidval[t] != svars->newuidval[t]) {
 			unsigned need = 0, got = 0;
 			debug( "trying to re-approve uid validity of %s\n", str_ms[t] );
 			for (srec = svars->srecs; srec; srec = srec->next) {
@@ -1460,7 +1463,7 @@ box_loaded( int sts, message_t *msgs, int total_msgs, int recent_msgs, void *aux
 				error( "Error: channel %s, %s %s: Unable to recover from UIDVALIDITY change\n"
 				       "(got %d, expected %d).\n",
 				       svars->chan->name, str_ms[t], svars->orig_name[t],
-				       svars->ctx[t]->uidvalidity, svars->uidval[t] );
+				       svars->newuidval[t], svars->uidval[t] );
 				goto uvchg;
 			}
 			notice( "Notice: channel %s, %s %s: Recovered from change of UIDVALIDITY.\n",
@@ -1470,8 +1473,8 @@ box_loaded( int sts, message_t *msgs, int total_msgs, int recent_msgs, void *aux
 	}
 
 	if (svars->uidval[M] == UIDVAL_BAD || svars->uidval[S] == UIDVAL_BAD) {
-		svars->uidval[M] = svars->ctx[M]->uidvalidity;
-		svars->uidval[S] = svars->ctx[S]->uidvalidity;
+		svars->uidval[M] = svars->newuidval[M];
+		svars->uidval[S] = svars->newuidval[S];
 		jFprintf( svars, "| %d %d\n", svars->uidval[M], svars->uidval[S] );
 	}
 

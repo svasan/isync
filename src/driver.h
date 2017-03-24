@@ -88,9 +88,6 @@ typedef struct message {
 typedef struct store {
 	struct store *next;
 	store_conf_t *conf; /* foreign */
-
-	/* currently open mailbox */
-	int uidvalidity;
 } store_t;
 
 typedef struct {
@@ -174,7 +171,7 @@ struct driver {
 	/* Open the selected mailbox.
 	 * Note that this should not directly complain about failure to open. */
 	void (*open_box)( store_t *ctx,
-	                  void (*cb)( int sts, void *aux ), void *aux );
+	                  void (*cb)( int sts, int uidvalidity, void *aux ), void *aux );
 
 	/* Return the minimal UID the next stored message will have. */
 	int (*get_uidnext)( store_t *ctx );
