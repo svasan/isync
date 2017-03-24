@@ -605,6 +605,20 @@ transform_refcounted_box_response( imap_cmd_refcounted_state_t *sts, int respons
 	}
 }
 
+static void
+transform_refcounted_msg_response( imap_cmd_refcounted_state_t *sts, int response )
+{
+	switch (response) {
+	case RESP_CANCEL:
+		sts->ret_val = DRV_CANCELED;
+		break;
+	case RESP_NO:
+		if (sts->ret_val == DRV_OK) /* Don't override cancelation. */
+			sts->ret_val = DRV_MSG_BAD;
+		break;
+	}
+}
+
 static const char *
 imap_strchr( const char *s, char tc )
 {
@@ -2665,15 +2679,8 @@ static void
 imap_set_flags_p2( imap_store_t *ctx ATTR_UNUSED, imap_cmd_t *cmd, int response )
 {
 	imap_set_msg_flags_state_t *sts = (imap_set_msg_flags_state_t *)((imap_cmd_refcounted_t *)cmd)->state;
-	switch (response) {
-	case RESP_CANCEL:
-		sts->gen.ret_val = DRV_CANCELED;
-		break;
-	case RESP_NO:
-		if (sts->gen.ret_val == DRV_OK) /* Don't override cancelation. */
-			sts->gen.ret_val = DRV_MSG_BAD;
-		break;
-	}
+
+	transform_refcounted_msg_response( &sts->gen, response);
 	imap_set_flags_p3( sts );
 }
 
