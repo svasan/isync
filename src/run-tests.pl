@@ -21,6 +21,7 @@ use strict;
 use Cwd;
 use File::Path;
 
+my $use_vg = $ENV{USE_VALGRIND};
 my $mbsync = getcwd()."/mbsync";
 
 -d "tmp" or mkdir "tmp";
@@ -282,8 +283,14 @@ sub runsync($$)
 {
 	my ($flags, $file) = @_;
 
-#	open FILE, "valgrind -q --log-fd=3 $mbsync $flags -c .mbsyncrc test 3>&2 2>&1 |";
-	open FILE, "$mbsync -D -Z $flags -c .mbsyncrc test 2>&1 |";
+	my $cmd;
+	if ($use_vg) {
+		$cmd = "valgrind -q --error-exitcode=1 ";
+	} else {
+		$flags .= " -D";
+	}
+	$cmd .= "$mbsync -Z $flags -c .mbsyncrc test";
+	open FILE, "$cmd 2>&1 |";
 	my @out = <FILE>;
 	close FILE or push(@out, $! ? "*** error closing mbsync: $!\n" : "*** mbsync exited with signal ".($?&127).", code ".($?>>8)."\n");
 	if ($file) {
