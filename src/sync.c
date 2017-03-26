@@ -217,7 +217,7 @@ jFprintf( sync_vars_t *svars, const char *msg, ... )
 }
 
 static void
-match_tuids( sync_vars_t *svars, int t )
+match_tuids( sync_vars_t *svars, int t, message_t *msgs )
 {
 	sync_rec_t *srec;
 	message_t *tmsg, *ntmsg = 0;
@@ -237,7 +237,7 @@ match_tuids( sync_vars_t *svars, int t )
 					goto mfound;
 				}
 			}
-			for (tmsg = svars->msgs[t]; tmsg != ntmsg; tmsg = tmsg->next) {
+			for (tmsg = msgs; tmsg != ntmsg; tmsg = tmsg->next) {
 				if (tmsg->status & M_DEAD)
 					continue;
 				if (tmsg->tuid[0] && !memcmp( tmsg->tuid, srec->tuid, TUIDL )) {
@@ -1380,7 +1380,7 @@ box_loaded( int sts, message_t *msgs, int total_msgs, int recent_msgs, void *aux
 
 	if (svars->state[t] & ST_FIND_OLD) {
 		debug( "matching previously copied messages on %s\n", str_ms[t] );
-		match_tuids( svars, t );
+		match_tuids( svars, t, msgs );
 	}
 
 	debug( "matching messages on %s against sync records\n", str_ms[t] );
@@ -1864,7 +1864,7 @@ msg_copied_p2( sync_vars_t *svars, sync_rec_t *srec, int t, int uid )
 	}
 }
 
-static void msgs_found_new( int sts, void *aux );
+static void msgs_found_new( int sts, message_t *msgs, void *aux );
 static void msgs_new_done( sync_vars_t *svars, int t );
 static void sync_close( sync_vars_t *svars, int t );
 
@@ -1928,7 +1928,7 @@ msgs_copied( sync_vars_t *svars, int t )
 }
 
 static void
-msgs_found_new( int sts, void *aux )
+msgs_found_new( int sts, message_t *msgs, void *aux )
 {
 	SVARS_CHECK_RET;
 	switch (sts) {
@@ -1939,7 +1939,7 @@ msgs_found_new( int sts, void *aux )
 		warn( "Warning: cannot find newly stored messages on %s.\n", str_ms[t] );
 		break;
 	}
-	match_tuids( svars, t );
+	match_tuids( svars, t, msgs );
 	msgs_new_done( svars, t );
 }
 
