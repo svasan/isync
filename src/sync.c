@@ -1374,7 +1374,7 @@ box_loaded( int sts, void *aux )
 	message_t *tmsg;
 	flag_vars_t *fv;
 	int uid, no[2], del[2], alive, todel, t1, t2;
-	int sflags, nflags, aflags, dflags, nex;
+	int sflags, nflags, aflags, dflags;
 	uint hashsz, idx;
 	char fbuf[16]; /* enlarge when support for keywords is added */
 
@@ -1709,7 +1709,7 @@ box_loaded( int sts, void *aux )
 			if (!srec->tuid[0]) {
 				if (!srec->msg[S])
 					continue;
-				nex = (srec->status / S_NEXPIRE) & 1;
+				uint nex = (srec->status / S_NEXPIRE) & 1;
 				if (nex != ((srec->status / S_EXPIRED) & 1)) {
 					/* The record needs a state change ... */
 					if (nex != ((srec->status / S_EXPIRE) & 1)) {
@@ -1986,7 +1986,7 @@ flags_set_p2( sync_vars_t *svars, sync_rec_t *srec, int t )
 			Fprintf( svars->jfp, "* %d %d %u\n", srec->uid[M], srec->uid[S], nflags );
 		}
 		if (t == S) {
-			int nex = (srec->status / S_NEXPIRE) & 1;
+			uint nex = (srec->status / S_NEXPIRE) & 1;
 			if (nex != ((srec->status / S_EXPIRED) & 1)) {
 				if (nex && (svars->smaxxuid < srec->uid[S]))
 					svars->smaxxuid = srec->uid[S];
