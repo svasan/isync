@@ -273,16 +273,24 @@ SyncState *
 
 sub killcfg()
 {
+	unlink $_ for (glob("*.log"));
 	unlink ".mbsyncrc";
 }
 
 # $options
-sub runsync($)
+sub runsync($$)
 {
-#	open FILE, "valgrind -q --log-fd=3 $mbsync ".shift()." -c .mbsyncrc test 3>&2 2>&1 |";
-	open FILE, "$mbsync -D -Z ".shift()." -c .mbsyncrc test 2>&1 |";
+	my ($flags, $file) = @_;
+
+#	open FILE, "valgrind -q --log-fd=3 $mbsync $flags -c .mbsyncrc test 3>&2 2>&1 |";
+	open FILE, "$mbsync -D -Z $flags -c .mbsyncrc test 2>&1 |";
 	my @out = <FILE>;
 	close FILE or push(@out, $! ? "*** error closing mbsync: $!\n" : "*** mbsync exited with signal ".($?&127).", code ".($?>>8)."\n");
+	if ($file) {
+		open FILE, ">$file" or die("Cannot create $file: $!\n");
+		print FILE @out;
+		close FILE;
+	}
 	return $?, @out;
 }
 
@@ -408,7 +416,7 @@ sub show($$$)
 	showchan("slave/.mbsyncstate");
 	print ");\n";
 	&writecfg(@sfx);
-	runsync("");
+	runsync("", "");
 	killcfg();
 	print "my \@X$tx = (\n";
 	showchan("slave/.mbsyncstate");
@@ -625,7 +633,7 @@ sub test($$$@)
 	mkchan($$sx[0], $$sx[1], @{ $$sx[2] });
 	&writecfg(@sfx);
 
-	my ($xc, @ret) = runsync("-J");
+	my ($xc, @ret) = runsync("-J", "1-initial.log");
 	if ($xc || ckchan("slave/.mbsyncstate.new", $tx)) {
 		print "Input:\n";
 		printchan($sx);
@@ -643,7 +651,7 @@ sub test($$$@)
 	}
 
 	my @nj = readfile("slave/.mbsyncstate.journal");
-	($xc, @ret) = runsync("-0 --no-expunge");
+	($xc, @ret) = runsync("-0 --no-expunge", "2-replay.log");
 	if ($xc || ckstate("slave/.mbsyncstate", @{ $$tx[2] })) {
 		print "Journal replay failed.\n";
 		print "Options:\n";
@@ -662,7 +670,7 @@ sub test($$$@)
 		exit 1;
 	}
 
-	($xc, @ret) = runsync("");
+	($xc, @ret) = runsync("", "3-verify.log");
 	if ($xc || ckchan("slave/.mbsyncstate", $tx)) {
 		print "Idempotence verification run failed.\n";
 		print "Input == Expected result:\n";
