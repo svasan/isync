@@ -605,6 +605,16 @@ sub printchan($)
 	printstate(@{ $$cs[2] });
 }
 
+sub readfile($)
+{
+	my ($file) = @_;
+
+	open(FILE, $file) or return;
+	my @nj = <FILE>;
+	close FILE;
+	return @nj;
+}
+
 # $title, \@source_state, \@target_state, @channel_configs
 sub test($$$@)
 {
@@ -632,10 +642,7 @@ sub test($$$@)
 		exit 1;
 	}
 
-	open(FILE, "<", "slave/.mbsyncstate.journal") or
-		die "Cannot read journal.\n";
-	my @nj = <FILE>;
-	close FILE;
+	my @nj = readfile("slave/.mbsyncstate.journal");
 	($xc, @ret) = runsync("-0 --no-expunge");
 	if ($xc || ckstate("slave/.mbsyncstate", @{ $$tx[2] })) {
 		print "Journal replay failed.\n";
