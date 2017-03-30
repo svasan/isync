@@ -828,7 +828,7 @@ load_state( sync_vars_t *svars )
 				      (t3 = 0, (sscanf( buf + 2, "%d %d %n", &t1, &t2, &t3 ) < 2) || !t3 || (t - t3 != TUIDL + 2)) :
 				      c == 'S' || c == '!' ?
 				        (sscanf( buf + 2, "%d", &t1 ) != 1) :
-				        c == 'F' || c == 'T' || c == '+' || c == '&' || c == '-' || c == '|' || c == '/' || c == '\\' ?
+				        c == 'F' || c == 'T' || c == '+' || c == '&' || c == '-' || c == '=' || c == '|' || c == '/' || c == '\\' ?
 				          (sscanf( buf + 2, "%d %d", &t1, &t2 ) != 2) :
 				          (sscanf( buf + 2, "%d %d %d", &t1, &t2, &t3 ) != 3))
 				{
@@ -877,6 +877,11 @@ load_state( sync_vars_t *svars )
 					switch (c) {
 					case '-':
 						debug( "killed\n" );
+						srec->status = S_DEAD;
+						break;
+					case '=':
+						debug( "aborted\n" );
+						svars->mmaxxuid = srec->uid[M];
 						srec->status = S_DEAD;
 						break;
 					case '#':
@@ -1698,8 +1703,6 @@ box_loaded( int sts, void *aux )
 					} else if (todel > 0) {
 						/* The message is excess. */
 						srec->status |= S_NEXPIRE;
-						debug( "  new pair(%d,%d) expired\n", srec->uid[M], srec->uid[S] );
-						svars->mmaxxuid = srec->uid[M];
 						todel--;
 					}
 				}
@@ -1738,8 +1741,9 @@ box_loaded( int sts, void *aux )
 				}
 			} else {
 				if (srec->status & S_NEXPIRE) {
-					jFprintf( svars, "- %d %d\n", srec->uid[M], srec->uid[S] );
+					jFprintf( svars, "= %d %d\n", srec->uid[M], srec->uid[S] );
 					debug( "  pair(%d,%d): 1 (abort)\n", srec->uid[M], srec->uid[S] );
+					svars->mmaxxuid = srec->uid[M];
 					srec->msg[M]->srec = 0;
 					srec->status = S_DEAD;
 				}
