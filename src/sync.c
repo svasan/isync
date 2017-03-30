@@ -1615,6 +1615,11 @@ box_loaded( int sts, void *aux )
 							jFprintf( svars, "* %d %d %u\n", srec->uid[M], srec->uid[S], srec->flags );
 							debug( "  -> updated flags to %u\n", tmsg->flags );
 						}
+						if (srec->uid[t] == -1) {
+							debug( "  -> not too big any more\n" );
+							jFprintf( svars, "%c %d %d -2\n", "<>"[t], srec->uid[M], srec->uid[S] );
+							srec->uid[t] = -2;
+						}
 						for (t1 = 0; t1 < TUIDL; t1++) {
 							t2 = arc4_getbyte() & 0x3f;
 							srec->tuid[t1] = t2 < 26 ? t2 + 'A' : t2 < 52 ? t2 + 'a' - 26 : t2 < 62 ? t2 + '0' - 52 : t2 == 62 ? '+' : '/';
