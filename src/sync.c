@@ -1610,7 +1610,7 @@ box_loaded( int sts, void *aux )
 						debug( "  -> pair(%d,%d) created\n", srec->uid[M], srec->uid[S] );
 					}
 					if ((tmsg->flags & F_FLAGGED) || tmsg->size <= svars->chan->stores[t]->max_size) {
-						if (tmsg->flags) {
+						if (tmsg->flags != srec->flags) {
 							srec->flags = tmsg->flags;
 							jFprintf( svars, "* %d %d %u\n", srec->uid[M], srec->uid[S], srec->flags );
 							debug( "  -> updated flags to %u\n", tmsg->flags );
