@@ -2712,6 +2712,7 @@ imap_find_new_msgs( store_t *gctx, int newuid,
 
 	INIT_IMAP_CMD_X(imap_cmd_find_new_t, cmd, cb, aux)
 	cmd->uid = newuid;
+	// Some servers fail to enumerate recently STOREd messages without syncing first.
 	imap_exec( (imap_store_t *)ctx, &cmd->gen.gen, imap_find_new_msgs_p2, "CHECK" );
 }
 
@@ -2739,6 +2740,18 @@ imap_list_store( store_t *gctx, int flags,
 	imap_store_t *ctx = (imap_store_t *)gctx;
 	imap_cmd_refcounted_state_t *sts = imap_refcounted_new_state( cb, aux );
 
+	// ctx->prefix may be empty, "INBOX.", or something else.
+	// 'flags' may be LIST_INBOX, LIST_PATH (or LIST_PATH_MAYBE), or both.
+	// This matrix determines what to query, and what comes out as a side effect:
+	//
+	// qry \ pfx | empty | inbox | other
+	// ----------+-------+-------+-------
+	// inbox     | i     | i [p] | i
+	// both      | p [i] | i [p] | i + p
+	// path      | p [i] | p {i} | p
+	//
+	// {i} => This doesn't actually contain INBOX itself, only its subfolders.
+	//
 	if ((flags & (LIST_PATH | LIST_PATH_MAYBE)) && (!(flags & LIST_INBOX) || !is_inbox( ctx, ctx->prefix, -1 )))
 		imap_exec( ctx, imap_refcounted_new_cmd( sts ), imap_refcounted_done_box,
 		           "LIST \"\" \"%\\s*\"", ctx->prefix );

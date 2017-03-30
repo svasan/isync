@@ -32,6 +32,10 @@ sub test($$$@);
 
 ################################################################################
 
+# Format of the test defs: [ master, slave, state ]
+# master/slave: [ maxuid, { seq, uid, flags }... ]
+# state: [ MaxPulledUid, MaxExpiredMasterUid, MaxPushedUid, { muid, suid, flags }... ]
+
 # generic syncing tests
 my @x01 = (
  [ 8,
