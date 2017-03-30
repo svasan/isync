@@ -877,8 +877,6 @@ load_state( sync_vars_t *svars )
 					switch (c) {
 					case '-':
 						debug( "killed\n" );
-						if (srec->msg[M])
-							srec->msg[M]->srec = 0;
 						srec->status = S_DEAD;
 						break;
 					case '#':
