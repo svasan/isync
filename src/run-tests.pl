@@ -339,17 +339,11 @@ sub showbox($)
 	my ($bn) = @_;
 
 	my ($mu, %ms) = readbox($bn);
-	print " [ $mu,\n   ";
-	my $frst = 1;
+	my @MS = ($mu);
 	for my $num (sort { $a <=> $b } keys %ms) {
-		if ($frst) {
-			$frst = 0;
-		} else {
-			print ", ";
-		}
-		print "$num, $ms{$num}[0], \"$ms{$num}[1]\"";
+		push @MS, $num, $ms{$num}[0], $ms{$num}[1];
 	}
-	print " ],\n";
+	printbox($bn, @MS);
 }
 
 # $filename
@@ -382,22 +376,14 @@ sub showstate($)
 		close FILE;
 		return;
 	}
-	print " [ ".($hdr{'MaxPulledUid'} // "missing").", ".
-	            ($hdr{'MaxExpiredSlaveUid'} // "0").", ".($hdr{'MaxPushedUid'} // "missing").",\n   ";
-	my $frst = 1;
+	my @T = ($hdr{'MaxPulledUid'} // "missing",
+	         $hdr{'MaxExpiredSlaveUid'} // "0",
+	         $hdr{'MaxPushedUid'} // "missing");
 	for (@ls) {
-		if ($frst) {
-			$frst = 0;
-		} else {
-			print ", ";
-		}
-		if (!/^(-?\d+) (-?\d+) (.*)$/) {
-			print "??, ??, \"??\"";
-		} else {
-			print "$1, $2, \"$3\"";
-		}
+		/^(-?\d+) (-?\d+) (.*)$/;
+		push @T, $1, $2, $3;
 	}
-	print " ],\n";
+	printstate(@T);
 }
 
 # $filename
@@ -604,7 +590,7 @@ sub printstate(@)
 		} else {
 			print ", ";
 		}
-		print shift(@t).", ".shift(@t).", \"".shift(@t)."\"";
+		print((shift(@t) // "??").", ".(shift(@t) // "??").", \"".(shift(@t) // "??")."\"");
 	}
 	print " ],\n";
 }
