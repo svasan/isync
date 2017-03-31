@@ -596,7 +596,7 @@ clean_strdup( const char *s )
 }
 
 
-#define JOURNAL_VERSION "2"
+#define JOURNAL_VERSION "3"
 
 static int
 prepare_state( sync_vars_t *svars )
@@ -826,27 +826,21 @@ load_state( sync_vars_t *svars )
 				buf[t] = 0;
 				if ((c = buf[0]) == '#' ?
 				      (t3 = 0, (sscanf( buf + 2, "%d %d %n", &t1, &t2, &t3 ) < 2) || !t3 || (t - t3 != TUIDL + 2)) :
-				      c == '(' || c == ')' || c == '{' || c == '}' || c == '[' || c == ']' || c == '!' ?
+				      c == '!' ?
 				        (sscanf( buf + 2, "%d", &t1 ) != 1) :
-				        c == '+' || c == '&' || c == '-' || c == '|' || c == '/' || c == '\\' ?
+				        c == 'S' || c == 'F' || c == 'T' || c == '+' || c == '&' || c == '-' || c == '|' || c == '/' || c == '\\' ?
 				          (sscanf( buf + 2, "%d %d", &t1, &t2 ) != 2) :
 				          (sscanf( buf + 2, "%d %d %d", &t1, &t2, &t3 ) != 3))
 				{
 					error( "Error: malformed journal entry at %s:%d\n", svars->jname, line );
 					goto jbail;
 				}
-				if (c == '(')
-					svars->maxuid[M] = t1;
-				else if (c == ')')
-					svars->maxuid[S] = t1;
-				else if (c == '{')
-					svars->newuid[M] = t1;
-				else if (c == '}')
-					svars->newuid[S] = t1;
-				else if (c == '[')
-					*int_array_append( &svars->trashed_msgs[M] ) = t1;
-				else if (c == ']')
-					*int_array_append( &svars->trashed_msgs[S] ) = t1;
+				if (c == 'S')
+					svars->maxuid[t1] = t2;
+				else if (c == 'F')
+					svars->newuid[t1] = t2;
+				else if (c == 'T')
+					*int_array_append( &svars->trashed_msgs[t1] ) = t2;
 				else if (c == '!')
 					svars->smaxxuid = t1;
 				else if (c == '|') {
@@ -1819,7 +1813,7 @@ box_loaded( int sts, void *aux )
 		fdatasync( fileno( svars->jfp ) );
 	for (t = 0; t < 2; t++) {
 		svars->newuid[t] = svars->ctx[t]->uidnext;
-		jFprintf( svars, "%c %d\n", "{}"[t], svars->newuid[t] );
+		jFprintf( svars, "F %d %d\n", t, svars->newuid[t] );
 		svars->new_msgs[t] = svars->ctx[1-t]->msgs;
 		msgs_copied( svars, t );
 		if (check_cancel( svars ))
@@ -1929,7 +1923,7 @@ msgs_copied( sync_vars_t *svars, int t )
 	if (svars->new_pending[t])
 		goto out;
 
-	jFprintf( svars, "%c %d\n", ")("[t], svars->maxuid[1-t] );
+	jFprintf( svars, "S %d %d\n", 1-t, svars->maxuid[1-t] );
 	sync_close( svars, 1-t );
 	if (check_cancel( svars ))
 		goto out;
@@ -2100,7 +2094,7 @@ msg_trashed( int sts, void *aux )
 		return;
 	INIT_SVARS(vars->aux);
 	debug( "  -> trashed %s %d\n", str_ms[t], vars->msg->uid );
-	jFprintf( svars, "%c %d\n", "[]"[t], vars->msg->uid );
+	jFprintf( svars, "T %d %d\n", t, vars->msg->uid );
 	free( vars );
 	trash_done[t]++;
 	stats();
@@ -2123,7 +2117,7 @@ msg_rtrashed( int sts, int uid ATTR_UNUSED, copy_vars_t *vars )
 	}
 	t ^= 1;
 	debug( "  -> remote trashed %s %d\n", str_ms[t], vars->msg->uid );
-	jFprintf( svars, "%c %d\n", "[]"[t], vars->msg->uid );
+	jFprintf( svars, "T %d %d\n", t, vars->msg->uid );
 	free( vars );
 	trash_done[t]++;
 	stats();
