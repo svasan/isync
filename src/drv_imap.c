@@ -304,6 +304,12 @@ send_imap_cmd( imap_store_t *ctx, struct imap_cmd *cmd )
 	iov[0].len = bufl;
 	iov[0].takeOwn = KeepOwn;
 	if (litplus) {
+		if (DFlags & DEBUG_NET_ALL) {
+			printf( "%s>>>>>>>>>\n", ctx->label );
+			fwrite( cmd->param.data, cmd->param.data_len, 1, stdout );
+			printf( "%s>>>>>>>>>\n", ctx->label );
+			fflush( stdout );
+		}
 		iov[1].buf = cmd->param.data;
 		iov[1].len = cmd->param.data_len;
 		iov[1].takeOwn = GiveOwn;
@@ -1363,6 +1369,12 @@ imap_socket_read( void *aux )
 			if (cmdp->param.data) {
 				if (cmdp->param.to_trash)
 					ctx->trashnc = TrashKnown; /* Can't get NO [TRYCREATE] any more. */
+				if (DFlags & DEBUG_NET_ALL) {
+					printf( "%s>>>>>>>>>\n", ctx->label );
+					fwrite( cmdp->param.data, cmdp->param.data_len, 1, stdout );
+					printf( "%s>>>>>>>>>\n", ctx->label );
+					fflush( stdout );
+				}
 				iov[0].buf = cmdp->param.data;
 				iov[0].len = cmdp->param.data_len;
 				iov[0].takeOwn = GiveOwn;
@@ -2715,7 +2727,7 @@ imap_find_new_msgs_p2( imap_store_t *ctx, struct imap_cmd *gcmd, int response )
 	}
 	INIT_IMAP_CMD(imap_cmd_simple, cmd, cmdp->gen.callback, cmdp->gen.callback_aux)
 	imap_exec( (imap_store_t *)ctx, &cmd->gen, imap_done_simple_box,
-	           "UID FETCH %d:1000000000 (UID BODY.PEEK[HEADER.FIELDS (X-TUID)])", cmdp->uid );
+	           "UID FETCH %d:" stringify(INT_MAX) " (UID BODY.PEEK[HEADER.FIELDS (X-TUID)])", cmdp->uid );
 }
 
 /******************* imap_list_store *******************/

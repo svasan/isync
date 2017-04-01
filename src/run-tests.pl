@@ -16,6 +16,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
+use warnings;
 use strict;
 use File::Path;
 
@@ -222,7 +223,7 @@ my @X51 = (
  [ 6, 3, 0,
    2, 2, "FS", 4, 4, "", 5, 5, "", 6, 6, "" ],
 );
-test("max messages + expire", \@x50, \@X51, @O51);
+test("max messages + expunge", \@x50, \@X51, @O51);
 
 
 ################################################################################
@@ -603,7 +604,6 @@ sub printstate(@)
 		print shift(@t).", ".shift(@t).", \"".shift(@t)."\"";
 	}
 	print " ],\n";
-	close FILE;
 }
 
 # \@chan_state

@@ -1396,6 +1396,8 @@ box_loaded( int sts, void *aux )
 		if (srec->status & S_DEAD)
 			continue;
 		uid = srec->uid[t];
+		if (uid <= 0)
+			continue;
 		idx = (uint)((uint)uid * 1103515245U) % hashsz;
 		while (srecmap[idx].uid)
 			if (++idx == hashsz)
@@ -1409,7 +1411,7 @@ box_loaded( int sts, void *aux )
 		uid = tmsg->uid;
 		if (DFlags & DEBUG_SYNC) {
 			make_flags( tmsg->flags, fbuf );
-			printf( tmsg->size ? "  message %5d, %-4s, %6lu: " : "  message %5d, %-4s: ", uid, fbuf, tmsg->size );
+			printf( tmsg->size ? "  message %5d, %-4s, %6d: " : "  message %5d, %-4s: ", uid, fbuf, tmsg->size );
 		}
 		idx = (uint)((uint)uid * 1103515245U) % hashsz;
 		while (srecmap[idx].uid) {

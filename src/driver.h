@@ -39,7 +39,7 @@ typedef struct store_conf {
 	const char *flat_delim;
 	const char *map_inbox;
 	const char *trash;
-	uint max_size; /* off_t is overkill */
+	int max_size; /* off_t is overkill */
 	char trash_remote_new, trash_only_new;
 } store_conf_t;
 
@@ -65,7 +65,7 @@ typedef struct message {
 	struct sync_rec *srec;
 	char *msgid; /* owned */
 	/* string_list_t *keywords; */
-	size_t size; /* zero implies "not fetched" */
+	int size; /* zero implies "not fetched" */
 	int uid;
 	uchar flags, status;
 	char tuid[TUIDL];
