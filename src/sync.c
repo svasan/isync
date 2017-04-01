@@ -124,20 +124,24 @@ make_flags( int flags, char *buf )
 	return d;
 }
 
+// These is the (mostly) persistent status of the sync record.
+// Most of these bits are actually mutually exclusive. It is a
+// bitfield to allow for easy testing for multiple states.
+#define S_EXPIRE       (1<<0)  // the entry is being expired (slave message removal scheduled)
+#define S_EXPIRED      (1<<1)  // the entry is expired (slave message removal confirmed)
+#define S_DEAD         (1<<7)  // ephemeral: the entry was killed and should be ignored
 
-#define S_DEAD         (1<<0)  /* ephemeral: the entry was killed and should be ignored */
-#define S_DEL(ms)      (1<<(2+(ms)))  /* ephemeral: m/s message would be subject to expunge */
-#define S_EXPIRED      (1<<4)  /* the entry is expired (slave message removal confirmed) */
-#define S_EXPIRE       (1<<5)  /* the entry is being expired (slave message removal scheduled) */
-#define S_NEXPIRE      (1<<6)  /* temporary: new expiration state */
-#define S_DELETE       (1<<7)  /* ephemeral: flags propagation is a deletion */
+// Ephemeral working set.
+#define W_NEXPIRE      (1<<0)  // temporary: new expiration state
+#define W_DELETE       (1<<1)  // ephemeral: flags propagation is a deletion
+#define W_DEL(ms)      (1<<(2+(ms)))  // ephemeral: m/s message would be subject to expunge
 
 typedef struct sync_rec {
 	struct sync_rec *next;
 	/* string_list_t *keywords; */
 	int uid[2]; /* -2 = pending (use tuid), -1 = skipped (too big), 0 = expired */
 	message_t *msg[2];
-	uchar status, flags, aflags[2], dflags[2];
+	uchar status, wstate, flags, aflags[2], dflags[2];
 	char tuid[TUIDL];
 } sync_rec_t;
 
@@ -758,6 +762,7 @@ load_state( sync_vars_t *svars )
 				srec->status = S_EXPIRE | S_EXPIRED;
 			} else
 				srec->status = 0;
+			srec->wstate = 0;
 			srec->flags = parse_flags( s );
 			debug( "  entry (%d,%d,%u,%s)\n", srec->uid[M], srec->uid[S], srec->flags, srec->status & S_EXPIRED ? "X" : "" );
 			srec->msg[M] = srec->msg[S] = 0;
@@ -835,7 +840,7 @@ load_state( sync_vars_t *svars )
 				      (t3 = 0, (sscanf( buf + 2, "%d %d %n", &t1, &t2, &t3 ) < 2) || !t3 || (t - t3 != TUIDL + 2)) :
 				      c == 'S' || c == '!' ?
 				        (sscanf( buf + 2, "%d", &t1 ) != 1) :
-				        c == 'F' || c == 'T' || c == '+' || c == '&' || c == '-' || c == '=' || c == '|' || c == '/' || c == '\\' ?
+				        c == 'F' || c == 'T' || c == '+' || c == '&' || c == '-' || c == '=' || c == '|' ?
 				          (sscanf( buf + 2, "%d %d", &t1, &t2 ) != 2) :
 				          (sscanf( buf + 2, "%d %d %d", &t1, &t2, &t3 ) != 3))
 				{
@@ -864,6 +869,7 @@ load_state( sync_vars_t *svars )
 					debug( "  new entry(%d,%d)\n", t1, t2 );
 					srec->msg[M] = srec->msg[S] = 0;
 					srec->status = 0;
+					srec->wstate = 0;
 					srec->flags = 0;
 					srec->tuid[0] = 0;
 					srec->next = 0;
@@ -915,27 +921,8 @@ load_state( sync_vars_t *svars )
 						srec->flags = t3;
 						break;
 					case '~':
-						debug( "expire now %d\n", t3 );
-						if (t3)
-							srec->status |= S_EXPIRE;
-						else
-							srec->status &= ~S_EXPIRE;
-						break;
-					case '\\':
-						t3 = (srec->status & S_EXPIRED);
-						debug( "expire back to %d\n", t3 / S_EXPIRED );
-						if (t3)
-							srec->status |= S_EXPIRE;
-						else
-							srec->status &= ~S_EXPIRE;
-						break;
-					case '/':
-						t3 = (srec->status & S_EXPIRE);
-						debug( "expired now %d\n", t3 / S_EXPIRE );
-						if (t3)
-							srec->status |= S_EXPIRED;
-						else
-							srec->status &= ~S_EXPIRED;
+						debug( "status now %#x\n", t3 );
+						srec->status = t3;
 						break;
 					default:
 						error( "Error: unrecognized journal entry at %s:%d\n", svars->jname, line );
@@ -1492,7 +1479,7 @@ box_loaded( int sts, message_t *msgs, int total_msgs, int recent_msgs, void *aux
 			for (t = 0; t < 2; t++) {
 				srec->aflags[t] = srec->dflags[t] = 0;
 				if (srec->msg[t] && (srec->msg[t]->flags & F_DELETED))
-					srec->status |= S_DEL(t);
+					srec->wstate |= W_DEL(t);
 				if (del[t]) {
 					// The target was newly expunged, so there is nothing to update.
 					// The deletion is propagated in the opposite iteration.
@@ -1515,7 +1502,7 @@ box_loaded( int sts, message_t *msgs, int total_msgs, int recent_msgs, void *aux
 						if (svars->chan->ops[t] & OP_DELETE) {
 							debug( "  %sing delete\n", str_hl[t] );
 							srec->aflags[t] = F_DELETED;
-							srec->status |= S_DELETE;
+							srec->wstate |= W_DELETE;
 						} else {
 							debug( "  not %sing delete\n", str_hl[t] );
 						}
@@ -1578,6 +1565,7 @@ box_loaded( int sts, message_t *msgs, int total_msgs, int recent_msgs, void *aux
 						svars->srecadd = &srec->next;
 						svars->nsrecs++;
 						srec->status = 0;
+						srec->wstate = 0;
 						srec->flags = 0;
 						srec->tuid[0] = 0;
 						srec->uid[1-t] = tmsg->uid;
@@ -1663,7 +1651,7 @@ box_loaded( int sts, message_t *msgs, int total_msgs, int recent_msgs, void *aux
 					           ((srec->status & (S_EXPIRE|S_EXPIRED)) == (S_EXPIRE|S_EXPIRED)) ||
 					           ((srec->status & (S_EXPIRE|S_EXPIRED)) && (tmsg->flags & F_DELETED))) {
 						/* The message is excess or was already (being) expired. */
-						srec->status |= S_NEXPIRE;
+						srec->wstate |= W_NEXPIRE;
 						debug( "  old pair(%d,%d) expired\n", srec->uid[M], srec->uid[S] );
 						if (svars->mmaxxuid < srec->uid[M])
 							svars->mmaxxuid = srec->uid[M];
@@ -1682,7 +1670,7 @@ box_loaded( int sts, message_t *msgs, int total_msgs, int recent_msgs, void *aux
 						todel--;
 					} else if (todel > 0) {
 						/* The message is excess. */
-						srec->status |= S_NEXPIRE;
+						srec->wstate |= W_NEXPIRE;
 						todel--;
 					}
 				}
@@ -1703,24 +1691,24 @@ box_loaded( int sts, message_t *msgs, int total_msgs, int recent_msgs, void *aux
 			if (!srec->tuid[0]) {
 				if (!srec->msg[S])
 					continue;
-				uint nex = (srec->status / S_NEXPIRE) & 1;
+				uint nex = (srec->wstate / W_NEXPIRE) & 1;
 				if (nex != ((srec->status / S_EXPIRED) & 1)) {
 					/* The record needs a state change ... */
 					if (nex != ((srec->status / S_EXPIRE) & 1)) {
 						/* ... and we need to start a transaction. */
-						jFprintf( svars, "~ %d %d %d\n", srec->uid[M], srec->uid[S], nex );
 						debug( "  pair(%d,%d): %d (pre)\n", srec->uid[M], srec->uid[S], nex );
 						srec->status = (srec->status & ~S_EXPIRE) | (nex * S_EXPIRE);
+						jFprintf( svars, "~ %d %d %u\n", srec->uid[M], srec->uid[S], srec->status  );
 					} else {
 						/* ... but the "right" transaction is already pending. */
 						debug( "  pair(%d,%d): %d (pending)\n", srec->uid[M], srec->uid[S], nex );
 					}
 				} else {
 					/* Note: the "wrong" transaction may be pending here,
-					 * e.g.: S_NEXPIRE = 0, S_EXPIRE = 1, S_EXPIRED = 0. */
+					 * e.g.: W_NEXPIRE = 0, S_EXPIRE = 1, S_EXPIRED = 0. */
 				}
 			} else {
-				if (srec->status & S_NEXPIRE) {
+				if (srec->wstate & W_NEXPIRE) {
 					jFprintf( svars, "= %d %d\n", srec->uid[M], srec->uid[S] );
 					debug( "  pair(%d,%d): 1 (abort)\n", srec->uid[M], srec->uid[S] );
 					// If we have so many new messages that some of them are instantly expired,
@@ -1743,7 +1731,7 @@ box_loaded( int sts, message_t *msgs, int total_msgs, int recent_msgs, void *aux
 		for (t = 0; t < 2; t++) {
 			aflags = srec->aflags[t];
 			dflags = srec->dflags[t];
-			if (srec->status & S_DELETE) {
+			if (srec->wstate & W_DELETE) {
 				if (!aflags) {
 					/* This deletion propagation goes the other way round. */
 					continue;
@@ -1752,7 +1740,7 @@ box_loaded( int sts, message_t *msgs, int total_msgs, int recent_msgs, void *aux
 				/* The trigger is an expiration transaction being ongoing ... */
 				if ((t == S) && ((shifted_bit(srec->status, S_EXPIRE, S_EXPIRED) ^ srec->status) & S_EXPIRED)) {
 					/* ... but the actual action derives from the wanted state. */
-					if (srec->status & S_NEXPIRE)
+					if (srec->wstate & W_NEXPIRE)
 						aflags |= F_DELETED;
 					else
 						dflags |= F_DELETED;
@@ -1949,9 +1937,9 @@ flags_set( int sts, void *aux )
 	switch (sts) {
 	case DRV_OK:
 		if (vars->aflags & F_DELETED)
-			vars->srec->status |= S_DEL(t);
+			vars->srec->wstate |= W_DEL(t);
 		else if (vars->dflags & F_DELETED)
-			vars->srec->status &= ~S_DEL(t);
+			vars->srec->wstate &= ~W_DEL(t);
 		flags_set_p2( svars, vars->srec, t );
 		break;
 	}
@@ -1965,7 +1953,7 @@ flags_set( int sts, void *aux )
 static void
 flags_set_p2( sync_vars_t *svars, sync_rec_t *srec, int t )
 {
-	if (srec->status & S_DELETE) {
+	if (srec->wstate & W_DELETE) {
 		debug( "  pair(%d,%d): resetting %s UID\n", srec->uid[M], srec->uid[S], str_ms[1-t] );
 		jFprintf( svars, "%c %d %d 0\n", "><"[t], srec->uid[M], srec->uid[S] );
 		srec->uid[1-t] = 0;
@@ -1977,15 +1965,15 @@ flags_set_p2( sync_vars_t *svars, sync_rec_t *srec, int t )
 			jFprintf( svars, "* %d %d %u\n", srec->uid[M], srec->uid[S], nflags );
 		}
 		if (t == S) {
-			uint nex = (srec->status / S_NEXPIRE) & 1;
+			uint nex = (srec->wstate / W_NEXPIRE) & 1;
 			if (nex != ((srec->status / S_EXPIRED) & 1)) {
-				jFprintf( svars, "/ %d %d\n", srec->uid[M], srec->uid[S] );
 				debug( "  pair(%d,%d): expired %d (commit)\n", srec->uid[M], srec->uid[S], nex );
 				srec->status = (srec->status & ~S_EXPIRED) | (nex * S_EXPIRED);
+				jFprintf( svars, "~ %d %d %u\n", srec->uid[M], srec->uid[S], srec->status );
 			} else if (nex != ((srec->status / S_EXPIRE) & 1)) {
-				jFprintf( svars, "\\ %d %d\n", srec->uid[M], srec->uid[S] );
 				debug( "  pair(%d,%d): expire %d (cancel)\n", srec->uid[M], srec->uid[S], nex );
 				srec->status = (srec->status & ~S_EXPIRE) | (nex * S_EXPIRE);
+				jFprintf( svars, "~ %d %d %u\n", srec->uid[M], srec->uid[S], srec->status );
 			}
 		}
 	}
@@ -2151,8 +2139,8 @@ box_closed_p2( sync_vars_t *svars, int t )
 		for (srec = svars->srecs; srec; srec = srec->next) {
 			if (srec->status & S_DEAD)
 				continue;
-			if (srec->uid[S] <= 0 || ((srec->status & S_DEL(S)) && (svars->state[S] & ST_DID_EXPUNGE))) {
-				if (srec->uid[M] <= 0 || ((srec->status & S_DEL(M)) && (svars->state[M] & ST_DID_EXPUNGE)) ||
+			if (srec->uid[S] <= 0 || ((srec->wstate & W_DEL(S)) && (svars->state[S] & ST_DID_EXPUNGE))) {
+				if (srec->uid[M] <= 0 || ((srec->wstate & W_DEL(M)) && (svars->state[M] & ST_DID_EXPUNGE)) ||
 				    ((srec->status & S_EXPIRED) && svars->maxuid[M] >= srec->uid[M] && svars->mmaxxuid >= srec->uid[M])) {
 					debug( "  -> killing (%d,%d)\n", srec->uid[M], srec->uid[S] );
 					srec->status = S_DEAD;
@@ -2162,7 +2150,7 @@ box_closed_p2( sync_vars_t *svars, int t )
 					jFprintf( svars, "> %d %d 0\n", srec->uid[M], srec->uid[S] );
 					srec->uid[S] = 0;
 				}
-			} else if (srec->uid[M] > 0 && ((srec->status & S_DEL(M)) && (svars->state[M] & ST_DID_EXPUNGE))) {
+			} else if (srec->uid[M] > 0 && ((srec->wstate & W_DEL(M)) && (svars->state[M] & ST_DID_EXPUNGE))) {
 				debug( "  -> orphaning ([%d],%d)\n", srec->uid[M], srec->uid[S] );
 				jFprintf( svars, "< %d %d 0\n", srec->uid[M], srec->uid[S] );
 				srec->uid[M] = 0;
