@@ -195,7 +195,7 @@ my @X31 = (
    1, 1, "F", 2, 2, "", 3, 3, "S", 4, 4, "", 5, 5, "S", 6, 6, "" ],
  [ 5,
    1, 1, "F", 2, 2, "", 4, 3, "", 5, 4, "S", 6, 5, "" ],
- [ 6, 2, 0,
+ [ 6, 3, 0,
    1, 1, "F", 2, 2, "", 4, 3, "", 5, 4, "S", 6, 5, "" ],
 );
 test("max messages", \@x30, \@X31, @O31);
@@ -207,7 +207,7 @@ my @X32 = (
    1, 1, "F", 2, 2, "", 3, 3, "S", 4, 4, "", 5, 5, "S", 6, 6, "" ],
  [ 4,
    1, 1, "F", 4, 2, "", 5, 3, "S", 6, 4, "" ],
- [ 6, 1, 0,
+ [ 6, 3, 0,
    1, 1, "F", 4, 2, "", 5, 3, "S", 6, 4, "" ],
 );
 test("max messages vs. unread", \@x30, \@X32, @O32);
@@ -367,7 +367,7 @@ sub showbox($)
 
 # $filename
 # Output:
-# [ maxuid[M], smaxxuid, maxuid[S],
+# [ maxuid[M], mmaxxuid, maxuid[S],
 #   uid[M], uid[S], "flags", ... ],
 sub showstate($)
 {
@@ -396,7 +396,7 @@ sub showstate($)
 		return;
 	}
 	my @T = ($hdr{'MaxPulledUid'} // "missing",
-	         $hdr{'MaxExpiredSlaveUid'} // "0",
+	         $hdr{'MaxExpiredMasterUid'} // "0",
 	         $hdr{'MaxPushedUid'} // "missing");
 	for (@ls) {
 		/^(-?\d+) (-?\d+) (.*)$/;
@@ -472,7 +472,7 @@ sub mkchan($$@)
 	open(FILE, ">", "slave/.mbsyncstate") or
 		die "Cannot create sync state.\n";
 	print FILE "MasterUidValidity 1\nMaxPulledUid ".shift(@t)."\n".
-	           "SlaveUidValidity 1\nMaxExpiredSlaveUid ".shift(@t)."\nMaxPushedUid ".shift(@t)."\n\n";
+	           "SlaveUidValidity 1\nMaxExpiredMasterUid ".shift(@t)."\nMaxPushedUid ".shift(@t)."\n\n";
 	while (@t) {
 		print FILE shift(@t)." ".shift(@t)." ".shift(@t)."\n";
 	}
@@ -515,13 +515,13 @@ sub ckbox($$$@)
 # $filename, @syncstate
 sub ckstate($@)
 {
-	my ($fn, $mmaxuid, $smaxxuid, $smaxuid, @T) = @_;
+	my ($fn, $mmaxuid, $mmaxxuid, $smaxuid, @T) = @_;
 	my %hdr;
 	$hdr{'MasterUidValidity'} = "1";
 	$hdr{'SlaveUidValidity'} = "1";
 	$hdr{'MaxPulledUid'} = $mmaxuid;
 	$hdr{'MaxPushedUid'} = $smaxuid;
-	$hdr{'MaxExpiredSlaveUid'} = $smaxxuid if ($smaxxuid ne 0);
+	$hdr{'MaxExpiredMasterUid'} = $mmaxxuid if ($mmaxxuid ne 0);
 	open(FILE, "<", $fn) or die "Cannot read sync state $fn.\n";
 	chomp(my @ls = <FILE>);
 	close FILE;

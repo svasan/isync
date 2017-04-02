@@ -159,8 +159,7 @@ typedef struct {
 	int newmaxuid[2]; /* highest UID that is currently being propagated */
 	int uidval[2]; /* UID validity value */
 	int newuid[2]; /* TUID lookup makes sense only for UIDs >= this */
-	int mmaxxuid; /* highest expired UID on master during new message propagation */
-	int smaxxuid; /* highest expired UID on slave */
+	int mmaxxuid; /* highest expired UID on master */
 } sync_vars_t;
 
 static void sync_ref( sync_vars_t *svars ) { ++svars->ref_count; }
@@ -649,8 +648,8 @@ save_state( sync_vars_t *svars )
 	Fprintf( svars->nfp,
 	         "MasterUidValidity %d\nSlaveUidValidity %d\nMaxPulledUid %d\nMaxPushedUid %d\n",
 	         svars->uidval[M], svars->uidval[S], svars->maxuid[M], svars->maxuid[S] );
-	if (svars->smaxxuid)
-		Fprintf( svars->nfp, "MaxExpiredSlaveUid %d\n", svars->smaxxuid );
+	if (svars->mmaxxuid)
+		Fprintf( svars->nfp, "MaxExpiredMasterUid %d\n", svars->mmaxxuid );
 	Fprintf( svars->nfp, "\n" );
 	for (srec = svars->srecs; srec; srec = srec->next) {
 		if (srec->status & S_DEAD)
@@ -678,6 +677,7 @@ load_state( sync_vars_t *svars )
 	char *s;
 	FILE *jfp;
 	int line, t, t1, t2, t3;
+	int smaxxuid = 0;
 	char c;
 	struct stat st;
 	char fbuf[16]; /* enlarge when support for keywords is added */
@@ -701,7 +701,7 @@ load_state( sync_vars_t *svars )
 			if (line == 1 && isdigit( buf[0] )) {
 				if (sscanf( buf, "%63s %63s", buf1, buf2 ) != 2 ||
 				    sscanf( buf1, "%d:%d", &svars->uidval[M], &svars->maxuid[M] ) < 2 ||
-				    sscanf( buf2, "%d:%d:%d", &svars->uidval[S], &svars->smaxxuid, &svars->maxuid[S] ) < 3) {
+				    sscanf( buf2, "%d:%d:%d", &svars->uidval[S], &smaxxuid, &svars->maxuid[S] ) < 3) {
 					error( "Error: invalid sync state header in %s\n", svars->dname );
 					goto jbail;
 				}
@@ -719,8 +719,10 @@ load_state( sync_vars_t *svars )
 				svars->maxuid[M] = t1;
 			else if (!strcmp( buf1, "MaxPushedUid" ))
 				svars->maxuid[S] = t1;
-			else if (!strcmp( buf1, "MaxExpiredSlaveUid" ))
-				svars->smaxxuid = t1;
+			else if (!strcmp( buf1, "MaxExpiredMasterUid" ))
+				svars->mmaxxuid = t1;
+			else if (!strcmp( buf1, "MaxExpiredSlaveUid" ))  // Legacy
+				smaxxuid = t1;
 			else {
 				error( "Error: unrecognized sync state header entry at %s:%d\n", svars->dname, line );
 				goto jbail;
@@ -768,9 +770,36 @@ load_state( sync_vars_t *svars )
 		}
 		svars->existing = 0;
 	}
+
+	// This is legacy support for pre-1.3 sync states.
+	if (smaxxuid) {
+		int minwuid = INT_MAX;
+		for (srec = svars->srecs; srec; srec = srec->next) {
+			if ((srec->status & S_DEAD) || srec->uid[M] <= 0)
+				continue;
+			if (srec->status & S_EXPIRED) {
+				if (!srec->uid[S]) {
+					// The expired message was already gone.
+					continue;
+				}
+				// The expired message was not expunged yet, so re-examine it.
+				// This will happen en masse, so just extend the bulk fetch.
+			} else {
+				if (srec->uid[S] > 0 && smaxxuid >= srec->uid[S]) {
+					// The non-expired message is in the generally expired range,
+					// so don't make it contribute to the bulk fetch.
+					continue;
+				}
+				// Usual non-expired message.
+			}
+			if (minwuid > srec->uid[M])
+				minwuid = srec->uid[M];
+		}
+		svars->mmaxxuid = minwuid - 1;
+	}
+
 	svars->newmaxuid[M] = svars->maxuid[M];
 	svars->newmaxuid[S] = svars->maxuid[S];
-	svars->mmaxxuid = INT_MAX;
 	line = 0;
 	if ((jfp = fopen( svars->jname, "r" ))) {
 		if (!lock_state( svars ))
@@ -814,7 +843,7 @@ load_state( sync_vars_t *svars )
 				else if (c == 'T')
 					*int_array_append( &svars->trashed_msgs[t1] ) = t2;
 				else if (c == '!')
-					svars->smaxxuid = t1;
+					svars->mmaxxuid = t1;
 				else if (c == '|') {
 					svars->uidval[M] = t1;
 					svars->uidval[S] = t2;
@@ -897,11 +926,9 @@ load_state( sync_vars_t *svars )
 					case '/':
 						t3 = (srec->status & S_EXPIRE);
 						debug( "expired now %d\n", t3 / S_EXPIRE );
-						if (t3) {
-							if (svars->smaxxuid < srec->uid[S])
-								svars->smaxxuid = srec->uid[S];
+						if (t3)
 							srec->status |= S_EXPIRED;
-						} else
+						else
 							srec->status &= ~S_EXPIRED;
 						break;
 					default:
@@ -919,6 +946,7 @@ load_state( sync_vars_t *svars )
 		}
 	}
 	svars->replayed = line;
+
 	return 1;
 }
 
@@ -1238,31 +1266,9 @@ box_opened2( sync_vars_t *svars, int t )
 			/* When messages have been expired on the slave, the master fetch is split into
 			 * two ranges: The bulk fetch which corresponds with the most recent messages, and an
 			 * exception list of messages which would have been expired if they weren't important. */
-			debug( "preparing master selection - max expired slave uid is %d\n", svars->smaxxuid );
+			debug( "preparing master selection - max expired master uid is %d\n", svars->mmaxxuid );
 			/* First, find out the lower bound for the bulk fetch. */
-			minwuid = INT_MAX;
-			for (srec = svars->srecs; srec; srec = srec->next) {
-				if ((srec->status & S_DEAD) || srec->uid[M] <= 0)
-					continue;
-				if (srec->status & S_EXPIRED) {
-					if (!srec->uid[S]) {
-						/* The expired message was already gone. */
-						continue;
-					}
-					/* The expired message was not expunged yet, so re-examine it.
-					 * This will happen en masse, so just extend the bulk fetch. */
-				} else {
-					if (svars->smaxxuid >= srec->uid[S]) {
-						/* The non-expired message is in the generally expired range, so don't
-						 * make it contribute to the bulk fetch. */
-						continue;
-					}
-					/* Usual non-expired message. */
-				}
-				if (minwuid > srec->uid[M])
-					minwuid = srec->uid[M];
-			}
-			debug( "  min non-orphaned master uid is %d\n", minwuid );
+			minwuid = svars->mmaxxuid + 1;
 			/* Next, calculate the exception fetch. */
 			for (srec = svars->srecs; srec; srec = srec->next) {
 				if (srec->status & S_DEAD)
@@ -1665,6 +1671,8 @@ box_loaded( int sts, void *aux )
 						/* The message is excess or was already (being) expired. */
 						srec->status |= S_NEXPIRE;
 						debug( "  old pair(%d,%d) expired\n", srec->uid[M], srec->uid[S] );
+						if (svars->mmaxxuid < srec->uid[M])
+							svars->mmaxxuid = srec->uid[M];
 						todel--;
 					}
 				}
@@ -1721,6 +1729,9 @@ box_loaded( int sts, void *aux )
 				if (srec->status & S_NEXPIRE) {
 					jFprintf( svars, "= %d %d\n", srec->uid[M], srec->uid[S] );
 					debug( "  pair(%d,%d): 1 (abort)\n", srec->uid[M], srec->uid[S] );
+					// If we have so many new messages that some of them are instantly expired,
+					// but some are still propagated because they are important, we need to
+					// ensure explicitly that the bulk fetch limit is upped.
 					svars->mmaxxuid = srec->uid[M];
 					srec->msg[M]->srec = 0;
 					srec->status = S_DEAD;
@@ -1849,16 +1860,6 @@ msg_copied_p2( sync_vars_t *svars, sync_rec_t *srec, int t, int uid )
 		srec->uid[t] = uid;
 		srec->tuid[0] = 0;
 	}
-	if (t == S && svars->mmaxxuid < srec->uid[M]) {
-		/* If we have so many new messages that some of them are instantly expired,
-		 * but some are still propagated because they are important, we need to
-		 * ensure explicitly that the bulk fetch limit is upped. */
-		svars->mmaxxuid = INT_MAX;
-		if (svars->smaxxuid < srec->uid[S] - 1) {
-			svars->smaxxuid = srec->uid[S] - 1;
-			jFprintf( svars, "! %d\n", svars->smaxxuid );
-		}
-	}
 }
 
 static void msgs_found_new( int sts, void *aux );
@@ -1984,8 +1985,6 @@ flags_set_p2( sync_vars_t *svars, sync_rec_t *srec, int t )
 		if (t == S) {
 			uint nex = (srec->status / S_NEXPIRE) & 1;
 			if (nex != ((srec->status / S_EXPIRED) & 1)) {
-				if (nex && (svars->smaxxuid < srec->uid[S]))
-					svars->smaxxuid = srec->uid[S];
 				jFprintf( svars, "/ %d %d\n", srec->uid[M], srec->uid[S] );
 				debug( "  pair(%d,%d): expired %d (commit)\n", srec->uid[M], srec->uid[S], nex );
 				srec->status = (srec->status & ~S_EXPIRED) | (nex * S_EXPIRED);
@@ -2144,35 +2143,23 @@ static void
 box_closed_p2( sync_vars_t *svars, int t )
 {
 	sync_rec_t *srec;
-	int minwuid;
 
 	svars->state[t] |= ST_CLOSED;
 	if (!(svars->state[1-t] & ST_CLOSED))
 		return;
 
+	// All the journalling done in this function is merely for the autotest -
+	// the operations are idempotent, and we're about to commit the new state
+	// right afterwards anyway.
+
 	if (((svars->state[M] | svars->state[S]) & ST_DID_EXPUNGE) || svars->chan->max_messages) {
 		debug( "purging obsolete entries\n" );
-
-		minwuid = INT_MAX;
-		if (svars->chan->max_messages) {
-			debug( "  max expired slave uid is %d\n", svars->smaxxuid );
-			for (srec = svars->srecs; srec; srec = srec->next) {
-				if (srec->status & S_DEAD)
-					continue;
-				if (!((srec->uid[S] <= 0 || ((srec->status & S_DEL(S)) && (svars->state[S] & ST_DID_EXPUNGE))) &&
-				      (srec->uid[M] <= 0 || ((srec->status & S_DEL(M)) && (svars->state[M] & ST_DID_EXPUNGE)) || (srec->status & S_EXPIRED))) &&
-				    svars->smaxxuid < srec->uid[S] && minwuid > srec->uid[M])
-					minwuid = srec->uid[M];
-			}
-			debug( "  min non-orphaned master uid is %d\n", minwuid );
-		}
-
 		for (srec = svars->srecs; srec; srec = srec->next) {
 			if (srec->status & S_DEAD)
 				continue;
 			if (srec->uid[S] <= 0 || ((srec->status & S_DEL(S)) && (svars->state[S] & ST_DID_EXPUNGE))) {
 				if (srec->uid[M] <= 0 || ((srec->status & S_DEL(M)) && (svars->state[M] & ST_DID_EXPUNGE)) ||
-				    ((srec->status & S_EXPIRED) && svars->maxuid[M] >= srec->uid[M] && minwuid > srec->uid[M])) {
+				    ((srec->status & S_EXPIRED) && svars->maxuid[M] >= srec->uid[M] && svars->mmaxxuid >= srec->uid[M])) {
 					debug( "  -> killing (%d,%d)\n", srec->uid[M], srec->uid[S] );
 					srec->status = S_DEAD;
 					jFprintf( svars, "- %d %d\n", srec->uid[M], srec->uid[S] );
@@ -2188,6 +2175,12 @@ box_closed_p2( sync_vars_t *svars, int t )
 			}
 		}
 	}
+
+	// This is just an optimization, so it needs no journaling of intermediate states.
+	// However, doing it before the entry purge would require ensuring that the
+	// exception list includes all relevant messages.
+	debug( "max expired uid on master is now %d\n", svars->mmaxxuid );
+	jFprintf( svars, "! %d\n", svars->mmaxxuid );
 
 	save_state( svars );
 
