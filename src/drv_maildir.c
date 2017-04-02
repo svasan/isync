@@ -1132,7 +1132,7 @@ maildir_init_msg( maildir_store_t *ctx, maildir_message_t *msg, msg_t *entry )
 	entry->msgid = 0; /* prevent deletion */
 	msg->gen.size = entry->size;
 	msg->gen.srec = 0;
-	strncpy( msg->gen.tuid, entry->tuid, TUIDL );
+	memcpy( msg->gen.tuid, entry->tuid, TUIDL );
 	if (entry->recent)
 		msg->gen.status |= M_RECENT;
 	if (ctx->gen.opts & OPEN_FLAGS) {

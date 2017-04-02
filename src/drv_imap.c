@@ -1060,7 +1060,7 @@ parse_fetch_rsp( imap_store_t *ctx, list_t *list, char *s ATTR_UNUSED )
 		cur->gen.srec = 0;
 		cur->gen.msgid = msgid;
 		if (tuid)
-			strncpy( cur->gen.tuid, tuid, TUIDL );
+			memcpy( cur->gen.tuid, tuid, TUIDL );
 		else
 			cur->gen.tuid[0] = 0;
 		if (ctx->gen.uidnext <= uid) /* in case the server sends no UIDNEXT */
