@@ -50,7 +50,7 @@
 #define SUB_MAILDIRPP  2
 #define SUB_LEGACY     3
 
-typedef struct maildir_store_conf {
+typedef struct {
 	store_conf_t gen;
 	char *inbox;
 #ifdef USE_DB
@@ -62,12 +62,12 @@ typedef struct maildir_store_conf {
 	char *info_prefix, *info_stop; /* precalculated from info_delimiter */
 } maildir_store_conf_t;
 
-typedef struct maildir_message {
+typedef struct {
 	message_t gen;
 	char *base;
 } maildir_message_t;
 
-typedef struct maildir_store {
+typedef struct {
 	store_t gen;
 	int uvfd, uvok, nuid, is_inbox, fresh[3];
 	int minuid, maxuid, newuid, seenuid;

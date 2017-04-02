@@ -43,7 +43,7 @@ enum {
 };
 #endif
 
-typedef struct server_conf {
+typedef struct {
 	char *tunnel;
 	char *host;
 	int port;
@@ -147,7 +147,7 @@ void socket_expect_read( conn_t *sock, int expect );
 int socket_read( conn_t *sock, char *buf, int len ); /* never waits */
 char *socket_read_line( conn_t *sock ); /* don't free return value; never waits */
 typedef enum { KeepOwn = 0, GiveOwn } ownership_t;
-typedef struct conn_iovec {
+typedef struct {
 	char *buf;
 	int len;
 	ownership_t takeOwn;

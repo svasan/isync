@@ -29,16 +29,16 @@
 int DFlags;
 const char *Home;
 
-struct tst {
+typedef struct {
 	int id;
 	int first, other, morph_at, morph_to;
 	time_t start;
 	wakeup_t timer;
 	wakeup_t morph_timer;
-};
+} tst_t;
 
 static void
-timer_start( struct tst *timer, int to )
+timer_start( tst_t *timer, int to )
 {
 	printf( "starting timer %d, should expire after %d\n", timer->id, to );
 	time( &timer->start );
@@ -48,7 +48,7 @@ timer_start( struct tst *timer, int to )
 static void
 timed_out( void *aux )
 {
-	struct tst *timer = (struct tst *)aux;
+	tst_t *timer = (tst_t *)aux;
 
 	printf( "timer %d expired after %d, repeat %d\n",
 	        timer->id, (int)(time( 0 ) - timer->start), timer->other );
@@ -64,7 +64,7 @@ timed_out( void *aux )
 static void
 morph_timed_out( void *aux )
 {
-	struct tst *timer = (struct tst *)aux;
+	tst_t *timer = (tst_t *)aux;
 
 	printf( "morphing timer %d after %d\n",
 	        timer->id, (int)(time( 0 ) - timer->start) );
@@ -80,7 +80,7 @@ main( int argc, char **argv )
 
 	for (i = 1; i < argc; i++) {
 		char *val = argv[i];
-		struct tst *timer = nfmalloc( sizeof(*timer) );
+		tst_t *timer = nfmalloc( sizeof(*timer) );
 		init_wakeup( &timer->timer, timed_out, timer );
 		init_wakeup( &timer->morph_timer, morph_timed_out, timer );
 		timer->id = ++nextid;

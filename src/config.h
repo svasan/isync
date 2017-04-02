@@ -25,7 +25,7 @@
 
 #include "common.h"
 
-typedef struct conffile {
+typedef struct {
 	const char *file;
 	FILE *fp;
 	char *buf;

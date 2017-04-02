@@ -146,11 +146,11 @@ char *expand_strdup( const char *s );
 int map_name( const char *arg, char **result, int reserve, const char *in, const char *out );
 
 #define DEFINE_ARRAY_TYPE(T) \
-	typedef struct T##_array { \
+	typedef struct { \
 		T *data; \
 		int size; \
 	} ATTR_PACKED(T *) T##_array_t; \
-	typedef struct T##_array_alloc { \
+	typedef struct { \
 		T##_array_t array; \
 		int alloc; \
 	} ATTR_PACKED(T *) T##_array_alloc_t; \
