@@ -1708,6 +1708,7 @@ imap_alloc_store( store_conf_t *conf, const char *label )
 	ctx->pending_append = &ctx->pending;
 
   gotsrv:
+	ctx->gen.driver = &imap_driver;
 	ctx->gen.conf = conf;
 	ctx->label = label;
 	ctx->ref_count = 1;

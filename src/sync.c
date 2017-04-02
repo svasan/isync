@@ -1003,7 +1003,7 @@ sync_boxes( store_t *ctx[], const char *names[], int present[], channel_conf_t *
 			sync_bail3( svars );
 			return;
 		}
-		svars->drv[t] = ctx[t]->conf->driver;
+		svars->drv[t] = ctx[t]->driver;
 		svars->drv[t]->set_bad_callback( ctx[t], store_bad, AUX );
 	}
 	/* Both boxes must be fully set up at this point, so that error exit paths
@@ -1284,10 +1284,6 @@ box_opened2( sync_vars_t *svars, int t )
 				}
 			}
 			sort_int_array( mexcs.array );
-			debugn( "  exception list is:" );
-			for (t = 0; t < mexcs.array.size; t++)
-				debugn( " %d", mexcs.array.data[t] );
-			debug( "\n" );
 		} else {
 			minwuid = 1;
 		}
@@ -1336,10 +1332,6 @@ load_box( sync_vars_t *svars, int t, int minwuid, int_array_t mexcs )
 		seenuid = svars->maxuid[t];
 	}
 	info( "Loading %s...\n", str_ms[t] );
-	if (maxwuid == INT_MAX)
-		debug( "loading %s [%d,inf] (new >= %d, seen <= %d)\n", str_ms[t], minwuid, svars->newuid[t], seenuid );
-	else
-		debug( "loading %s [%d,%d] (new >= %d, seen <= %d)\n", str_ms[t], minwuid, maxwuid, svars->newuid[t], seenuid );
 	svars->drv[t]->load_box( svars->ctx[t], minwuid, maxwuid, svars->newuid[t], seenuid, mexcs, box_loaded, AUX );
 }
 
@@ -1372,7 +1364,6 @@ box_loaded( int sts, message_t *msgs, int total_msgs, int recent_msgs, void *aux
 	int uid, no[2], del[2], alive, todel, t1, t2;
 	int sflags, nflags, aflags, dflags;
 	uint hashsz, idx;
-	char fbuf[16]; /* enlarge when support for keywords is added */
 
 	if (check_ret( sts, aux ))
 		return;
@@ -1406,10 +1397,6 @@ box_loaded( int sts, message_t *msgs, int total_msgs, int recent_msgs, void *aux
 		if (tmsg->srec) /* found by TUID */
 			continue;
 		uid = tmsg->uid;
-		if (DFlags & DEBUG_SYNC) {
-			make_flags( tmsg->flags, fbuf );
-			printf( tmsg->size ? "  message %5d, %-4s, %6d: " : "  message %5d, %-4s: ", uid, fbuf, tmsg->size );
-		}
 		idx = (uint)((uint)uid * 1103515245U) % hashsz;
 		while (srecmap[idx].uid) {
 			if (srecmap[idx].uid == uid) {
@@ -1419,12 +1406,10 @@ box_loaded( int sts, message_t *msgs, int total_msgs, int recent_msgs, void *aux
 			if (++idx == hashsz)
 				idx = 0;
 		}
-		debug( "new\n" );
 		continue;
 	  found:
 		tmsg->srec = srec;
 		srec->msg[t] = tmsg;
-		debug( "pairs %5d\n", srec->uid[1-t] );
 	}
 	free( srecmap );
 

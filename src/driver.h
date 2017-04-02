@@ -87,6 +87,7 @@ typedef struct message {
 
 typedef struct store {
 	struct store *next;
+	driver_t *driver;
 	store_conf_t *conf; /* foreign */
 } store_t;
 
@@ -124,9 +125,11 @@ typedef struct {
 #define LIST_PATH       2
 #define LIST_PATH_MAYBE 4
 
+#define xint int  // For auto-generation of appropriate printf() formats.
+
 struct driver {
 	/* Return driver capabilities. */
-	int (*get_caps)( store_t *ctx );
+	xint (*get_caps)( store_t *ctx );
 
 	/* Parse configuration. */
 	int (*parse_store)( conffile_t *cfg, store_conf_t **storep );
@@ -192,7 +195,7 @@ struct driver {
 	/* Invoked before load_box(), this informs the driver which operations (OP_*)
 	 * will be performed on the mailbox. The driver may extend the set by implicitly
 	 * needed or available operations. Returns this possibly extended set. */
-	int (*prepare_load_box)( store_t *ctx, int opts );
+	xint (*prepare_load_box)( store_t *ctx, xint opts );
 
 	/* Load the message attributes needed to perform the requested operations.
 	 * Consider only messages with UIDs between minuid and maxuid (inclusive)
@@ -260,8 +263,10 @@ void free_generic_messages( message_t * );
 
 void parse_generic_store( store_conf_t *store, conffile_t *cfg );
 
+store_t *proxy_alloc_store( store_t *real_ctx, const char *label );
+
 #define N_DRIVERS 2
 extern driver_t *drivers[N_DRIVERS];
-extern driver_t maildir_driver, imap_driver;
+extern driver_t maildir_driver, imap_driver, proxy_driver;
 
 #endif

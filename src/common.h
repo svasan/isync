@@ -70,7 +70,9 @@ typedef unsigned int uint;
 #define DEBUG_NET_ALL   0x08
 #define DEBUG_SYNC      0x10
 #define DEBUG_MAIN      0x20
-#define DEBUG_ALL       (0xFF & ~DEBUG_NET_ALL)
+#define DEBUG_DRV       0x40
+#define DEBUG_DRV_ALL   0x80
+#define DEBUG_ALL       (0xFF & ~(DEBUG_NET_ALL | DEBUG_DRV_ALL))
 #define QUIET           0x100
 #define VERYQUIET       0x200
 #define PROGRESS        0x400

@@ -462,6 +462,10 @@ main( int argc, char **argv )
 						op = VERBOSE | DEBUG_ALL;
 					else if (!strcmp( opt, "-crash" ))
 						op = DEBUG_CRASH;
+					else if (!strcmp( opt, "-driver" ))
+						op = VERBOSE | DEBUG_DRV;
+					else if (!strcmp( opt, "-driver-all" ))
+						op = VERBOSE | DEBUG_DRV | DEBUG_DRV_ALL;
 					else if (!strcmp( opt, "-maildir" ))
 						op = VERBOSE | DEBUG_MAILDIR;
 					else if (!strcmp( opt, "-main" ))
@@ -648,6 +652,12 @@ main( int argc, char **argv )
 				case 'C':
 					op |= DEBUG_CRASH;
 					break;
+				case 'd':
+					op |= DEBUG_DRV | VERBOSE;
+					break;
+				case 'D':
+					op |= DEBUG_DRV | DEBUG_DRV_ALL | VERBOSE;
+					break;
 				case 'm':
 					op |= DEBUG_MAILDIR | VERBOSE;
 					break;
@@ -811,14 +821,20 @@ sync_chans( main_vars_t *mvars, int ent )
 		if (mvars->skip)
 			goto next2;
 		mvars->state[M] = mvars->state[S] = ST_FRESH;
-		if (mvars->chan->stores[M]->driver->get_caps( 0 ) & mvars->chan->stores[S]->driver->get_caps( 0 ) & DRV_VERBOSE)
+		if ((DFlags & DEBUG_DRV) || (mvars->chan->stores[M]->driver->get_caps( 0 ) & mvars->chan->stores[S]->driver->get_caps( 0 ) & DRV_VERBOSE))
 			labels[M] = "M: ", labels[S] = "S: ";
 		else
 			labels[M] = labels[S] = "";
 		for (t = 0; t < 2; t++) {
-			mvars->drv[t] = mvars->chan->stores[t]->driver;
-			mvars->ctx[t] = mvars->drv[t]->alloc_store( mvars->chan->stores[t], labels[t] );
-			mvars->drv[t]->set_bad_callback( mvars->ctx[t], store_bad, AUX );
+			driver_t *drv = mvars->chan->stores[t]->driver;
+			store_t *ctx = drv->alloc_store( mvars->chan->stores[t], labels[t] );
+			if (DFlags & DEBUG_DRV) {
+				drv = &proxy_driver;
+				ctx = proxy_alloc_store( ctx, labels[t] );
+			}
+			mvars->drv[t] = drv;
+			mvars->ctx[t] = ctx;
+			drv->set_bad_callback( ctx, store_bad, AUX );
 		}
 		for (t = 0; ; t++) {
 			info( "Opening %s store %s...\n", str_ms[t], mvars->chan->stores[t]->name );
@@ -1008,11 +1024,6 @@ store_listed( int sts, string_list_t *boxes, void *aux )
 	case DRV_CANCELED:
 		return;
 	case DRV_OK:
-		if (DFlags & DEBUG_MAIN) {
-			debug( "got mailbox list from %s:\n", str_ms[t] );
-			for (box = boxes; box; box = box->next)
-				debug( "  %s\n", box->string );
-		}
 		for (box = boxes; box; box = box->next) {
 			if (mvars->ctx[t]->conf->flat_delim) {
 				string_list_t *nbox;

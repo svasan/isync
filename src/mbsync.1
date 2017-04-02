@@ -83,11 +83,15 @@ Display version information.
 \fB-V\fR, \fB--verbose\fR
 Enable \fIverbose\fR mode, which displays what is currently happening.
 .TP
-\fB-D\fR[\fBC\fR][\fBm\fR][\fBM\fR][\fBn\fR|\fBN\fR][\fBs\fR]\fR]\fR,\
- \fB--debug\fR[\fB-crash\fR|\fB-maildir\fR|\fB-main\fR|\fB-net\fR|\fB-net-all\fR|\fB-sync\fR]
+\fB-D\fR[\fBC\fR][\fBd\fR|\fBD\fR][\fBm\fR][\fBM\fR][\fBn\fR|\fBN\fR][\fBs\fR]\fR]\fR,\
+ \fB--debug\fR[\fB-crash\fR|\fB-driver\fR|\fB-driver-all\fR|\fB-maildir\fR|\fB-main\fR|\fB-net\fR|\fB-net-all\fR|\fB-sync\fR]
 Enable debugging categories:
 .in +4
 \fBC\fR, \fBcrash\fR - use built-in crash handler
+.br
+\fBd\fR, \fBdriver\fR - print driver calls (metadata only)
+.br
+\fBD\fR, \fBdriver-all\fR - print driver calls (including messages)
 .br
 \fBm\fR, \fBmaildir\fR - print maildir debug info
 .br

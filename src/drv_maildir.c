@@ -226,6 +226,7 @@ maildir_alloc_store( store_conf_t *gconf, const char *label ATTR_UNUSED )
 	maildir_store_t *ctx;
 
 	ctx = nfcalloc( sizeof(*ctx) );
+	ctx->gen.driver = &maildir_driver;
 	ctx->gen.conf = gconf;
 	ctx->uvfd = -1;
 	init_wakeup( &ctx->lcktmr, lcktmr_timeout, ctx );
