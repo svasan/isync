@@ -1379,7 +1379,7 @@ box_loaded( int sts, message_t *msgs, int total_msgs, int recent_msgs, void *aux
 	sync_rec_map_t *srecmap;
 	message_t *tmsg;
 	flag_vars_t *fv;
-	int uid, no[2], del[2], alive, todel, t1, t2;
+	int uid, no[2], del[2], alive, todel;
 	int sflags, nflags, aflags, dflags;
 	uint hashsz, idx;
 
@@ -1488,6 +1488,7 @@ box_loaded( int sts, message_t *msgs, int total_msgs, int recent_msgs, void *aux
 		if (srec->status & S_DEAD)
 			continue;
 		debug( "pair (%d,%d)\n", srec->uid[M], srec->uid[S] );
+		assert( !srec->tuid[0] );
 		// no[] means that a message is known to be not there.
 		no[M] = !srec->msg[M] && (svars->opts[M] & OPEN_OLD);
 		no[S] = !srec->msg[S] && (svars->opts[S] & OPEN_OLD);
@@ -1618,12 +1619,6 @@ box_loaded( int sts, message_t *msgs, int total_msgs, int recent_msgs, void *aux
 							srec->status = S_PENDING;
 							jFprintf( svars, "~ %d %d %u\n", srec->uid[M], srec->uid[S], srec->status );
 						}
-						for (t1 = 0; t1 < TUIDL; t1++) {
-							t2 = arc4_getbyte() & 0x3f;
-							srec->tuid[t1] = t2 < 26 ? t2 + 'A' : t2 < 52 ? t2 + 'a' - 26 : t2 < 62 ? t2 + '0' - 52 : t2 == 62 ? '+' : '/';
-						}
-						jFprintf( svars, "# %d %d %." stringify(TUIDL) "s\n", srec->uid[M], srec->uid[S], srec->tuid );
-						debug( "  -> %sing message, TUID %." stringify(TUIDL) "s\n", str_hl[t], srec->tuid );
 					} else {
 						if (srec->status == S_SKIPPED) {
 							debug( "  -> not %sing - still too big\n", str_hl[t] );
@@ -1656,7 +1651,7 @@ box_loaded( int sts, message_t *msgs, int total_msgs, int recent_msgs, void *aux
 			}
 		}
 		for (tmsg = svars->msgs[M]; tmsg; tmsg = tmsg->next) {
-			if ((srec = tmsg->srec) && srec->tuid[0] && !(tmsg->flags & F_DELETED))
+			if ((srec = tmsg->srec) && (srec->status & S_PENDING) && !(tmsg->flags & F_DELETED))
 				alive++;
 		}
 		todel = alive - svars->chan->max_messages;
@@ -1691,7 +1686,7 @@ box_loaded( int sts, message_t *msgs, int total_msgs, int recent_msgs, void *aux
 			}
 		}
 		for (tmsg = svars->msgs[M]; tmsg; tmsg = tmsg->next) {
-			if ((srec = tmsg->srec) && srec->tuid[0]) {
+			if ((srec = tmsg->srec) && (srec->status & S_PENDING)) {
 				nflags = tmsg->flags;
 				if (!(nflags & F_DELETED)) {
 					if ((nflags & F_FLAGGED) || !((nflags & F_SEEN) || ((void)(todel > 0 && alive++), svars->chan->expire_unread > 0))) {
@@ -1718,7 +1713,7 @@ box_loaded( int sts, message_t *msgs, int total_msgs, int recent_msgs, void *aux
 		for (srec = svars->srecs; srec; srec = srec->next) {
 			if (srec->status & S_DEAD)
 				continue;
-			if (!srec->tuid[0]) {
+			if (!(srec->status & S_PENDING)) {
 				if (!srec->msg[S])
 					continue;
 				uint nex = (srec->wstate / W_NEXPIRE) & 1;
@@ -1880,11 +1875,17 @@ msgs_copied( sync_vars_t *svars, int t )
 
 	if (!(svars->state[t] & ST_SENT_NEW)) {
 		for (tmsg = svars->new_msgs[t]; tmsg; tmsg = tmsg->next) {
-			if ((srec = tmsg->srec) && srec->tuid[0]) {
+			if ((srec = tmsg->srec) && (srec->status & S_PENDING)) {
 				if (svars->drv[t]->get_memory_usage( svars->ctx[t] ) >= BufferLimit) {
 					svars->new_msgs[t] = tmsg;
 					goto out;
 				}
+				for (uint i = 0; i < TUIDL; i++) {
+					uchar c = arc4_getbyte() & 0x3f;
+					srec->tuid[i] = c < 26 ? c + 'A' : c < 52 ? c + 'a' - 26 : c < 62 ? c + '0' - 52 : c == 62 ? '+' : '/';
+				}
+				jFprintf( svars, "# %d %d %." stringify(TUIDL) "s\n", srec->uid[M], srec->uid[S], srec->tuid );
+				debug( "%sing message %d, TUID %." stringify(TUIDL) "s\n", str_hl[t], tmsg->uid, srec->tuid );
 				new_total[t]++;
 				stats();
 				svars->new_pending[t]++;
