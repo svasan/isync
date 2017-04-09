@@ -1279,7 +1279,7 @@ box_opened2( sync_vars_t *svars, int t )
 				else if (!srec->uid[S])
 					opts[S] |= OPEN_NEW|OPEN_FIND, svars->state[S] |= ST_FIND_OLD;
 				else
-					assert( !"sync record with stray TUID" );
+					warn( "Warning: sync record (%d,%d) has stray TUID. Ignoring.\n", srec->uid[M], srec->uid[S] );
 			}
 		}
 	svars->opts[M] = svars->drv[M]->prepare_load_box( ctx[M], opts[M] );
