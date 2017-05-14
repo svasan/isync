@@ -1788,9 +1788,7 @@ static void
 maildir_close_box( store_t *gctx,
                    void (*cb)( int sts, void *aux ), void *aux )
 {
-#ifdef USE_DB
 	maildir_store_t *ctx = (maildir_store_t *)gctx;
-#endif /* USE_DB */
 	message_t *msg;
 	int basel, retry, ret;
 	char buf[_POSIX_PATH_MAX];
