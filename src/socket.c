@@ -329,6 +329,7 @@ static void socket_fd_cb( int, void * );
 static void socket_fake_cb( void * );
 
 static void socket_connect_one( conn_t * );
+static void socket_connect_next( conn_t * );
 static void socket_connect_failed( conn_t * );
 static void socket_connected( conn_t * );
 static void socket_connect_bail( conn_t * );
@@ -469,8 +470,8 @@ socket_connect_one( conn_t *sock )
 	s = socket( PF_INET, SOCK_STREAM, 0 );
 #endif
 	if (s < 0) {
-		perror( "socket" );
-		exit( 1 );
+		socket_connect_next( sock );
+		return;
 	}
 	socket_open_internal( sock, s );
 
@@ -494,10 +495,9 @@ socket_connect_one( conn_t *sock )
 }
 
 static void
-socket_connect_failed( conn_t *conn )
+socket_connect_next( conn_t *conn )
 {
 	sys_error( "Cannot connect to %s", conn->name );
-	socket_close_internal( conn );
 	free( conn->name );
 	conn->name = 0;
 #ifdef HAVE_IPV6
@@ -506,6 +506,13 @@ socket_connect_failed( conn_t *conn )
 	conn->curr_addr++;
 #endif
 	socket_connect_one( conn );
+}
+
+static void
+socket_connect_failed( conn_t *conn )
+{
+	socket_close_internal( conn );
+	socket_connect_next( conn );
 }
 
 static void
