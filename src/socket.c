@@ -637,7 +637,9 @@ socket_fill_z( conn_t *sock )
 	sock->in_z->next_out = (unsigned char *)buf;
 
 	ret = inflate( sock->in_z, Z_SYNC_FLUSH );
-	if (ret != Z_OK && ret != Z_STREAM_END) {
+	/* Z_BUF_ERROR happens here when the previous call both consumed
+	 * all input and exactly filled up the output buffer. */
+	if (ret != Z_OK && ret != Z_BUF_ERROR && ret != Z_STREAM_END) {
 		error( "Error decompressing data from %s: %s\n", sock->name, z_err_msg( ret, sock->in_z ) );
 		socket_fail( sock );
 		return;
@@ -824,6 +826,9 @@ do_flush( conn_t *conn )
 			conn->out_z->avail_in = 0;
 			conn->out_z->next_out = (uchar *)bc->data + bc->len;
 			conn->out_z->avail_out = buf_avail;
+			/* Z_BUF_ERROR cannot happen here, as zlib suppresses the error
+			 * both upon increasing the flush level (1st iteration) and upon
+			 * a no-op after the output buffer was full (later iterations). */
 			if ((ret = deflate( conn->out_z, Z_PARTIAL_FLUSH )) != Z_OK) {
 				error( "Fatal: Compression error: %s\n", z_err_msg( ret, conn->out_z ) );
 				abort();
@@ -892,6 +897,8 @@ socket_write( conn_t *conn, conn_iovec_t *iov, int iovcnt )
 				conn->out_z->avail_in = len;
 				conn->out_z->next_out = (uchar *)bc->data + bc->len;
 				conn->out_z->avail_out = buf_avail;
+				/* Z_BUF_ERROR is impossible here, as the input buffer always has data,
+				 * and the output buffer always has space. */
 				if ((ret = deflate( conn->out_z, Z_NO_FLUSH )) != Z_OK) {
 					error( "Fatal: Compression error: %s\n", z_err_msg( ret, conn->out_z ) );
 					abort();
