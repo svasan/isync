@@ -292,6 +292,14 @@ static void start_tls_p3( conn_t *conn, int ok )
 
 static void z_fake_cb( void * );
 
+static const char *
+z_err_msg( int code, z_streamp strm )
+{
+	/* zlib's consistency in populating z_stream->msg is somewhat
+	 * less than stellar. zError() is undocumented. */
+	return strm->msg ? strm->msg : zError( code );
+}
+
 void
 socket_start_deflate( conn_t *conn )
 {
@@ -303,7 +311,7 @@ socket_start_deflate( conn_t *conn )
 			-15 /* Use raw deflate */
 		);
 	if (result != Z_OK) {
-		error( "Fatal: Cannot initialize decompression: %s\n", conn->in_z->msg );
+		error( "Fatal: Cannot initialize decompression: %s\n", z_err_msg( result, conn->in_z ) );
 		abort();
 	}
 
@@ -317,7 +325,7 @@ socket_start_deflate( conn_t *conn )
 			Z_DEFAULT_STRATEGY /* Don't try to do anything fancy */
 		);
 	if (result != Z_OK) {
-		error( "Fatal: Cannot initialize compression: %s\n", conn->out_z->msg );
+		error( "Fatal: Cannot initialize compression: %s\n", z_err_msg( result, conn->out_z ) );
 		abort();
 	}
 
@@ -630,7 +638,7 @@ socket_fill_z( conn_t *sock )
 
 	ret = inflate( sock->in_z, Z_SYNC_FLUSH );
 	if (ret != Z_OK && ret != Z_STREAM_END) {
-		error( "Error decompressing data from %s: %s\n", sock->name, sock->in_z->msg );
+		error( "Error decompressing data from %s: %s\n", sock->name, z_err_msg( ret, sock->in_z ) );
 		socket_fail( sock );
 		return;
 	}
@@ -806,6 +814,7 @@ do_flush( conn_t *conn )
 		if (!conn->z_written)
 			return;
 		do {
+			int ret;
 			if (!bc) {
 				buf_avail = WRITE_CHUNK_SIZE;
 				bc = nfmalloc( offsetof(buff_chunk_t, data) + buf_avail );
@@ -815,8 +824,8 @@ do_flush( conn_t *conn )
 			conn->out_z->avail_in = 0;
 			conn->out_z->next_out = (uchar *)bc->data + bc->len;
 			conn->out_z->avail_out = buf_avail;
-			if (deflate( conn->out_z, Z_PARTIAL_FLUSH ) != Z_OK) {
-				error( "Fatal: Compression error: %s\n", conn->out_z->msg );
+			if ((ret = deflate( conn->out_z, Z_PARTIAL_FLUSH )) != Z_OK) {
+				error( "Fatal: Compression error: %s\n", z_err_msg( ret, conn->out_z ) );
 				abort();
 			}
 			bc->len = (char *)conn->out_z->next_out - bc->data;
@@ -878,12 +887,13 @@ socket_write( conn_t *conn, conn_iovec_t *iov, int iovcnt )
 			len = iov->len - offset;
 #ifdef HAVE_LIBZ
 			if (conn->out_z) {
+				int ret;
 				conn->out_z->next_in = (uchar *)iov->buf + offset;
 				conn->out_z->avail_in = len;
 				conn->out_z->next_out = (uchar *)bc->data + bc->len;
 				conn->out_z->avail_out = buf_avail;
-				if (deflate( conn->out_z, Z_NO_FLUSH ) != Z_OK) {
-					error( "Fatal: Compression error: %s\n", conn->out_z->msg );
+				if ((ret = deflate( conn->out_z, Z_NO_FLUSH )) != Z_OK) {
+					error( "Fatal: Compression error: %s\n", z_err_msg( ret, conn->out_z ) );
 					abort();
 				}
 				bc->len = (char *)conn->out_z->next_out - bc->data;
