@@ -305,6 +305,14 @@ static void start_tls_p3( conn_t *conn, int ok )
 
 static void z_fake_cb( void * );
 
+static const char *
+z_err_msg( int code, z_streamp strm )
+{
+	/* zlib's consistency in populating z_stream->msg is somewhat
+	 * less than stellar. zError() is undocumented. */
+	return strm->msg ? strm->msg : zError( code );
+}
+
 void
 socket_start_deflate( conn_t *conn )
 {
@@ -316,7 +324,7 @@ socket_start_deflate( conn_t *conn )
 			-15 /* Use raw deflate */
 		);
 	if (result != Z_OK) {
-		error( "Fatal: Cannot initialize decompression: %s\n", conn->in_z->msg );
+		error( "Fatal: Cannot initialize decompression: %s\n", z_err_msg( result, conn->in_z ) );
 		abort();
 	}
 
@@ -330,7 +338,7 @@ socket_start_deflate( conn_t *conn )
 			Z_DEFAULT_STRATEGY /* Don't try to do anything fancy */
 		);
 	if (result != Z_OK) {
-		error( "Fatal: Cannot initialize compression: %s\n", conn->out_z->msg );
+		error( "Fatal: Cannot initialize compression: %s\n", z_err_msg( result, conn->out_z ) );
 		abort();
 	}
 
@@ -343,6 +351,7 @@ static void socket_fake_cb( void * );
 static void socket_timeout_cb( void * );
 
 static void socket_connect_one( conn_t * );
+static void socket_connect_next( conn_t * );
 static void socket_connect_failed( conn_t * );
 static void socket_connected( conn_t * );
 static void socket_connect_bail( conn_t * );
@@ -485,8 +494,8 @@ socket_connect_one( conn_t *sock )
 	s = socket( PF_INET, SOCK_STREAM, 0 );
 #endif
 	if (s < 0) {
-		perror( "socket" );
-		exit( 1 );
+		socket_connect_next( sock );
+		return;
 	}
 	socket_open_internal( sock, s );
 
@@ -511,10 +520,9 @@ socket_connect_one( conn_t *sock )
 }
 
 static void
-socket_connect_failed( conn_t *conn )
+socket_connect_next( conn_t *conn )
 {
 	sys_error( "Cannot connect to %s", conn->name );
-	socket_close_internal( conn );
 	free( conn->name );
 	conn->name = 0;
 #ifdef HAVE_IPV6
@@ -523,6 +531,13 @@ socket_connect_failed( conn_t *conn )
 	conn->curr_addr++;
 #endif
 	socket_connect_one( conn );
+}
+
+static void
+socket_connect_failed( conn_t *conn )
+{
+	socket_close_internal( conn );
+	socket_connect_next( conn );
 }
 
 static void
@@ -648,8 +663,10 @@ socket_fill_z( conn_t *sock )
 	sock->in_z->next_out = (unsigned char *)buf;
 
 	ret = inflate( sock->in_z, Z_SYNC_FLUSH );
-	if (ret != Z_OK && ret != Z_STREAM_END) {
-		error( "Error decompressing data from %s: %s\n", sock->name, sock->in_z->msg );
+	/* Z_BUF_ERROR happens here when the previous call both consumed
+	 * all input and exactly filled up the output buffer. */
+	if (ret != Z_OK && ret != Z_BUF_ERROR && ret != Z_STREAM_END) {
+		error( "Error decompressing data from %s: %s\n", sock->name, z_err_msg( ret, sock->in_z ) );
 		socket_fail( sock );
 		return;
 	}
@@ -832,6 +849,7 @@ do_flush( conn_t *conn )
 		if (!conn->z_written)
 			return;
 		do {
+			int ret;
 			if (!bc) {
 				buf_avail = WRITE_CHUNK_SIZE;
 				bc = nfmalloc( offsetof(buff_chunk_t, data) + buf_avail );
@@ -841,8 +859,11 @@ do_flush( conn_t *conn )
 			conn->out_z->avail_in = 0;
 			conn->out_z->next_out = (uchar *)bc->data + bc->len;
 			conn->out_z->avail_out = buf_avail;
-			if (deflate( conn->out_z, Z_PARTIAL_FLUSH ) != Z_OK) {
-				error( "Fatal: Compression error: %s\n", conn->out_z->msg );
+			/* Z_BUF_ERROR cannot happen here, as zlib suppresses the error
+			 * both upon increasing the flush level (1st iteration) and upon
+			 * a no-op after the output buffer was full (later iterations). */
+			if ((ret = deflate( conn->out_z, Z_PARTIAL_FLUSH )) != Z_OK) {
+				error( "Fatal: Compression error: %s\n", z_err_msg( ret, conn->out_z ) );
 				abort();
 			}
 			bc->len = (char *)conn->out_z->next_out - bc->data;
@@ -904,12 +925,15 @@ socket_write( conn_t *conn, conn_iovec_t *iov, int iovcnt )
 			len = iov->len - offset;
 #ifdef HAVE_LIBZ
 			if (conn->out_z) {
+				int ret;
 				conn->out_z->next_in = (uchar *)iov->buf + offset;
 				conn->out_z->avail_in = len;
 				conn->out_z->next_out = (uchar *)bc->data + bc->len;
 				conn->out_z->avail_out = buf_avail;
-				if (deflate( conn->out_z, Z_NO_FLUSH ) != Z_OK) {
-					error( "Fatal: Compression error: %s\n", conn->out_z->msg );
+				/* Z_BUF_ERROR is impossible here, as the input buffer always has data,
+				 * and the output buffer always has space. */
+				if ((ret = deflate( conn->out_z, Z_NO_FLUSH )) != Z_OK) {
+					error( "Fatal: Compression error: %s\n", z_err_msg( ret, conn->out_z ) );
 					abort();
 				}
 				bc->len = (char *)conn->out_z->next_out - bc->data;

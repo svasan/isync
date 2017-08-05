@@ -248,6 +248,7 @@ Define the Maildir Store \fIname\fR, opening a section for its parameters.
 Use the \fBalternative\fR UID storage scheme for mailboxes in this Store.
 This does not affect mailboxes that do already have a UID storage scheme;
 use \fBmdconvert\fR to change it.
+See \fBRECOMMENDATIONS\fR below.
 (Default: \fBno\fR)
 ..
 .TP
@@ -711,6 +712,14 @@ you should not use \fBmbsync\fR's \fBTrash\fR option at all.
 .P
 Use of the \fBTrash\fR option with M$ Exchange 2013 requires the use of
 \fBDisableExtension MOVE\fR due to a server bug.
+.P
+When using the more efficient default UID mapping scheme, it is important
+that the MUA renames files when moving them between Maildir folders.
+Mutt always does that, while mu4e needs to be configured to do it:
+.br
+.in +4
+(setq mu4e-change-filenames-when-moving t)
+.in -4
 ..
 .SH INHERENT PROBLEMS
 Changes done after \fBmbsync\fR has retrieved the message list will not be
