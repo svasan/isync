@@ -244,6 +244,7 @@ Define the Maildir Store \fIname\fR, opening a section for its parameters.
 Use the \fBalternative\fR UID storage scheme for mailboxes in this Store.
 This does not affect mailboxes that do already have a UID storage scheme;
 use \fBmdconvert\fR to change it.
+See \fBRECOMMENDATIONS\fR below.
 (Default: \fBno\fR)
 ..
 .TP
@@ -656,6 +657,14 @@ If your server supports auto-trashing (as Gmail does), it is probably a
 good idea to rely on that instead of \fBmbsync\fR's trash functionality.
 If you do that, and intend to synchronize the trash like other mailboxes,
 you should not use \fBmbsync\fR's \fBTrash\fR option at all.
+.P
+When using the more efficient default UID mapping scheme, it is important
+that the MUA renames files when moving them between Maildir folders.
+Mutt always does that, while mu4e needs to be configured to do it:
+.br
+.in +4
+(setq mu4e-change-filenames-when-moving t)
+.in -4
 ..
 .SH INHERENT PROBLEMS
 Changes done after \fBmbsync\fR has retrieved the message list will not be
