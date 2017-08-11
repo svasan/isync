@@ -55,7 +55,6 @@ typedef struct config {
 	unsigned int require_cram:1;
 	unsigned int require_ssl:1;
 	unsigned int use_imaps:1;
-	unsigned int use_sslv2:1;
 	unsigned int use_sslv3:1;
 	unsigned int use_tlsv1:1;
 	char *cert_file;

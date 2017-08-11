@@ -3075,7 +3075,7 @@ imap_parse_store( conffile_t *cfg, store_conf_t **storep )
 #ifdef HAVE_LIBSSL
 	/* Legacy SSL options */
 	int require_ssl = -1, use_imaps = -1;
-	int use_sslv2 = -1, use_sslv3 = -1, use_tlsv1 = -1, use_tlsv11 = -1, use_tlsv12 = -1;
+	int use_sslv3 = -1, use_tlsv1 = -1, use_tlsv11 = -1, use_tlsv12 = -1;
 #endif
 	/* Legacy SASL option */
 	int require_cram = -1;
@@ -3115,7 +3115,7 @@ imap_parse_store( conffile_t *cfg, store_conf_t **storep )
 				arg += 6;
 				server->ssl_type = SSL_IMAPS;
 				if (server->sconf.ssl_versions == -1)
-					server->sconf.ssl_versions = SSLv2 | SSLv3 | TLSv1 | TLSv1_1 | TLSv1_2;
+					server->sconf.ssl_versions = SSLv3 | TLSv1 | TLSv1_1 | TLSv1_2;
 			} else
 #endif
 			if (starts_with( arg, -1, "imap:", 5 ))
@@ -3197,7 +3197,7 @@ imap_parse_store( conffile_t *cfg, store_conf_t **storep )
 			arg = cfg->val;
 			do {
 				if (!strcasecmp( "SSLv2", arg )) {
-					server->sconf.ssl_versions |= SSLv2;
+					warn( "Warning: SSLVersion SSLv2 is no longer supported\n" );
 				} else if (!strcasecmp( "SSLv3", arg )) {
 					server->sconf.ssl_versions |= SSLv3;
 				} else if (!strcasecmp( "TLSv1", arg )) {
@@ -3216,7 +3216,7 @@ imap_parse_store( conffile_t *cfg, store_conf_t **storep )
 		else if (!strcasecmp( "UseIMAPS", cfg->cmd ))
 			use_imaps = parse_bool( cfg );
 		else if (!strcasecmp( "UseSSLv2", cfg->cmd ))
-			use_sslv2 = parse_bool( cfg );
+			warn( "Warning: UseSSLv2 is no longer supported\n" );
 		else if (!strcasecmp( "UseSSLv3", cfg->cmd ))
 			use_sslv3 = parse_bool( cfg );
 		else if (!strcasecmp( "UseTLSv1", cfg->cmd ))
@@ -3283,7 +3283,7 @@ imap_parse_store( conffile_t *cfg, store_conf_t **storep )
 			return 1;
 		}
 #ifdef HAVE_LIBSSL
-		if ((use_sslv2 & use_sslv3 & use_tlsv1 & use_tlsv11 & use_tlsv12) != -1 || use_imaps >= 0 || require_ssl >= 0) {
+		if ((use_sslv3 & use_tlsv1 & use_tlsv11 & use_tlsv12) != -1 || use_imaps >= 0 || require_ssl >= 0) {
 			if (server->ssl_type >= 0 || server->sconf.ssl_versions >= 0) {
 				error( "%s '%s': The deprecated UseSSL*, UseTLS*, UseIMAPS, and RequireSSL options are mutually exclusive with SSLType and SSLVersions.\n", type, name );
 				cfg->err = 1;
@@ -3291,7 +3291,6 @@ imap_parse_store( conffile_t *cfg, store_conf_t **storep )
 			}
 			warn( "Notice: %s '%s': UseSSL*, UseTLS*, UseIMAPS, and RequireSSL are deprecated. Use SSLType and SSLVersions instead.\n", type, name );
 			server->sconf.ssl_versions =
-					(use_sslv2 != 1 ? 0 : SSLv2) |
 					(use_sslv3 != 1 ? 0 : SSLv3) |
 					(use_tlsv1 == 0 ? 0 : TLSv1) |
 					(use_tlsv11 != 1 ? 0 : TLSv1_1) |

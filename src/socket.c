@@ -204,8 +204,6 @@ init_ssl_ctx( const server_conf_t *conf )
 
 	mconf->SSLContext = SSL_CTX_new( SSLv23_client_method() );
 
-	if (!(conf->ssl_versions & SSLv2))
-		options |= SSL_OP_NO_SSLv2;
 	if (!(conf->ssl_versions & SSLv3))
 		options |= SSL_OP_NO_SSLv3;
 	if (!(conf->ssl_versions & TLSv1))

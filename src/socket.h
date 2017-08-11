@@ -35,7 +35,6 @@ typedef struct ssl_ctx_st SSL_CTX;
 typedef struct stack_st _STACK;
 
 enum {
-	SSLv2 = 1,
 	SSLv3 = 2,
 	TLSv1 = 4,
 	TLSv1_1 = 8,

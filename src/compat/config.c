@@ -148,7 +148,6 @@ load_config( const char *path, config_t ***stor )
 				val += 6;
 				cfg->use_imaps = 1;
 				cfg->port = 993;
-				cfg->use_sslv2 = 1;
 				cfg->use_sslv3 = 1;
 			}
 			cfg->host = nfstrdup( val );
@@ -187,7 +186,7 @@ load_config( const char *path, config_t ***stor )
 		else if (!strcasecmp( "RequireSSL", cmd ))
 			cfg->require_ssl = is_true( val );
 		else if (!strcasecmp( "UseSSLv2", cmd ))
-			cfg->use_sslv2 = is_true( val );
+			fprintf( stderr, "Warning: UseSSLv2 is no longer supported\n" );
 		else if (!strcasecmp( "UseSSLv3", cmd ))
 			cfg->use_sslv3 = is_true( val );
 		else if (!strcasecmp( "UseTLSv1", cmd ))
@@ -316,12 +315,10 @@ write_imap_server( FILE *fp, config_t *cfg )
 	if (cfg->pass)
 		fprintf( fp, "Pass %s\n", quotify( cfg->pass ) );
 	fprintf( fp, "RequireCRAM %s\nRequireSSL %s\n"
-	             "UseSSLv2 %s\nUseSSLv3 %s\nUseTLSv1 %s\nUseTLSv1.1 %s\nUseTLSv1.2 %s\n",
+	             "UseSSLv3 %s\nUseTLSv1 %s\nUseTLSv1.1 %s\nUseTLSv1.2 %s\n",
 	             tb(cfg->require_cram), tb(cfg->require_ssl),
-	             tb(cfg->use_sslv2), tb(cfg->use_sslv3),
-	             tb(cfg->use_tlsv1), tb(cfg->use_tlsv1), tb(cfg->use_tlsv1) );
-	if ((cfg->use_imaps || cfg->use_sslv2 || cfg->use_sslv3 || cfg->use_tlsv1) &&
-	    cfg->cert_file)
+	             tb(cfg->use_sslv3), tb(cfg->use_tlsv1), tb(cfg->use_tlsv1), tb(cfg->use_tlsv1) );
+	if ((cfg->use_imaps || cfg->use_sslv3 || cfg->use_tlsv1) && cfg->cert_file)
 		fprintf( fp, "CertificateFile %s\n", quotify( cfg->cert_file ) );
 	fputc( '\n', fp );
 }
@@ -417,12 +414,11 @@ write_config( int fd )
 				if (mstrcmp( pbox->user, box->user ) ||
 				    mstrcmp( pbox->pass, box->pass )) /* nonsense */
 					continue;
-				if ((box->use_imaps || box->use_sslv2 ||
+				if ((box->use_imaps ||
 				     box->use_sslv3 || box->use_tlsv1) &&
 				    mstrcmp( pbox->cert_file, box->cert_file )) /* nonsense */
 					continue;
 				if (pbox->use_imaps != box->use_imaps ||
-				    pbox->use_sslv2 != box->use_sslv2 ||
 				    pbox->use_sslv3 != box->use_sslv3 ||
 				    pbox->use_tlsv1 != box->use_tlsv1)
 					continue;
