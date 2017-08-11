@@ -316,9 +316,10 @@ write_imap_server( FILE *fp, config_t *cfg )
 	if (cfg->pass)
 		fprintf( fp, "Pass %s\n", quotify( cfg->pass ) );
 	fprintf( fp, "RequireCRAM %s\nRequireSSL %s\n"
-	             "UseSSLv2 %s\nUseSSLv3 %s\nUseTLSv1 %s\n",
+	             "UseSSLv2 %s\nUseSSLv3 %s\nUseTLSv1 %s\nUseTLSv1.1 %s\nUseTLSv1.2 %s\n",
 	             tb(cfg->require_cram), tb(cfg->require_ssl),
-	             tb(cfg->use_sslv2), tb(cfg->use_sslv3), tb(cfg->use_tlsv1) );
+	             tb(cfg->use_sslv2), tb(cfg->use_sslv3),
+	             tb(cfg->use_tlsv1), tb(cfg->use_tlsv1), tb(cfg->use_tlsv1) );
 	if ((cfg->use_imaps || cfg->use_sslv2 || cfg->use_sslv3 || cfg->use_tlsv1) &&
 	    cfg->cert_file)
 		fprintf( fp, "CertificateFile %s\n", quotify( cfg->cert_file ) );

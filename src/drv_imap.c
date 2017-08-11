@@ -2767,7 +2767,7 @@ imap_parse_store( conffile_t *cfg, store_conf_t **storep )
 				arg += 6;
 				server->ssl_type = SSL_IMAPS;
 				if (server->sconf.ssl_versions == -1)
-					server->sconf.ssl_versions = SSLv2 | SSLv3 | TLSv1;
+					server->sconf.ssl_versions = SSLv2 | SSLv3 | TLSv1 | TLSv1_1 | TLSv1_2;
 			} else
 #endif
 			if (starts_with( arg, -1, "imap:", 5 ))
@@ -2930,7 +2930,7 @@ imap_parse_store( conffile_t *cfg, store_conf_t **storep )
 			}
 		} else {
 			if (server->sconf.ssl_versions < 0)
-				server->sconf.ssl_versions = TLSv1; /* Most compatible and still reasonably secure. */
+				server->sconf.ssl_versions = TLSv1 | TLSv1_1 | TLSv1_2;
 			if (server->ssl_type < 0)
 				server->ssl_type = server->sconf.tunnel ? SSL_None : SSL_STARTTLS;
 		}

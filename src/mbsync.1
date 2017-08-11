@@ -337,8 +337,8 @@ right after connecting the secure IMAP port 993.
 Select the acceptable SSL/TLS versions.
 Use of SSLv2 is strongly discouraged for security reasons, but might be the
 only option on some very old servers.
-Generally, the newest TLS version is recommended, but as this confuses some
-servers, \fBTLSv1\fR is the default.
+Use old versions only when the server has problems with newer ones.
+(Default: [\fBTLSv1\fR] [\fBTLSv1.1\fR] [\fBTLSv1.2\fR]).
 ..
 .TP
 \fBSystemCertificates\fR \fByes\fR|\fBno\fR
