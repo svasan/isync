@@ -54,13 +54,13 @@ if test "x$ob_cv_with_ssl" != xno; then
       dnl Detect the pkg-config tool, as it may have extra info about the openssl
       dnl installation we can use. I *believe* this is what we are expected to do
       dnl on really recent Redhat Linux hosts.
-      AC_PATH_PROG(PKGCONFIG, pkg-config, no, $PATH:/usr/bin:/usr/local/bin)
-      if test "$PKGCONFIG" != "no" ; then
+      PKG_PROG_PKG_CONFIG
+      if test "x$PKG_CONFIG" != "x" ; then
         AC_MSG_CHECKING([OpenSSL presence with pkg-config])
-        if $PKGCONFIG --exists openssl; then
-          SSL_LIBS=`$PKGCONFIG --libs-only-l openssl`
-          SSL_LDFLAGS=`$PKGCONFIG --libs-only-L openssl`
-          SSL_CPPFLAGS=`$PKGCONFIG --cflags-only-I openssl`
+        if $PKG_CONFIG --exists openssl; then
+          SSL_LIBS=`$PKG_CONFIG --libs-only-l openssl`
+          SSL_LDFLAGS=`$PKG_CONFIG --libs-only-L openssl`
+          SSL_CPPFLAGS=`$PKG_CONFIG --cflags-only-I openssl`
           have_ssl_paths=yes
           AC_MSG_RESULT([found])
         else
