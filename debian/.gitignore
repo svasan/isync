@@ -1,5 +1,7 @@
+.debhelper
+autoreconf.after
+autoreconf.before
 files
 isync
 isync.debhelper.log
-isync.postrm.debhelper
 isync.substvars

@@ -54,12 +54,8 @@ log:
 	   git log --date=iso --log-size --name-only --no-merges | \
 	     perl -e '$(LOG_PL)' > ChangeLog )
 
-deb: deb-clean
-	CFLAGS= fakeroot debian/rules binary
-
-deb-clean:
-	dh_clean -Xsrc/
-	fakeroot debian/rules clean
+deb:
+	CFLAGS= INSTALL= dpkg-buildpackage -b --no-sign
 
 dist-hook:
 	find $(distdir)/debian \( -name .#\*# -o -type l \) -print0 | xargs -0r rm -rf

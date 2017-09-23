@@ -1,0 +1,12 @@
+A note from isync's web site:
+
+isync can be integrated into Mutt fairly easily with a few hooks:
+
+	folder-hook ~A bind index $ <sync-mailbox>
+	folder-hook +maildir 'macro index $ "<sync-mailbox>!isync -e maildir\n"'
+
+where maildir is the name of the local mailbox (or its alias). This works well
+so long as you are not modifying the IMAP mailbox outside of Mutt. However, if
+you are using another mail program simultaneously Mutt will have the wrong idea
+of the local mailbox flags and messages will start disappearing from its index
+display (don't worry, they are still on disk).

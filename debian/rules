@@ -1,55 +1,10 @@
 #!/usr/bin/make -f
 
-CFLAGS = -Wall -g
-ifneq (,$(findstring noopt,$(DEB_BUILD_OPTIONS)))
-CFLAGS += -O0
-else
-CFLAGS += -O2
-endif
+%:
+	dh $@ --with=autoreconf
 
-DEB_HOST_GNU_TYPE := $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
-DEB_BUILD_GNU_TYPE := $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
-
-build: build-stamp
-build-stamp:
-	dh_testdir
-	./configure --build=$(DEB_BUILD_GNU_TYPE) --host=$(DEB_HOST_GNU_TYPE) --prefix=/usr --mandir=/usr/share/man 
-	$(MAKE) CFLAGS="$(CFLAGS)"
-	touch build-stamp
-
-clean:
-	dh_testdir
-	dh_testroot
-	rm -f build-stamp
-	[ ! -f Makefile ] || $(MAKE) distclean
-	dh_clean Makefile config.log config.status
-
-install: build
-	dh_testdir
-	dh_testroot
-	dh_clean -k
-	dh_installdirs usr/bin usr/share/man/man1
-	$(MAKE) DESTDIR=$(CURDIR)/debian/isync install
-	rm -r $(CURDIR)/debian/isync/usr/share/doc
-	mv $(CURDIR)/debian/isync/usr/bin/get-cert $(CURDIR)/debian/isync/usr/bin/mbsync-get-cert
-
-binary-indep: build install
-
-binary-arch: build install
-	dh_testdir
-	dh_testroot
-	dh_installchangelogs ChangeLog
-	dh_installdocs AUTHORS NEWS README TODO
-	dh_installexamples src/mbsyncrc.sample src/compat/isyncrc.sample
-	dh_installman
-	dh_strip
-	dh_compress
-	dh_fixperms
-	dh_installdeb
-	dh_shlibdeps
-	dh_gencontrol
-	dh_md5sums
-	dh_builddeb
-
-binary: binary-indep binary-arch
-.PHONY: build clean binary-indep binary-arch binary install
+override_dh_auto_install:
+	dh_auto_install
+	mv $(CURDIR)/debian/isync/usr/bin/get-cert \
+	   $(CURDIR)/debian/isync/usr/bin/mbsync-get-cert
+	$(RM) $(CURDIR)/debian/isync/usr/share/doc/isync/ChangeLog
