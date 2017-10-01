@@ -51,14 +51,14 @@ int new_total[2], new_done[2];
 int flags_total[2], flags_done[2];
 int trash_total[2], trash_done[2];
 
-static void
+static void ATTR_NORETURN
 version( void )
 {
 	puts( PACKAGE " " VERSION );
 	exit( 0 );
 }
 
-static void
+static void ATTR_NORETURN
 usage( int code )
 {
 	fputs(
@@ -573,7 +573,7 @@ main( int argc, char **argv )
 			goto cop;
 		case 'F':
 			cops |= XOP_PULL|XOP_PUSH;
-			/* fallthrough */
+			FALLTHROUGH
 		case '0':
 			ops[M] |= XOP_HAVE_TYPE;
 			break;

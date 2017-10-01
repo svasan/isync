@@ -34,6 +34,12 @@
 # define ATTR_PRINTFLIKE(fmt,var)
 #endif
 
+#if __GNUC__ >= 7
+# define FALLTHROUGH __attribute__((fallthrough));
+#else
+# define FALLTHROUGH
+#endif
+
 typedef struct config {
 	struct config *next;
 

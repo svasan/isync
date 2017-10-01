@@ -49,6 +49,12 @@ typedef unsigned int uint;
 # define ATTR_PRINTFLIKE(fmt,var)
 #endif
 
+#if __GNUC__ >= 7
+# define FALLTHROUGH __attribute__((fallthrough));
+#else
+# define FALLTHROUGH
+#endif
+
 #ifdef __GNUC__
 # define INLINE __inline__
 #else
