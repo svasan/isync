@@ -1,3 +1,97 @@
+isync (1.2.3-0) unstable; urgency=low
+
+  * Upload to unstable (with urgency=low)
+
+ -- Oswald Buddenhagen <ossi@users.sf.net>  Sun, 01 Oct 2017 12:12:12 +0000
+
+isync (1.2.1-2) unstable; urgency=low
+
+  * Upload to unstable (with urgency=low)
+  * Don't call uupdate after uscan
+  * Import patch to fix build with OpenSSL 1.1 (Closes: #828357)
+  * Bump Standards-Version to 3.9.8 (no changes needed)
+  * Add pkg-config to Build-Depends
+  * Update Vcs-* URLs
+  * Fix spelling-error-in-binary
+
+ -- Alessandro Ghedini <ghedo@debian.org>  Sat, 19 Nov 2016 17:14:42 +0000
+
+isync (1.2.1-1) experimental; urgency=medium
+
+  [ Evgeni Golov ]
+  * New upstream release.
+  * Explicitly Build-Depend on zlib1g-dev
+
+ -- Alessandro Ghedini <ghedo@debian.org>  Sat, 09 Jan 2016 12:56:39 +0000
+
+isync (1.2.0-1) experimental; urgency=medium
+
+  * New upstream release
+    - Only show sync progress by default (Closes: #765052)
+  * Enable libsasl support
+
+ -- Alessandro Ghedini <ghedo@debian.org>  Mon, 06 Apr 2015 13:42:24 +0200
+
+isync (1.1.2-1) unstable; urgency=medium
+
+  * New upstream release
+  * Bump Standards-Version to 3.9.6 (no changes needed)
+
+ -- Alessandro Ghedini <ghedo@debian.org>  Sun, 01 Feb 2015 20:42:25 +0100
+
+isync (1.1.1-1) unstable; urgency=medium
+
+  * New upstream release
+    - Don't lie about the default of User (Closes: #744389)
+    - Don't forget to reset message counts when skipping scan (Closes: #744259)
+    - Rework maildir store mapping (Closes: #737708)
+  * Drop 01_fix-manpages.patch (merged upstream)
+  * Drop 02_fix-empty-folder-sync.patch (merged upstream)
+
+ -- Alessandro Ghedini <ghedo@debian.org>  Tue, 03 Jun 2014 21:00:44 +0200
+
+isync (1.1.0-2) unstable; urgency=medium
+
+  * Drop 02_fix-duplicate-changelog.patch
+    (rm the file after installation instead)
+  * Update 01_fix-manpages.patch
+  * Add 02_fix-empty-folder-sync.patch (Closes: #738873)
+
+ -- Alessandro Ghedini <ghedo@debian.org>  Fri, 14 Feb 2014 20:41:49 +0100
+
+isync (1.1.0-1) unstable; urgency=low
+
+  * New upstream release (Closes: #674403)
+    - Fix overlapping memcpy (Closes: #650373)
+    - Fix segfault while syncing mailboxes (Closes: #411120)
+    - Fix segfault when invoked with arguments without configuration
+      (Closes: #727239)
+  * Bump debhelper compat level, update Build-Depends
+  * Switch to short-form dh rules, remove useless files
+  * Switch to 3.0 (quilt) source format
+  * Remove empty patches/ directory
+  * Drop local source modifications
+  * Update short/long descriptions
+  * Add 01_fix-manpages.patch to fix manpage errors and typos
+  * Add Homepage field
+  * Update copyright file to Copyright-Format 1.0
+  * Add Vcs-* fields
+  * Add 02_fix-duplicate-changelog.patch to avoid duplicate changelog install
+  * Add myself to Uploaders
+  * Bump Standards-Version to 3.9.5 (no changes needed)
+  * Use dh-autoreconf instead of autotools-dev
+
+ -- Alessandro Ghedini <ghedo@debian.org>  Sun, 12 Jan 2014 16:35:52 +0100
+
+isync (1.0.4-2.2) unstable; urgency=low
+
+  * Non-maintainer upload.
+  * Apply upstream patch for CVE-2013-0289.
+    Fix incorrect server's SSL x509.v3 certificate validation when
+    performing IMAP synchronization. (Closes: #701052)
+
+ -- Salvatore Bonaccorso <carnil@debian.org>  Sun, 24 Feb 2013 09:27:55 +0100
+
 isync (1.0.4-2.1) unstable; urgency=low
 
   * Non-maintainer upload.

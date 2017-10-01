@@ -1,32 +1,33 @@
-This package was debianized by Tommi Virtanen <tv@debian.org> and is now
-maintained by Nicolas Boullis <nboullis@debian.org>.
+Format: http://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: isync
+Source: http://isync.sourceforge.net
 
-It was downloaded from http://isync.sourceforge.net/
+Files: *
+Copyright: 2000-2002, Michael R. Elkins <me@mutt.org>
+ 2002-2017, Oswald Buddenhagen <ossi@users.sf.net>
+ 2004, Theodore Y. Ts'o <tytso@mit.edu>
+License: GPL-2+
 
-Upstream Author: Michael R. Elkins <me@mutt.org>,
-                 Oswald Buddenhagen <ossi@users.sf.net>
+Files: debian/*
+Copyright: 2013, Alessandro Ghedini <ghedo@debian.org>
+License: GPL-2+
 
-Copyright:
-
- * isync - IMAP4 to maildir mailbox synchronizer
- * Copyright (C) 2000-2002 Michael R. Elkins <me@mutt.org>
- * Copyright (C) 2002-2006 Oswald Buddenhagen <ossi@users.sf.net>
- *
- *  This program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
- *  (at your option) any later version.
- *
- *  This program is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
- *
- *  You should have received a copy of the GNU General Public License
- *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
- *
- * As a special exception, isync may be linked with the OpenSSL library,
- * despite that library's more restrictive license.
-
-On Debian systems, the complete text of the GNU General Public
-License can be found in /usr/share/common-licenses/GPL
+License: GPL-2+
+ This program is free software: you can redistribute it and/or modify
+ it under the terms of the GNU General Public License as published by
+ the Free Software Foundation, either version 2 of the License, or
+ (at your option) any later version.
+ .
+ This package is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ GNU General Public License for more details.
+ .
+ You should have received a copy of the GNU General Public License
+ along with this program. If not, see <http://www.gnu.org/licenses/>.
+ .
+ As a special exception, mbsync may be linked with the OpenSSL library,
+ despite that library's more restrictive license.
+ .
+ On Debian systems, the complete text of the GNU General Public License version
+ 2 can be found in "/usr/share/common-licenses/GPL-2".

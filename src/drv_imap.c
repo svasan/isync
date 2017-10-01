@@ -3115,7 +3115,7 @@ imap_parse_store( conffile_t *cfg, store_conf_t **storep )
 				arg += 6;
 				server->ssl_type = SSL_IMAPS;
 				if (server->sconf.ssl_versions == -1)
-					server->sconf.ssl_versions = SSLv2 | SSLv3 | TLSv1;
+					server->sconf.ssl_versions = SSLv2 | SSLv3 | TLSv1 | TLSv1_1 | TLSv1_2;
 			} else
 #endif
 			if (starts_with( arg, -1, "imap:", 5 ))
@@ -3285,7 +3285,7 @@ imap_parse_store( conffile_t *cfg, store_conf_t **storep )
 #ifdef HAVE_LIBSSL
 		if ((use_sslv2 & use_sslv3 & use_tlsv1 & use_tlsv11 & use_tlsv12) != -1 || use_imaps >= 0 || require_ssl >= 0) {
 			if (server->ssl_type >= 0 || server->sconf.ssl_versions >= 0) {
-				error( "%s '%s': The deprecated UseSSL*, UseTLS*, UseIMAPS, and RequireSSL options are mutually exlusive with SSLType and SSLVersions.\n", type, name );
+				error( "%s '%s': The deprecated UseSSL*, UseTLS*, UseIMAPS, and RequireSSL options are mutually exclusive with SSLType and SSLVersions.\n", type, name );
 				cfg->err = 1;
 				return 1;
 			}
@@ -3313,14 +3313,14 @@ imap_parse_store( conffile_t *cfg, store_conf_t **storep )
 			}
 		} else {
 			if (server->sconf.ssl_versions < 0)
-				server->sconf.ssl_versions = TLSv1; /* Most compatible and still reasonably secure. */
+				server->sconf.ssl_versions = TLSv1 | TLSv1_1 | TLSv1_2;
 			if (server->ssl_type < 0)
 				server->ssl_type = server->sconf.tunnel ? SSL_None : SSL_STARTTLS;
 		}
 #endif
 		if (require_cram >= 0) {
 			if (server->auth_mechs) {
-				error( "%s '%s': The deprecated RequireCRAM option is mutually exlusive with AuthMech.\n", type, name );
+				error( "%s '%s': The deprecated RequireCRAM option is mutually exclusive with AuthMech.\n", type, name );
 				cfg->err = 1;
 				return 1;
 			}

@@ -72,7 +72,7 @@ ssl_return( const char *func, conn_t *conn, int ret )
 		return ret;
 	case SSL_ERROR_WANT_WRITE:
 		conf_notifier( &conn->notify, POLLIN, POLLOUT );
-		/* fallthrough */
+		FALLTHROUGH
 	case SSL_ERROR_WANT_READ:
 		return 0;
 	case SSL_ERROR_SYSCALL:

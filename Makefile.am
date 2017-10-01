@@ -58,12 +58,8 @@ cov-scan: clean
 	/opt/cov-analysis-*/bin/cov-build --dir cov-int $(MAKE)
 	tar cavf isync.tar.xz cov-int
 
-deb: deb-clean
-	CFLAGS= fakeroot debian/rules binary
-
-deb-clean:
-	dh_clean -Xsrc/
-	fakeroot debian/rules clean
+deb:
+	CFLAGS= INSTALL= dpkg-buildpackage -b --no-sign
 
 dist-hook:
 	find $(distdir)/debian \( -name .#\*# -o -type l \) -print0 | xargs -0r rm -rf
