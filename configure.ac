@@ -179,7 +179,7 @@ fi
 AM_CONDITIONAL(with_compat, test "x$ob_cv_enable_compat" != xno -a "x$ac_cv_berkdb4" = xyes)
 AM_CONDITIONAL(with_mdconvert, test "x$ac_cv_berkdb4" = xyes)
 
-AC_CONFIG_FILES([Makefile src/Makefile src/compat/Makefile isync.spec])
+AC_CONFIG_FILES([Makefile src/Makefile isync.spec])
 AC_OUTPUT
 
 AC_MSG_RESULT()

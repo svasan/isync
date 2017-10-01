@@ -26,11 +26,6 @@ Description: IMAP and MailDir mailbox synchronizer
  deletions and flag changes can be propagated both ways. isync is suitable
  for use in IMAP-disconnected mode.
  .
- The main application was much improved in version 1.0. Those improvements
- lead to interface changes and the application being renamed to mbsync. The
- application isync is now only a wrapper to keep compatibility with earlier
- versions.
- .
  Features:
   * Fine-grained selection of synchronization operations to perform
   * Synchronizes single mailboxes or entire mailbox collections

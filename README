@@ -23,8 +23,7 @@ Mailboxes can be safely modified while ``mbsync'' operates.
 Multiple replicas of each mailbox can be maintained.
 
 isync is the project name, while mbsync is the current executable name; this
-change was necessary because of massive changes in the user interface. An
-isync executable still exists; it is a compatibility wrapper around mbsync.
+change was necessary because of massive changes in the user interface.
 
 * Features
 

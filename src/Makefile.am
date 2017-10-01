@@ -1,8 +1,3 @@
-if with_compat
-compat_dir = compat
-endif
-SUBDIRS = $(compat_dir)
-
 mbsync_SOURCES = main.c sync.c config.c util.c socket.c driver.c drv_imap.c drv_maildir.c drv_proxy.c
 mbsync_LDADD = $(DB_LIBS) $(SSL_LIBS) $(SOCK_LIBS) $(SASL_LIBS) $(Z_LIBS)
 noinst_HEADERS = common.h config.h driver.h sync.h socket.h
