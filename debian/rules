@@ -5,6 +5,4 @@
 
 override_dh_auto_install:
 	dh_auto_install
-	mv $(CURDIR)/debian/isync/usr/bin/get-cert \
-	   $(CURDIR)/debian/isync/usr/bin/mbsync-get-cert
 	$(RM) $(CURDIR)/debian/isync/usr/share/doc/isync/ChangeLog

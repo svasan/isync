@@ -1,5 +1,5 @@
 SUBDIRS = src
-bin_SCRIPTS = get-cert
+bin_SCRIPTS = mbsync-get-cert
 EXTRA_DIST = debian isync.spec $(bin_SCRIPTS)
 
 LOG_PL = \
