@@ -63,7 +63,7 @@ deb:
 
 dist-hook:
 	find $(distdir)/debian \( -name .#\*# -o -type l \) -print0 | xargs -0r rm -rf
-	-cd $(distdir)/debian && test -f .gitignore && rm -rf `cat .gitignore` .gitignore
+	-cd $(distdir)/debian && test -f .gitignore && rm -rf `cut -c2- .gitignore` .gitignore
 
 dist-sign: dist
 	gpg -b -a $(PACKAGE)-$(VERSION).tar.gz
