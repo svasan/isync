@@ -192,7 +192,7 @@ maildir_join_path( maildir_store_conf_t *conf, int in_inbox, const char *box )
 				break;
 			case SUB_LEGACY:
 				*p++ = c;
-				/* fallthrough */
+				FALLTHROUGH
 			default: /* SUB_MAILDIRPP */
 				*p++ = '.';
 				break;
