@@ -519,13 +519,13 @@ map_name( const char *arg, char **result, int reserve, const char *in, const cha
 		for (ll = 0; ll < inl; ll++)
 			if (arg[i + ll] != in[ll])
 				goto rnexti;
-#ifdef __GNUC__
+#if defined(__GNUC__) && (__GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 3)) && !defined(__clang__)
 # pragma GCC diagnostic push
 /* https://gcc.gnu.org/bugzilla/show_bug.cgi?id=42145 */
 # pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
 #endif
 		memcpy( p, out, outl );
-#ifdef __GNUC__
+#if defined(__GNUC__) && (__GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 3)) && !defined(__clang__)
 # pragma GCC diagnostic pop
 #endif
 		p += outl;
