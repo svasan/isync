@@ -21,6 +21,7 @@
 /install-sh
 /isync.spec
 /isync-*.tar.gz
+/isync-*.tar.gz.asc
 /missing
 /patch-stamp
 /stamp-h
