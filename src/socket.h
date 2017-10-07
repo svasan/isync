@@ -30,9 +30,7 @@
 #endif
 
 #ifdef HAVE_LIBSSL
-typedef struct ssl_st SSL;
-typedef struct ssl_ctx_st SSL_CTX;
-typedef struct stack_st _STACK;
+# include <openssl/ssl.h>
 
 enum {
 	SSLv3 = 2,
