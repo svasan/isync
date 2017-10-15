@@ -491,7 +491,7 @@ map_name( const char *arg, char **result, int reserve, const char *in, const cha
 	}
 	assert( out );
 	outl = strlen( out );
-	if (inl == outl && !memcmp( in, out, inl ))
+	if (equals( in, inl, out, outl ))
 		goto copy;
 	for (num = 0, i = 0; i < l; ) {
 		for (ll = 0; ll < inl; ll++)
