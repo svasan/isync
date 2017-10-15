@@ -11,6 +11,23 @@ fi
 
 CPPFLAGS="$CPPFLAGS -D_GNU_SOURCE"
 
+AC_CHECK_PROG(PERL, perl, perl)
+if test "x$PERL" = "x"; then
+    AC_MSG_ERROR([perl not found])
+fi
+
+need_perl=5.14
+AC_CACHE_CHECK([whether perl is recent enough], ob_cv_perl_ver, [
+    if $PERL -e "use v$need_perl;"; then
+        ob_cv_perl_ver=yes
+    else
+        ob_cv_perl_ver=no
+    fi
+])
+if test "x$ob_cv_perl_ver" = "xno"; then
+    AC_MSG_ERROR([perl is too old])
+fi
+
 AC_CACHE_CHECK([whether strftime supports %z], ob_cv_strftime_z,
     [AC_TRY_RUN(
 [#include <time.h>
