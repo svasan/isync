@@ -2250,7 +2250,7 @@ imap_open_store_namespace( imap_store_t *ctx )
 
 	ctx->state = SST_HALF;
 	ctx->prefix = cfg->gen.path;
-	ctx->delimiter[0] = cfg->delimiter ? cfg->delimiter : 0;
+	ctx->delimiter[0] = cfg->delimiter;
 	if (((!ctx->prefix && cfg->use_namespace) || !cfg->delimiter) && CAP(NAMESPACE)) {
 		/* get NAMESPACE info */
 		if (!ctx->got_namespace)
