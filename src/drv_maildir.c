@@ -1153,28 +1153,29 @@ maildir_scan( maildir_store_t *ctx, msg_t_array_alloc_t *msglist )
 					goto retry;
 				}
 				int off, in_msgid = 0;
-				while ((want_tuid || want_msgid) && fgets( nbuf, sizeof(nbuf), f )) {
-					int bufl = strlen( nbuf );
-					if (bufl && nbuf[bufl - 1] == '\n')
+				char lnbuf[1000];  // Says RFC2822
+				while ((want_tuid || want_msgid) && fgets( lnbuf, sizeof(lnbuf), f )) {
+					int bufl = strlen( lnbuf );
+					if (bufl && lnbuf[bufl - 1] == '\n')
 						--bufl;
-					if (bufl && nbuf[bufl - 1] == '\r')
+					if (bufl && lnbuf[bufl - 1] == '\r')
 						--bufl;
 					if (!bufl)
 						break;
-					if (want_tuid && starts_with( nbuf, bufl, "X-TUID: ", 8 )) {
+					if (want_tuid && starts_with( lnbuf, bufl, "X-TUID: ", 8 )) {
 						if (bufl < 8 + TUIDL) {
 							error( "Maildir error: malformed X-TUID header (UID %u)\n", uid );
 							continue;
 						}
-						memcpy( entry->tuid, nbuf + 8, TUIDL );
+						memcpy( entry->tuid, lnbuf + 8, TUIDL );
 						want_tuid = 0;
 						in_msgid = 0;
 						continue;
 					}
-					if (want_msgid && starts_with_upper( nbuf, bufl, "MESSAGE-ID:", 11 )) {
+					if (want_msgid && starts_with_upper( lnbuf, bufl, "MESSAGE-ID:", 11 )) {
 						off = 11;
 					} else if (in_msgid) {
-						if (!isspace( nbuf[0] )) {
+						if (!isspace( lnbuf[0] )) {
 							in_msgid = 0;
 							continue;
 						}
@@ -1182,13 +1183,13 @@ maildir_scan( maildir_store_t *ctx, msg_t_array_alloc_t *msglist )
 					} else {
 						continue;
 					}
-					while (off < bufl && isspace( nbuf[off] ))
+					while (off < bufl && isspace( lnbuf[off] ))
 						off++;
 					if (off == bufl) {
 						in_msgid = 1;
 						continue;
 					}
-					entry->msgid = nfstrndup( nbuf + off, bufl - off );
+					entry->msgid = nfstrndup( lnbuf + off, bufl - off );
 					want_msgid = 0;
 					in_msgid = 0;
 				}
