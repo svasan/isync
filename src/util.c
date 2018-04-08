@@ -479,19 +479,20 @@ map_name( const char *arg, char **result, int reserve, const char *in, const cha
 	char *p;
 	int i, l, ll, num, inl, outl;
 
+	assert( arg );
 	l = strlen( arg );
-	if (!in) {
+	assert( in );
+	inl = strlen( in );
+	if (!inl) {
 	  copy:
 		*result = nfmalloc( reserve + l + 1 );
 		memcpy( *result + reserve, arg, l + 1 );
 		return 0;
 	}
-	inl = strlen( in );
-	if (out) {
-		outl = strlen( out );
-		if (inl == outl && !memcmp( in, out, inl ))
-			goto copy;
-	}
+	assert( out );
+	outl = strlen( out );
+	if (equals( in, inl, out, outl ))
+		goto copy;
 	for (num = 0, i = 0; i < l; ) {
 		for (ll = 0; ll < inl; ll++)
 			if (arg[i + ll] != in[ll])
@@ -500,7 +501,7 @@ map_name( const char *arg, char **result, int reserve, const char *in, const cha
 		i += inl;
 		continue;
 	  fout:
-		if (out) {
+		if (outl) {
 			for (ll = 0; ll < outl; ll++)
 				if (arg[i + ll] != out[ll])
 					goto fnexti;
@@ -511,7 +512,7 @@ map_name( const char *arg, char **result, int reserve, const char *in, const cha
 	}
 	if (!num)
 		goto copy;
-	if (!out)
+	if (!outl)
 		return -2;
 	*result = nfmalloc( reserve + l + num * (outl - inl) + 1 );
 	p = *result + reserve;
@@ -519,15 +520,7 @@ map_name( const char *arg, char **result, int reserve, const char *in, const cha
 		for (ll = 0; ll < inl; ll++)
 			if (arg[i + ll] != in[ll])
 				goto rnexti;
-#ifdef __GNUC__
-# pragma GCC diagnostic push
-/* https://gcc.gnu.org/bugzilla/show_bug.cgi?id=42145 */
-# pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
-#endif
 		memcpy( p, out, outl );
-#ifdef __GNUC__
-# pragma GCC diagnostic pop
-#endif
 		p += outl;
 		i += inl;
 		continue;

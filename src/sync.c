@@ -1014,7 +1014,7 @@ sync_boxes( store_t *ctx[], const char *names[], int present[], channel_conf_t *
 		svars->orig_name[t] =
 			(!names[t] || (ctx[t]->conf->map_inbox && !strcmp( ctx[t]->conf->map_inbox, names[t] ))) ?
 				"INBOX" : names[t];
-		if (!ctx[t]->conf->flat_delim) {
+		if (!ctx[t]->conf->flat_delim[0]) {
 			svars->box_name[t] = nfstrdup( svars->orig_name[t] );
 		} else if (map_name( svars->orig_name[t], &svars->box_name[t], 0, "/", ctx[t]->conf->flat_delim ) < 0) {
 			error( "Error: canonical mailbox name '%s' contains flattened hierarchy delimiter\n", svars->orig_name[t] );

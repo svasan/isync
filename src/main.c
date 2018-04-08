@@ -983,7 +983,7 @@ store_connected( int sts, void *aux )
 							flags |= LIST_INBOX;
 						} else if (c == '/') {
 							/* Flattened sub-folders of INBOX actually end up in Path. */
-							if (mvars->ctx[t]->conf->flat_delim)
+							if (mvars->ctx[t]->conf->flat_delim[0])
 								flags |= LIST_PATH;
 							else
 								flags |= LIST_INBOX;
@@ -1027,7 +1027,7 @@ store_listed( int sts, string_list_t *boxes, void *aux )
 		return;
 	case DRV_OK:
 		for (box = boxes; box; box = box->next) {
-			if (mvars->ctx[t]->conf->flat_delim) {
+			if (mvars->ctx[t]->conf->flat_delim[0]) {
 				string_list_t *nbox;
 				if (map_name( box->string, (char **)&nbox, offsetof(string_list_t, string), mvars->ctx[t]->conf->flat_delim, "/" ) < 0) {
 					error( "Error: flattened mailbox name '%s' contains canonical hierarchy delimiter\n", box->string );

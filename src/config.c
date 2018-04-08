@@ -355,6 +355,8 @@ load_config( const char *where, int pseudo )
 				if (store) {
 					if (!store->max_size)
 						store->max_size = INT_MAX;
+					if (!store->flat_delim)
+						store->flat_delim = "";
 					*storeapp = store;
 					storeapp = &store->next;
 					*storeapp = 0;
